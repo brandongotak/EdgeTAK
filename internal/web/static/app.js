@@ -164,6 +164,9 @@ $('#tabs').addEventListener('click', (e) => {
 
 // ---------- dashboard ----------
 
+// A client has a position once it reported SA with a GPS fix (ATAK sends 0,0 without one).
+const hasPos = (c) => Number.isFinite(c.lat) && Number.isFinite(c.lon) && !(c.lat === 0 && c.lon === 0);
+
 async function refreshStatus() {
   status = await api('GET', 'api/status');
   $('#server-name').textContent = status.server_name;
@@ -175,7 +178,7 @@ async function loadDashboard() {
   status = st;
   const tiles = [
     ['Connected', clients.length],
-    ['With position', clients.filter((c) => c.lat || c.lon).length],
+    ['With position', clients.filter(hasPos).length],
     ['Users', st.users],
     ['Data packages', st.packages],
     ['Missions', st.missions],
@@ -201,7 +204,7 @@ async function loadDashboard() {
   const rows = clients.map((c) => {
     const color = TEAM_COLORS[c.team] || '#888';
     const team = c.team ? `<span class="team-dot" style="background:${color}"></span>${esc(c.team)}${c.role ? ' · ' + esc(c.role) : ''}` : '—';
-    const pos = c.lat || c.lon ? `<span class="mono">${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}</span>` : '—';
+    const pos = hasPos(c) ? `<span class="mono">${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}</span>` : '—';
     const batt = c.battery != null ? `<span class="pill ${c.battery < 20 ? 'bad' : c.battery < 50 ? 'warn' : 'ok'}">${c.battery}%</span>` : '—';
     const transport = `<span class="pill ${c.transport === 'tls' ? 'ok' : 'warn'}">${esc(c.transport.toUpperCase())}</span>`;
     return `<tr>
@@ -234,7 +237,7 @@ $('#clients-table').addEventListener('click', guard(async (e) => {
 
 function updateMap(clients) {
   if (!window.L) return;
-  const withPos = clients.filter((c) => c.lat || c.lon);
+  const withPos = clients.filter(hasPos);
   if (!map) {
     if (!withPos.length) return;
     const el = $('#map');

@@ -40,8 +40,10 @@ Working and covered by an end-to-end test (`internal/app/app_test.go`):
     subscribers only and is added to the mission automatically. `t-x-m-c` /
     `-n` / `-d` / `-i` / `-r` notifications are sent like the official server's.
   - Stored as one JSON file per mission in `data/missions/`
-- **Client compatibility**: verified with ATAK, WinTAK 5.6 and TAKX-MIL 5.8,
-  including Data Sync between them
+- **Client compatibility**: verified with ATAK, WinTAK 5.6, TAKX-MIL 5.8
+  (including Data Sync between them) and iTAK
+  - iTAK connection packages: a flat zip with a pre-issued client certificate,
+    since iTAK does not enroll; each one is revocable on the Certificates tab
   - OAuth2 password login (`/oauth/token`) issuing RS256 JWTs signed by the
     server key, accepted as Bearer tokens on every API (TAKX)
   - Newer `/Marti/api/...` forms of the file, search, contacts and CoT APIs

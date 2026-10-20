@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -524,6 +525,12 @@ func TestEndToEnd(t *testing.T) {
 		for _, c := range clients {
 			if c["callsign"] == "ALICE" && c["team"] == "Cyan" {
 				found = true
+				if _, ok := c["lat"].(float64); !ok {
+					t.Errorf("ALICE lat missing: %v", c)
+				}
+				if _, ok := c["lon"].(float64); !ok {
+					t.Errorf("ALICE lon missing: %v", c)
+				}
 				if c["format"] != "protobuf" {
 					t.Errorf("ALICE format = %v, want protobuf", c["format"])
 				}
@@ -576,6 +583,41 @@ func TestEndToEnd(t *testing.T) {
 		if err != nil || len(certs) != 1 || !certs[0].Equal(a.CA.Cert) {
 			t.Errorf("truststore: %v %d", err, len(certs))
 		}
+
+		// iTAK: flat zip with config.pref, a client .p12 and the truststore.
+		resp, _ = hc.Get(base + "/admin/api/connection-package?mode=itak&username=nobody")
+		resp.Body.Close()
+		if resp.StatusCode != 400 {
+			t.Errorf("itak package for unknown user = %d", resp.StatusCode)
+		}
+		resp, _ = hc.Get(base + "/admin/api/connection-package?mode=itak&username=dave")
+		zipData, _ = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		zr, err = zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
+		if err != nil {
+			t.Fatalf("itak package: %d %v", resp.StatusCode, err)
+		}
+		files = map[string][]byte{}
+		for _, f := range zr.File {
+			rc, _ := f.Open()
+			files[f.Name], _ = io.ReadAll(rc)
+			rc.Close()
+		}
+		if len(files) != 3 || files["config.pref"] == nil || files["dave.p12"] == nil || files["truststore-root.p12"] == nil {
+			t.Fatalf("itak package entries = %v", maps.Keys(files))
+		}
+		for _, want := range []string{"cert/dave.p12", "cert/truststore-root.p12", "127.0.0.1:" + port(a.Addrs["tls"]) + ":ssl"} {
+			if !bytes.Contains(files["config.pref"], []byte(want)) {
+				t.Errorf("itak config.pref missing %q:\n%s", want, files["config.pref"])
+			}
+		}
+		key, leaf, _, err := pkcs12.DecodeChain(files["dave.p12"], a.Cfg.TruststorePassword)
+		if err != nil || leaf.Subject.CommonName != "dave" {
+			t.Fatalf("itak client p12: %v", err)
+		}
+		// The bundled certificate is accepted by the TLS stream.
+		itakCert := tls.Certificate{Certificate: [][]byte{leaf.Raw}, PrivateKey: key, Leaf: leaf}
+		mustDial(t, a, &itakCert).conn.Close()
 	})
 
 	t.Run("plaintext admin is loopback only and marti allows anonymous", func(t *testing.T) {

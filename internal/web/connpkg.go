@@ -10,13 +10,16 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/edgetak/edgetak/internal/pki"
+	"github.com/edgetak/edgetak/internal/store"
 )
 
 // connectionPackage builds an ATAK/WinTAK data package that adds this server
 // as a streaming connection. In "ssl" mode it carries the CA truststore and
 // enables certificate enrollment, so the client only has to enter its
 // password; in "tcp" mode it configures the plaintext port.
-func (s *Server) connectionPackage(w http.ResponseWriter, r *http.Request, _ *identity) {
+func (s *Server) connectionPackage(w http.ResponseWriter, r *http.Request, id *identity) {
 	q := r.URL.Query()
 	mode := firstNonEmpty(q.Get("mode"), "ssl")
 	host := firstNonEmpty(q.Get("host"), s.Cfg.PublicHost)
@@ -25,11 +28,21 @@ func (s *Server) connectionPackage(w http.ResponseWriter, r *http.Request, _ *id
 		jsonError(w, http.StatusBadRequest, "public_host is not configured; pass ?host=")
 		return
 	}
-	if mode != "ssl" && mode != "tcp" {
-		jsonError(w, http.StatusBadRequest, "mode must be ssl or tcp")
+	var data []byte
+	var err error
+	switch mode {
+	case "ssl", "tcp":
+		data, err = s.buildConnectionPackage(mode, host, username)
+	case "itak":
+		if _, ok := s.Store.User(username); !ok {
+			jsonError(w, http.StatusBadRequest, "iTAK packages contain a client certificate: choose an existing username")
+			return
+		}
+		data, err = s.buildITAKPackage(host, username, id.Username)
+	default:
+		jsonError(w, http.StatusBadRequest, "mode must be ssl, tcp or itak")
 		return
 	}
-	data, err := s.buildConnectionPackage(mode, host, username)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -133,6 +146,82 @@ func (s *Server) buildConnectionPackage(mode, host, username string) ([]byte, er
 			return nil, err
 		}
 		if err := add("certs/"+vals["Truststore"].(string), func(b *bytes.Buffer) error { _, err := b.Write(p12); return err }); err != nil {
+			return nil, err
+		}
+	}
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+var itakPrefTmpl = template.Must(template.New("itak").Parse(`<?xml version='1.0' standalone='yes'?>
+<preferences>
+  <preference version="1" name="cot_streams">
+    <entry key="count" class="class java.lang.Integer">1</entry>
+    <entry key="description0" class="class java.lang.String">{{.Name}}</entry>
+    <entry key="enabled0" class="class java.lang.Boolean">true</entry>
+    <entry key="connectString0" class="class java.lang.String">{{.Connect}}</entry>
+  </preference>
+  <preference version="1" name="com.atakmap.app_preferences">
+    <entry key="displayServerConnectionWidget" class="class java.lang.Boolean">true</entry>
+    <entry key="caLocation" class="class java.lang.String">cert/truststore-root.p12</entry>
+    <entry key="caPassword" class="class java.lang.String">{{.Password}}</entry>
+    <entry key="clientPassword" class="class java.lang.String">{{.Password}}</entry>
+    <entry key="certificateLocation" class="class java.lang.String">cert/{{.ClientFile}}</entry>
+  </preference>
+</preferences>
+`))
+
+// buildITAKPackage builds the flat package iTAK imports: config.pref, a
+// freshly issued client certificate and the truststore, all at the zip
+// root. iTAK does not enroll, so the certificate is issued here and
+// recorded like any other (revocable from the Certificates tab).
+func (s *Server) buildITAKPackage(host, username, admin string) ([]byte, error) {
+	if s.Addrs["tls"] == "" {
+		return nil, fmt.Errorf("the TLS streaming listener is disabled")
+	}
+	_, port, err := net.SplitHostPort(s.Addrs["tls"])
+	if err != nil {
+		return nil, err
+	}
+	cert, key, err := s.CA.NewClient(username)
+	if err != nil {
+		return nil, err
+	}
+	clientP12, err := s.CA.ClientP12(cert, key, s.Cfg.TruststorePassword)
+	if err != nil {
+		return nil, err
+	}
+	trust, err := s.CA.TrustStoreP12(s.Cfg.TruststorePassword)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.Store.AddCert(store.Cert{Serial: pki.SerialHex(cert), CommonName: username, ClientUID: "itak-package",
+		Issued: time.Now().UTC(), Expires: cert.NotAfter.UTC()}); err != nil {
+		return nil, err
+	}
+	s.Log.Info("issued iTAK connection package", "admin", admin, "user", username, "serial", pki.SerialHex(cert))
+
+	clientFile := sanitize(username) + ".p12"
+	var pref bytes.Buffer
+	if err := itakPrefTmpl.Execute(&pref, map[string]string{
+		"Name": xmlEscape(s.Cfg.ServerName), "Connect": xmlEscape(fmt.Sprintf("%s:%s:ssl", host, port)),
+		"Password": xmlEscape(s.Cfg.TruststorePassword), "ClientFile": xmlEscape(clientFile),
+	}); err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, f := range []struct {
+		name string
+		data []byte
+	}{{"config.pref", pref.Bytes()}, {clientFile, clientP12}, {"truststore-root.p12", trust}} {
+		w, err := zw.CreateHeader(&zip.FileHeader{Name: f.name, Method: zip.Deflate, Modified: time.Now()})
+		if err != nil {
+			return nil, err
+		}
+		if _, err := w.Write(f.data); err != nil {
 			return nil, err
 		}
 	}

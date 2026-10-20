@@ -143,8 +143,8 @@ type clientView struct {
 	Out         uint64    `json:"out"`
 	Dropped     uint64    `json:"dropped"`
 	Type        string    `json:"type,omitempty"`
-	Lat         float64   `json:"lat,omitempty"`
-	Lon         float64   `json:"lon,omitempty"`
+	Lat         *float64  `json:"lat,omitempty"` // both set once the client has sent SA
+	Lon         *float64  `json:"lon,omitempty"`
 	Team        string    `json:"team,omitempty"`
 	Role        string    `json:"role,omitempty"`
 	Battery     *uint32   `json:"battery,omitempty"`
@@ -172,7 +172,8 @@ func (s *Server) listClients(w http.ResponseWriter, r *http.Request, _ *identity
 }
 
 func fillSA(v *clientView, sa *cot.Event) {
-	v.Type, v.Lat, v.Lon = sa.Type, sa.Lat, sa.Lon
+	lat, lon := sa.Lat, sa.Lon
+	v.Type, v.Lat, v.Lon = sa.Type, &lat, &lon
 	d := sa.Detail
 	if d.Group != nil {
 		v.Team, v.Role = d.Group.Name, d.Group.Role
