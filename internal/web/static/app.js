@@ -281,6 +281,7 @@ const BASEMAPS = [
   ['Satellite', [[esri('World_Imagery'), { maxNativeZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' }]]],
   ['Hybrid', [[esri('World_Imagery'), { maxNativeZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' }],
     [esri('Reference/World_Boundaries_and_Places'), { maxNativeZoom: 19 }]]],
+  ['Google Hybrid', [['https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxNativeZoom: 20, subdomains: '0123', attribution: 'Imagery &copy; Google' }]]],
   ['Topo', [['https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxNativeZoom: 17, attribution: 'Map data ' + OSM_ATTR + ', SRTM | style &copy; OpenTopoMap (CC-BY-SA)' }]]],
   ['USGS Topo', [[usgs('USGSTopo'), { maxNativeZoom: 16, attribution: 'USGS The National Map' }]]],
   ['USGS Imagery Topo', [[usgs('USGSImageryTopo'), { maxNativeZoom: 16, attribution: 'USGS The National Map' }]]],
@@ -486,7 +487,7 @@ function renderMapSources() {
       <div class="grow"><strong>${esc(s.name)}</strong> ${s.overlay ? '<span class="pill">overlay</span>' : '<span class="pill">base map</span>'}
         <div class="muted mono grow" title="${esc(s.url)}">${esc(s.url)}</div></div>
       <button type="button" class="small danger" data-remove-source="${i}">Remove</button>
-    </div>`).join('') || '<p class="muted">No custom sources yet. The built-in ones are Streets, Satellite, Hybrid, Topo, USGS Topo, USGS Imagery Topo and Dark.</p>';
+    </div>`).join('') || '<p class="muted">No custom sources yet. The built-in ones are Streets, Satellite, Hybrid, Google Hybrid, Topo, USGS Topo, USGS Imagery Topo and Dark.</p>';
 }
 
 async function saveMapSources(list) {

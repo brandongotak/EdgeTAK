@@ -51,7 +51,7 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   off, require admin approval, or be open. Afterwards the sign-up page shows
   how to connect.
 - **Live map** beside every console tab (full screen on phones), with base
-  maps like ATAK's: Streets, Satellite, Hybrid, Topo, USGS Topo, USGS
+  maps like ATAK's: Streets, Satellite, Hybrid, Google Hybrid, Topo, USGS Topo, USGS
   Imagery Topo and Dark. Add your own tile sources or import ATAK map source
   `.xml` files; overlays for devices, callsigns and the server contact.
 - **Web admin console**: connected clients, users, groups,
