@@ -28,6 +28,7 @@
       <button data-tab="users">Users</button>
       <button data-tab="certs">Certificates</button>
       <button data-tab="packages">Data Packages</button>
+      <button data-tab="missions">Missions</button>
       <button data-tab="connect">Connect</button>
     </nav>
     <div class="who"><span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
@@ -94,6 +95,16 @@
         <h2>Data packages</h2>
         <div class="table-wrap"><table id="packages-table">
           <thead><tr><th>Name</th><th>Size</th><th>Submitted by</th><th>Groups</th><th>Visibility</th><th>Submitted</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section id="tab-missions" class="tab" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Data Sync missions</h2><span class="muted">Created and managed from ATAK / WinTAK / iTAK Data Sync</span></div>
+        <div class="table-wrap"><table id="missions-table">
+          <thead><tr><th>Mission</th><th>Owner</th><th>Groups</th><th>Access</th><th>Items</th><th>Files</th><th>Subscribers</th><th>Logs</th><th>Last edited</th><th></th></tr></thead>
           <tbody></tbody>
         </table></div>
       </div>

@@ -30,10 +30,21 @@ Working and covered by an end-to-end test (`internal/app/app_test.go`):
 - **Data packages**: `missionupload`, `missionquery`, `content`, `search`,
   `sync/upload`, metadata tool and delete endpoints. Storage is
   content-addressed by SHA-256, and access is limited to the uploader's groups.
+- **Data Sync / missions**: the `/Marti/api/missions` API used by ATAK, WinTAK
+  and iTAK Data Sync
+  - Create, list, delete; group scoped, optionally password protected or invite only
+  - Subscriptions with owner, subscriber and read-only roles, plus signed mission tokens
+  - Map items and files as mission contents, with a change feed
+    (`/changes`), latest CoT (`/cot`), logs, keywords, invitations and archive export
+  - Live push to subscribers: CoT sent to `<dest mission="..."/>` reaches
+    subscribers only and is added to the mission automatically. `t-x-m-c` /
+    `-n` / `-d` / `-i` / `-r` notifications are sent like the official server's.
+  - Stored as one JSON file per mission in `data/missions/`
 - **Web admin console**: `https://<host>:8443/admin/`
   - Live map and connected-client table (callsign, team, battery, device, traffic)
   - Users and groups, issuing `.p12` certificates, revoking certificates
   - Data package upload, download and delete
+  - Missions overview with export and delete
   - One-click **connection data package** (truststore + enrollment prefs) and a
     quick-connect QR code
 
@@ -114,6 +125,7 @@ internal/cot/       CoT event model, XML <-> TAK protobuf codec, stream framing
 internal/router/    client registry, group/directed routing, plugin hooks
 internal/stream/    TCP/TLS stream sessions and protocol negotiation
 internal/web/       Marti API, enrollment, data packages, admin console (embedded)
+internal/mission/   Data Sync missions: roles, contents, change feed, notifications
 internal/pki/       CA, CSR signing, PKCS#12
 internal/store/     JSON-file store for users, certificates, packages
 internal/app/       wiring, listeners, end-to-end test
@@ -130,7 +142,7 @@ seams for the planned plugin API.
 ## Roadmap
 
 - Plugin API (out-of-process plugins over gRPC/WebSocket on top of the hooks)
-- Missions / Data Sync API (`/Marti/api/missions`)
+- Data Sync extras: mission feeds, map layers, external data, mission hierarchy
 - Federation with official TAK Server, OTS and FTS
 - Group selection from the client (`t-x-g-c`), CoT history and replay
 - Video stream registry, device profiles, and packaging (deb/rpm, Docker, Windows service)

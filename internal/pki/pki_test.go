@@ -13,6 +13,9 @@ func TestServerChain(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if n := len(ca.ServerCert.Certificate); n != 2 {
+			t.Errorf("pass %d: server presents %d certificates, want leaf + CA", i, n)
+		}
 		leaf := ca.ServerCert.Leaf
 		if _, err := leaf.Verify(x509.VerifyOptions{Roots: ca.Pool(), DNSName: "localhost"}); err != nil {
 			t.Fatalf("pass %d: server cert does not chain to CA: %v (issuer %q, ca subject %q)", i, err, leaf.Issuer, ca.Cert.Subject)

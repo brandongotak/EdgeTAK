@@ -278,7 +278,10 @@ do_install() {
   Enrollment      $host:8446
 
 EOF
-	if [ -f "$DATA_DIR/initial-admin-password.txt" ]; then
+	if [ -f "$DATA_DIR/initial-admin-password.txt" ] && [ "$upgrading" -eq 1 ]; then
+		warn "$DATA_DIR/initial-admin-password.txt still exists. Delete it once you have changed the admin password."
+		echo
+	elif [ -f "$DATA_DIR/initial-admin-password.txt" ]; then
 		echo "  Initial administrator login:"
 		sed 's/^/    /' "$DATA_DIR/initial-admin-password.txt"
 		echo "  (stored in $DATA_DIR/initial-admin-password.txt; delete it after you change the password)"

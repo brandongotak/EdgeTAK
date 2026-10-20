@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/edgetak/edgetak/internal/cot"
+	"github.com/edgetak/edgetak/internal/mission"
 	"github.com/edgetak/edgetak/internal/pki"
 	"github.com/edgetak/edgetak/internal/store"
 )
@@ -50,6 +51,8 @@ func (s *Server) martiRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /Marti/sync/upload", s.authed(s.rawUpload))
 	mux.HandleFunc("PUT /Marti/api/sync/metadata/{hash}/tool", s.authed(s.setTool))
 	mux.HandleFunc("DELETE /Marti/api/files/{hash}", s.authed(s.deleteFile))
+
+	s.missionRoutes(mux)
 }
 
 // ---- enrollment ----
@@ -250,13 +253,20 @@ func (s *Server) savePackage(src io.Reader, name, mimeType, creatorUID string, k
 	return p, err
 }
 
-// visiblePackage returns the package if it exists and id may see it.
+// visiblePackage returns the package if it exists and id may see it, either
+// through its groups or because it belongs to a mission id can read.
 func (s *Server) visiblePackage(hash string, id *identity) (*store.Package, bool) {
 	p, ok := s.Store.Package(strings.ToLower(hash))
-	if !ok || !id.canSee(p.Groups) {
+	if !ok {
 		return nil, false
 	}
-	return p, true
+	if id.canSee(p.Groups) {
+		return p, true
+	}
+	if s.Missions != nil && s.Missions.CanReadHash(p.Hash, mission.Caller{Username: id.Username, Groups: id.Groups, Admin: id.Admin, Anonymous: id.Anonymous}) {
+		return p, true
+	}
+	return nil, false
 }
 
 func (s *Server) missionQuery(w http.ResponseWriter, r *http.Request, id *identity) {

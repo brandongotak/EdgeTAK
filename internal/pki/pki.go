@@ -97,6 +97,10 @@ func (ca *CA) ensureServer(dir string, hosts []string) error {
 		if pair, err := tls.LoadX509KeyPair(certPath, keyPath); err == nil {
 			if leaf, err := x509.ParseCertificate(pair.Certificate[0]); err == nil && time.Until(leaf.NotAfter) > 30*24*time.Hour {
 				pair.Leaf = leaf
+				if len(pair.Certificate) == 1 {
+					// Older installs stored only the leaf; always present the full chain.
+					pair.Certificate = append(pair.Certificate, ca.Cert.Raw)
+				}
 				ca.ServerCert = pair
 				return nil
 			}

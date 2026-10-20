@@ -141,6 +141,7 @@ const loaders = {
   users: loadUsers,
   certs: loadCerts,
   packages: loadPackages,
+  missions: loadMissions,
   connect: loadConnect,
 };
 
@@ -177,6 +178,7 @@ async function loadDashboard() {
     ['With position', clients.filter((c) => c.lat || c.lon).length],
     ['Users', st.users],
     ['Data packages', st.packages],
+    ['Missions', st.missions],
     ['Uptime', duration(st.uptime_seconds)],
     ['Memory', `${st.memory_mb} MB`],
   ];
@@ -401,6 +403,43 @@ $('#packages-table').addEventListener('click', guard(async (e) => {
   await api('DELETE', `api/packages/${hash}`);
   toast('Package deleted');
   loadPackages();
+}));
+
+// ---------- missions ----------
+
+const ROLE_LABELS = { MISSION_SUBSCRIBER: 'subscribers can edit', MISSION_READONLY_SUBSCRIBER: 'read-only', MISSION_OWNER: 'everyone owner' };
+
+async function loadMissions() {
+  const missions = await api('GET', 'api/missions');
+  $('#missions-table tbody').innerHTML = missions.map((m) => {
+    const access = [
+      m.password_protected ? '<span class="pill warn">password</span>' : '',
+      m.invite_only ? '<span class="pill warn">invite only</span>' : '',
+      `<span class="pill">${esc(ROLE_LABELS[m.default_role] || m.default_role)}</span>`,
+    ].join('');
+    return `<tr>
+      <td><strong>${esc(m.name)}</strong>${m.description ? `<div class="muted">${esc(m.description)}</div>` : ''}</td>
+      <td>${esc(m.creator || '—')}<div class="muted mono">${esc(m.creator_uid)}</div></td>
+      <td>${groupPills(m.groups)}</td>
+      <td>${access}</td>
+      <td>${m.items}</td>
+      <td>${m.files}</td>
+      <td title="${esc(m.subscribers.join(', '))}">${m.subscribers.length}</td>
+      <td>${m.logs}</td>
+      <td title="${esc(date(m.last_edited))}">${ago(m.last_edited)}</td>
+      <td class="actions">
+        <a class="button small" href="/Marti/api/missions/${encodeURIComponent(m.name)}/archive">Export</a>
+        <button class="small danger" data-del-mission="${esc(m.name)}">Delete</button>
+      </td></tr>`;
+  }).join('') || emptyRow(10, 'No missions yet. Create one from Data Sync in ATAK.');
+}
+
+$('#missions-table').addEventListener('click', guard(async (e) => {
+  const name = e.target.dataset.delMission;
+  if (!name || !confirm(`Delete mission "${name}"? Subscribers are notified and its change history is lost. Files stay on the Data Packages tab.`)) return;
+  await api('DELETE', `api/missions/${encodeURIComponent(name)}`);
+  toast('Mission deleted');
+  loadMissions();
 }));
 
 // ---------- connect ----------

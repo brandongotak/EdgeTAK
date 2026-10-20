@@ -308,8 +308,7 @@ func TestEndToEnd(t *testing.T) {
 
 	t.Run("latest SA replay", func(t *testing.T) {
 		late := mustDial(t, a, &carolCert)
-		late.expect(isFrom("ANDROID-alice"), "replayed alice SA")
-		late.expect(isFrom("ANDROID-bob"), "replayed bob SA")
+		late.expectAll("replayed alice and bob SA", isFrom("ANDROID-alice"), isFrom("ANDROID-bob"))
 		late.conn.Close()
 	})
 
@@ -363,6 +362,26 @@ func TestEndToEnd(t *testing.T) {
 		resp.Body.Close()
 		if resp.StatusCode != 200 {
 			t.Errorf("missionquery = %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("https never resumes sessions and sends the full chain", func(t *testing.T) {
+		tr := memTransport(&tls.Config{RootCAs: a.CA.Pool(), Certificates: []tls.Certificate{aliceCert}, ClientSessionCache: tls.NewLRUClientSessionCache(8)})
+		tr.DisableKeepAlives = true
+		hc := &http.Client{Transport: tr}
+		for i := 0; i < 2; i++ {
+			resp, err := hc.Get("https://" + a.Addrs["https"] + "/Marti/api/version")
+			if err != nil {
+				t.Fatal(err)
+			}
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			if resp.TLS.DidResume {
+				t.Errorf("request %d resumed a TLS session; WinTAK (SChannel) cannot handle that", i)
+			}
+			if n := len(resp.TLS.PeerCertificates); n != 2 {
+				t.Errorf("server sent %d certificates, want leaf + CA", n)
+			}
 		}
 	})
 

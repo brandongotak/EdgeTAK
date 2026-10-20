@@ -13,6 +13,11 @@ import (
 	"github.com/edgetak/edgetak/internal/cot"
 )
 
+// MissionResolver returns the client UIDs subscribed to a mission that src
+// may deliver to. Recipients it returns bypass the group check because
+// mission membership already enforced it.
+type MissionResolver func(src *Client, mission string) []string
+
 // Hook inspects (and may modify) an event before it is routed. Returning
 // false drops the event. Hooks are the extension point for plugins. src is
 // nil for events injected by the server.
@@ -22,10 +27,11 @@ type Router struct {
 	log          *slog.Logger
 	sendLatestSA bool
 
-	mu      sync.RWMutex
-	clients map[uint64]*Client
-	hooks   []Hook
-	nextID  atomic.Uint64
+	mu       sync.RWMutex
+	clients  map[uint64]*Client
+	hooks    []Hook
+	missions MissionResolver
+	nextID   atomic.Uint64
 }
 
 func New(log *slog.Logger, sendLatestSA bool) *Router {
@@ -37,6 +43,29 @@ func (r *Router) AddHook(h Hook) {
 	r.mu.Lock()
 	r.hooks = append(r.hooks, h)
 	r.mu.Unlock()
+}
+
+// SetMissionResolver enables delivery of <dest mission="..."/> events.
+func (r *Router) SetMissionResolver(fn MissionResolver) {
+	r.mu.Lock()
+	r.missions = fn
+	r.mu.Unlock()
+}
+
+// SendTo delivers a server-originated event directly to the connected
+// clients with the given UIDs or callsigns, bypassing hooks and groups.
+func (r *Router) SendTo(ev *cot.Event, uids, callsigns []string) {
+	if len(uids)+len(callsigns) == 0 {
+		return
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, c := range r.clients {
+		uid, cs := c.Identity()
+		if (uid != "" && slices.Contains(uids, uid)) || (cs != "" && slices.Contains(callsigns, cs)) {
+			c.Send(ev)
+		}
+	}
 }
 
 // Register adds a connected client and replays the latest SA of visible peers.
@@ -93,7 +122,7 @@ func (r *Router) Client(id uint64) (*Client, bool) {
 
 // Route delivers an event from src to every other client that shares a group
 // with it, or only to the addressed clients when the event carries
-// <marti><dest uid|callsign/></marti> entries.
+// <marti><dest uid|callsign|mission/></marti> entries.
 func (r *Router) Route(src *Client, ev *cot.Event) {
 	r.deliver(src, src.Groups, ev)
 }
@@ -105,7 +134,7 @@ func (r *Router) Inject(ev *cot.Event, groups []string) {
 
 func (r *Router) deliver(src *Client, groups []string, ev *cot.Event) {
 	r.mu.RLock()
-	hooks := r.hooks
+	hooks, resolve := r.hooks, r.missions
 	r.mu.RUnlock()
 	for _, h := range hooks {
 		if !h(src, ev) {
@@ -113,7 +142,8 @@ func (r *Router) deliver(src *Client, groups []string, ev *cot.Event) {
 		}
 	}
 
-	var uids, callsigns []string
+	var uids, callsigns, missionUIDs []string
+	missionDest := false
 	for _, d := range ev.Dests() {
 		if d.UID != "" {
 			uids = append(uids, d.UID)
@@ -121,22 +151,34 @@ func (r *Router) deliver(src *Client, groups []string, ev *cot.Event) {
 		if d.Callsign != "" {
 			callsigns = append(callsigns, d.Callsign)
 		}
+		if d.Mission != "" {
+			missionDest = true
+			if resolve != nil {
+				missionUIDs = append(missionUIDs, resolve(src, d.Mission)...)
+			}
+		}
 	}
-	directed := len(uids)+len(callsigns) > 0
+	directed := missionDest || len(uids)+len(callsigns) > 0
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for _, c := range r.clients {
-		if c == src || !sharesGroup(groups, c.Groups) {
+		if c == src {
 			continue
 		}
-		if directed {
-			uid, cs := c.Identity()
-			if !slices.Contains(uids, uid) && !slices.Contains(callsigns, cs) {
-				continue
+		if !directed {
+			if sharesGroup(groups, c.Groups) {
+				c.Send(ev)
 			}
+			continue
 		}
-		c.Send(ev)
+		uid, cs := c.Identity()
+		switch {
+		case uid != "" && slices.Contains(missionUIDs, uid):
+			c.Send(ev)
+		case sharesGroup(groups, c.Groups) && (slices.Contains(uids, uid) || slices.Contains(callsigns, cs)):
+			c.Send(ev)
+		}
 	}
 }
 

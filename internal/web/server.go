@@ -11,11 +11,14 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/edgetak/edgetak/internal/config"
+	"github.com/edgetak/edgetak/internal/mission"
 	"github.com/edgetak/edgetak/internal/pki"
 	"github.com/edgetak/edgetak/internal/router"
 	"github.com/edgetak/edgetak/internal/store"
@@ -29,6 +32,7 @@ type Server struct {
 	Store      *store.Store
 	CA         *pki.CA
 	Router     *router.Router
+	Missions   *mission.Service
 	Log        *slog.Logger
 	PackageDir string
 	NodeID     string
@@ -83,13 +87,86 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	})
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		defer func() { s.logRequest(r, rec, time.Since(start)) }()
+
+		rec.Header().Set("X-Content-Type-Options", "nosniff")
 		if !tlsListener && isAdminPath(r.URL.Path) && !isLoopback(r.RemoteAddr) {
-			http.Error(w, "the admin console is only available over HTTPS (port 8443) or from localhost", http.StatusForbidden)
+			http.Error(rec, "the admin console is only available over HTTPS (port 8443) or from localhost", http.StatusForbidden)
 			return
 		}
-		mux.ServeHTTP(w, r)
+		if !s.rewriteMissionGUID(r) {
+			http.Error(rec, "mission not found", http.StatusNotFound)
+			return
+		}
+		mux.ServeHTTP(rec, r)
 	})
+}
+
+// rewriteMissionGUID maps /Marti/api/missions/guid/{guid}/... onto the
+// name-based routes, which newer clients use interchangeably. It returns
+// false for an unknown GUID.
+func (s *Server) rewriteMissionGUID(r *http.Request) bool {
+	const prefix = "/Marti/api/missions/guid/"
+	if !strings.HasPrefix(r.URL.Path, prefix) || s.Missions == nil {
+		return true
+	}
+	guid, rest, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, prefix), "/")
+	name, ok := s.Missions.NameByGUID(guid)
+	if !ok {
+		return false
+	}
+	if rest != "" {
+		rest = "/" + rest
+	}
+	r.URL.Path = "/Marti/api/missions/" + name + rest
+	r.URL.RawPath = "/Marti/api/missions/" + url.PathEscape(name) + rest
+	return true
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+	bytes  int64
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Write(b []byte) (int, error) {
+	n, err := r.ResponseWriter.Write(b)
+	r.bytes += int64(n)
+	return n, err
+}
+
+// redactedQuery hides secrets that clients pass as query parameters.
+func redactedQuery(q url.Values) string {
+	for _, k := range []string{"password", "token"} {
+		if q.Has(k) {
+			q.Set(k, "REDACTED")
+		}
+	}
+	return q.Encode()
+}
+
+// logRequest records every HTTP request at debug level; this is the main
+// tool for diagnosing client compatibility (log_level: debug).
+func (s *Server) logRequest(r *http.Request, rec *statusRecorder, d time.Duration) {
+	if !s.Log.Enabled(r.Context(), slog.LevelDebug) {
+		return
+	}
+	who := ""
+	if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
+		who = "cert:" + r.TLS.PeerCertificates[0].Subject.CommonName
+	} else if u, _, ok := r.BasicAuth(); ok {
+		who = "basic:" + u
+	}
+	s.Log.Debug("http", "method", r.Method, "path", r.URL.Path, "query", redactedQuery(r.URL.Query()),
+		"status", rec.status, "bytes", rec.bytes, "ms", d.Milliseconds(), "remote", r.RemoteAddr,
+		"who", who, "agent", r.UserAgent())
 }
 
 func isAdminPath(p string) bool { return p == "/" || len(p) >= 6 && p[:6] == "/admin" }

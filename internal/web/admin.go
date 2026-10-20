@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/edgetak/edgetak/internal/cot"
+	"github.com/edgetak/edgetak/internal/mission"
 	"github.com/edgetak/edgetak/internal/pki"
 	"github.com/edgetak/edgetak/internal/store"
 )
@@ -45,6 +46,18 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 			jsonError(w, http.StatusNotFound, "package not found")
 			return
 		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	mux.HandleFunc("GET /admin/api/missions", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
+		writeJSON(w, http.StatusOK, s.Missions.Summaries())
+	}))
+	mux.HandleFunc("DELETE /admin/api/missions/{name}", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
+		if _, err := s.Missions.Delete(r.PathValue("name"), mission.Caller{Username: id.Username, Groups: id.Groups, Admin: true}); err != nil {
+			s.missionError(w, err)
+			return
+		}
+		s.Log.Info("admin deleted mission", "admin", id.Username, "mission", r.PathValue("name"))
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -108,6 +121,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request, _ *identity) {
 		"server_name": s.Cfg.ServerName, "version": s.Version, "public_host": s.Cfg.PublicHost,
 		"started": s.Started, "uptime_seconds": int(time.Since(s.Started).Seconds()),
 		"clients": len(s.Router.Clients()), "users": len(s.Store.Users()), "packages": len(s.Store.Packages()),
+		"missions":  len(s.Missions.Summaries()),
 		"memory_mb": mem.Alloc >> 20, "goroutines": runtime.NumGoroutine(),
 		"listeners":  s.Addrs,
 		"ca_subject": s.CA.Cert.Subject.CommonName, "ca_expires": s.CA.Cert.NotAfter,

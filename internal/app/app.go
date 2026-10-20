@@ -18,10 +18,12 @@ import (
 	"time"
 
 	"github.com/edgetak/edgetak/internal/config"
+	"github.com/edgetak/edgetak/internal/mission"
 	"github.com/edgetak/edgetak/internal/pki"
 	"github.com/edgetak/edgetak/internal/router"
 	"github.com/edgetak/edgetak/internal/store"
 	"github.com/edgetak/edgetak/internal/stream"
+	"github.com/edgetak/edgetak/internal/tlstrace"
 	"github.com/edgetak/edgetak/internal/web"
 )
 
@@ -31,9 +33,10 @@ type App struct {
 	Log     *slog.Logger
 	Version string
 
-	Store  *store.Store
-	CA     *pki.CA
-	Router *router.Router
+	Store    *store.Store
+	CA       *pki.CA
+	Router   *router.Router
+	Missions *mission.Service
 
 	// Addrs holds the bound address of each listener after Start.
 	Addrs map[string]string
@@ -53,6 +56,7 @@ func New(cfg config.Config, dataDir, version string, log *slog.Logger) (*App, er
 			a.Cfg.PublicHost, _ = os.Hostname()
 		}
 	}
+	a.checkPublicHost()
 	var err error
 	if a.Store, err = store.Open(filepath.Join(dataDir, "db.json")); err != nil {
 		return nil, fmt.Errorf("open store: %w", err)
@@ -72,7 +76,37 @@ func New(cfg config.Config, dataDir, version string, log *slog.Logger) (*App, er
 		return nil, err
 	}
 	a.Router = router.New(log, cfg.SendLatestSA)
+	if a.Missions, err = mission.Open(filepath.Join(dataDir, "missions"), a.Store, a.Router, log); err != nil {
+		return nil, fmt.Errorf("open missions: %w", err)
+	}
+	a.Missions.PackageDir = filepath.Join(dataDir, "packages")
 	return a, nil
+}
+
+// checkPublicHost warns when public_host is neither one of this machine's
+// addresses nor a resolvable name: connection packages would point clients
+// at an unreachable server.
+func (a *App) checkPublicHost() {
+	h := a.Cfg.PublicHost
+	if h == "" {
+		return
+	}
+	if ip := net.ParseIP(h); ip != nil {
+		if addrs, err := net.InterfaceAddrs(); err == nil {
+			for _, ad := range addrs {
+				if ipn, ok := ad.(*net.IPNet); ok && ipn.IP.Equal(ip) {
+					return
+				}
+			}
+		}
+		a.Log.Warn("public_host is not an address of this machine; clients need it to reach the server (fine if behind NAT/port forwarding)",
+			"public_host", h, "detected", pki.PrimaryIP())
+		return
+	}
+	if _, err := net.LookupHost(h); err != nil {
+		a.Log.Warn("public_host does not resolve; connection packages will point clients at an unreachable server",
+			"public_host", h, "detected", pki.PrimaryIP(), "err", err)
+	}
 }
 
 func (a *App) ensureAdmin() error {
@@ -108,6 +142,11 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	}
 	httpsTLS := streamTLS.Clone()
 	httpsTLS.ClientAuth = tls.VerifyClientCertIfGiven
+	// Windows SChannel (WinTAK's HTTPS stack) aborts both full handshakes
+	// that issue a session ticket and ticket resumptions when it presents a
+	// client certificate. Full handshakes every time match what TAK clients
+	// see from the official server and cost little at edge scale.
+	httpsTLS.SessionTicketsDisabled = true
 
 	st := &stream.Server{
 		Router: a.Router, Store: a.Store, Log: a.Log, AnonymousGroup: a.Cfg.AnonymousGroup,
@@ -115,7 +154,7 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		ServerUID:   "EdgeTAK-" + a.nodeID, Version: "EdgeTAK " + a.Version,
 	}
 	ws := &web.Server{
-		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Log: a.Log,
+		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Log: a.Log,
 		PackageDir: filepath.Join(a.DataDir, "packages"), NodeID: a.nodeID, Version: a.Version, Started: time.Now(),
 	}
 
@@ -152,6 +191,9 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		}
 		a.Addrs[sp.name] = ln.Addr().String()
 		if sp.tls != nil {
+			if a.Log.Enabled(ctx, slog.LevelDebug) {
+				ln = &tlstrace.Listener{Listener: ln, Log: a.Log, Name: sp.name}
+			}
 			ln = tls.NewListener(ln, sp.tls)
 		}
 		binds = append(binds, bound{sp.name, ln, sp.web, sp.tls != nil})
@@ -159,6 +201,8 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	ws.Addrs = a.Addrs
 
 	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { defer wg.Done(); a.Missions.FlushLoop(ctx.Done()) }()
 	errLog := slog.NewLogLogger(a.Log.Handler(), slog.LevelDebug)
 	var servers []*http.Server
 	for _, b := range binds {
