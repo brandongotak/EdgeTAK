@@ -140,7 +140,31 @@ type db struct {
 	Packages map[string]*Package `json:"packages"`
 	Groups   map[string]*Group   `json:"groups"`
 	NextSeq  int64               `json:"next_seq"`
+
+	ServerContact ServerContact  `json:"server_contact"`
+	Inbox         []InboxMessage `json:"inbox"`
 }
+
+// ServerContact is the server's presence as a contact on devices, which
+// direct messages come from and replies go to.
+type ServerContact struct {
+	Enabled  bool    `json:"enabled"`
+	Callsign string  `json:"callsign"`
+	Lat      float64 `json:"lat"`
+	Lon      float64 `json:"lon"`
+}
+
+// InboxMessage is a chat message a device sent to the server contact.
+type InboxMessage struct {
+	ID           string    `json:"id"`
+	Time         time.Time `json:"time"`
+	FromUID      string    `json:"from_uid"`
+	FromCallsign string    `json:"from_callsign"`
+	Username     string    `json:"username"`
+	Text         string    `json:"text"`
+}
+
+const maxInbox = 500
 
 var (
 	ErrNotFound = errors.New("not found")
@@ -210,6 +234,42 @@ func cloneUser(u *User) *User {
 	c.GroupsOut = slices.Clone(u.GroupsOut)
 	c.Inactive = slices.Clone(u.Inactive)
 	return &c
+}
+
+func (s *Store) ServerContact() ServerContact {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.ServerContact
+}
+
+func (s *Store) SetServerContact(c ServerContact) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.ServerContact = c
+	return s.save()
+}
+
+// AddInbox stores a message sent to the server contact, keeping the newest.
+func (s *Store) AddInbox(m InboxMessage) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Inbox = append(s.db.Inbox, m)
+	if n := len(s.db.Inbox); n > maxInbox {
+		s.db.Inbox = slices.Clone(s.db.Inbox[n-maxInbox:])
+	}
+	return s.save()
+}
+
+// Inbox returns messages to the server contact, newest first.
+func (s *Store) Inbox() []InboxMessage {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := slices.Clone(s.db.Inbox)
+	slices.Reverse(out)
+	if out == nil {
+		out = []InboxMessage{}
+	}
+	return out
 }
 
 // SetActive records which of username's memberships are switched on;

@@ -43,6 +43,9 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
 - **Send to devices**: from the admin console, send a chat message or offer
   a data package (including settings `.pref` packages) to everyone, chosen
   groups or chosen devices, with a history of what was sent.
+  - **Direct messages**: the server can appear on devices as an HQ contact.
+    Its messages open as a private conversation, users can reply, and
+    replies show up in the console's Inbox.
 - **Web admin console**: live map and connected clients, users, groups,
   certificates, data packages, missions, and connection packages for each
   client.

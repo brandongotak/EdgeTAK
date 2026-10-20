@@ -62,6 +62,7 @@ func (h *sendHistory) list() []sendRecord {
 
 func (s *Server) sendRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/api/send/message", s.admin(s.sendMessage))
+	s.dmRoutes(mux)
 	mux.HandleFunc("POST /admin/api/send/package", s.admin(s.sendPackage))
 	mux.HandleFunc("GET /admin/api/send/history", s.admin(func(w http.ResponseWriter, r *http.Request, _ *identity) {
 		writeJSON(w, http.StatusOK, s.history.list())
@@ -103,9 +104,10 @@ func (s *Server) senderUID() string { return "EdgeTAK-" + strings.ReplaceAll(s.N
 
 func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request, id *identity) {
 	var req struct {
-		From string     `json:"from"`
-		Text string     `json:"text"`
-		To   sendTarget `json:"to"`
+		From   string     `json:"from"`
+		Text   string     `json:"text"`
+		Direct bool       `json:"direct"` // private conversation with the server contact
+		To     sendTarget `json:"to"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid request")
@@ -120,6 +122,18 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request, id *identit
 	targets := s.resolveTargets(req.To)
 	if len(targets) == 0 {
 		jsonError(w, http.StatusBadRequest, "no connected devices match the selected recipients")
+		return
+	}
+	if req.Direct {
+		if !s.Store.ServerContact().Enabled {
+			jsonError(w, http.StatusBadRequest, "direct messages need the server contact: turn it on under Server contact")
+			return
+		}
+		delivered, skipped := s.sendDirect(targets, req.Text)
+		s.history.add(sendRecord{Time: time.Now().UTC(), Admin: id.Username, Kind: "direct", Summary: truncate(req.Text, 80),
+			To: describeTarget(req.To), Delivered: delivered})
+		s.Log.Info("admin sent direct message", "admin", id.Username, "to", describeTarget(req.To), "devices", delivered, "skipped", skipped)
+		writeJSON(w, http.StatusOK, map[string]int{"delivered": delivered, "skipped": skipped})
 		return
 	}
 	ev := s.chatEvent(from, req.Text)

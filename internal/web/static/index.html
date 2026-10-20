@@ -168,6 +168,7 @@
           <form id="send-message-form" class="stack wide">
             <label>From <input name="from" id="send-from" placeholder="sender name shown in chat"></label>
             <label>Message <textarea name="text" rows="4" required placeholder="Arrives in All Chat Rooms on ATAK, WinTAK, TAKX and iTAK"></textarea></label>
+            <label class="check"><input type="checkbox" name="direct" id="send-direct"> Direct message: a private conversation with the server contact; replies arrive in the Inbox</label>
             <div><button class="primary" type="submit">Send message</button></div>
           </form>
         </div>
@@ -177,6 +178,31 @@
             <label>Package <select name="hash" id="send-package" required></select></label>
             <p class="muted">Devices get a file transfer offer and download it from this server. Recipients are given access to the package. A package with a <code>.pref</code> file applies settings on import.</p>
             <div><button class="primary" type="submit">Send package</button></div>
+          </form>
+        </div>
+      </div>
+      <div class="grid-2 even">
+        <div class="card">
+          <div class="card-head"><h2>Inbox</h2><span class="muted">messages devices send to the server contact</span></div>
+          <div class="table-wrap"><table id="send-inbox">
+            <thead><tr><th>Time</th><th>From</th><th>Message</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <h2>Server contact</h2>
+          <p class="muted">Direct messages come from this contact. Devices show it as an HQ marker at this position and can message it like any other contact.</p>
+          <form id="contact-form" class="stack wide">
+            <label class="check"><input type="checkbox" name="enabled"> Show the server contact on devices</label>
+            <label>Callsign <input name="callsign" placeholder="e.g. Ops Center"></label>
+            <div class="inline-form">
+              <label>Latitude <input name="lat" type="number" step="any" min="-90" max="90"></label>
+              <label>Longitude <input name="lon" type="number" step="any" min="-180" max="180"></label>
+            </div>
+            <div class="inline-form">
+              <button class="primary" type="submit">Save</button>
+              <button type="button" class="small" id="contact-here">Use this browser's location</button>
+            </div>
           </form>
         </div>
       </div>

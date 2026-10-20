@@ -228,6 +228,7 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		a.Public.Warm(ctx)
 	}
 	ws.Addrs = a.Addrs
+	ws.Start(ctx) // server contact and Inbox
 
 	var wg sync.WaitGroup
 	wg.Add(1)

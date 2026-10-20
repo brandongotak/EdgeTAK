@@ -157,6 +157,8 @@ function selectTab(name) {
   if (name === 'dashboard') {
     pollTimer = setInterval(guard(loadDashboard), 3000);
     if (map) setTimeout(() => map.invalidateSize(), 0);
+  } else if (name === 'send') {
+    pollTimer = setInterval(guard(loadSendLive), 5000); // Inbox updates
   }
 }
 $('#tabs').addEventListener('click', (e) => {
@@ -642,10 +644,36 @@ function syncSendScope() {
   $('#send-clients').hidden = scope !== 'clients';
 }
 
+let contactLoaded = false;
+
+async function loadSendLive() {
+  const [history, inbox] = await Promise.all([api('GET', 'api/send/history'), api('GET', 'api/send/inbox')]);
+  $('#send-history tbody').innerHTML = history.map((h) => `<tr>
+      <td title="${esc(date(h.time))}">${ago(h.time)}</td>
+      <td><span class="pill">${esc(h.kind)}</span> ${esc(h.summary)}</td>
+      <td>${esc(h.to)}</td><td>${h.delivered}</td><td>${esc(h.admin)}</td></tr>`).join('')
+    || emptyRow(5, 'Nothing sent yet');
+  $('#send-inbox tbody').innerHTML = inbox.map((m) => `<tr>
+      <td title="${esc(date(m.time))}">${ago(m.time)}</td>
+      <td><strong>${esc(m.from_callsign || m.from_uid)}</strong><div class="muted">${esc(m.username || 'anonymous')}</div></td>
+      <td style="white-space: pre-wrap">${esc(m.text)}</td>
+      <td class="actions"><button class="small" data-reply="${esc(m.from_uid)}" data-name="${esc(m.from_callsign)}">Reply</button></td></tr>`).join('')
+    || emptyRow(4, 'No messages yet');
+}
+
 async function loadSend() {
-  const [groups, clients, packages, history] = await Promise.all([
-    api('GET', 'api/groups'), api('GET', 'api/clients'), api('GET', 'api/packages'), api('GET', 'api/send/history'),
+  const [groups, clients, packages, contact] = await Promise.all([
+    api('GET', 'api/groups'), api('GET', 'api/clients'), api('GET', 'api/packages'), api('GET', 'api/send/contact'),
   ]);
+  if (!contactLoaded) {
+    const f = $('#contact-form');
+    f.enabled.checked = contact.enabled;
+    f.callsign.value = contact.callsign;
+    f.lat.value = contact.lat || '';
+    f.lon.value = contact.lon || '';
+    contactLoaded = true;
+  }
+  await loadSendLive();
   const keep = (sel) => new Set([...document.querySelectorAll(`${sel} input:checked`)].map((i) => i.value));
   const gKeep = keep('#send-groups');
   const cKeep = keep('#send-clients');
@@ -661,13 +689,43 @@ async function loadSend() {
   pkgSel.innerHTML = packages.map((p) => `<option value="${esc(p.hash)}"${p.hash === current ? ' selected' : ''}>${esc(p.name)} (${bytes(p.size)})</option>`).join('')
     || '<option value="">No data packages; upload one on the Data Packages tab</option>';
   if (!$('#send-from').value && status) $('#send-from').value = status.server_name;
-  $('#send-history tbody').innerHTML = history.map((h) => `<tr>
-      <td title="${esc(date(h.time))}">${ago(h.time)}</td>
-      <td><span class="pill">${esc(h.kind)}</span> ${esc(h.summary)}</td>
-      <td>${esc(h.to)}</td><td>${h.delivered}</td><td>${esc(h.admin)}</td></tr>`).join('')
-    || emptyRow(5, 'Nothing sent yet');
   syncSendScope();
 }
+
+$('#send-direct').addEventListener('change', (e) => {
+  // Direct messages always come from the server contact's callsign.
+  $('#send-from').disabled = e.target.checked;
+});
+
+$('#contact-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  await api('PUT', 'api/send/contact', {
+    enabled: f.enabled.checked, callsign: f.callsign.value, lat: Number(f.lat.value) || 0, lon: Number(f.lon.value) || 0,
+  });
+  toast(f.enabled.checked ? 'Server contact is on devices' : 'Server contact removed from devices');
+}));
+
+$('#contact-here').addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    toast('This browser cannot share its location', true);
+    return;
+  }
+  navigator.geolocation.getCurrentPosition((p) => {
+    $('#contact-form').lat.value = p.coords.latitude.toFixed(6);
+    $('#contact-form').lon.value = p.coords.longitude.toFixed(6);
+  }, (err) => toast(`Location unavailable: ${err.message}`, true));
+});
+
+$('#send-inbox').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('button[data-reply]');
+  if (!b) return;
+  const text = prompt(`Reply to ${b.dataset.name}`);
+  if (!text) return;
+  await api('POST', 'api/send/reply', { uid: b.dataset.reply, text });
+  toast(`Reply sent to ${b.dataset.name}`);
+  loadSendLive();
+}));
 
 function sendTarget() {
   const scope = sendScope();
@@ -688,9 +746,10 @@ for (const r of document.querySelectorAll('input[name="send-scope"]')) r.addEven
 $('#send-message-form').addEventListener('submit', guard(async (e) => {
   e.preventDefault();
   const f = new FormData(e.target);
-  const res = await api('POST', 'api/send/message', { from: f.get('from'), text: f.get('text'), to: sendTarget() });
+  const direct = $('#send-direct').checked;
+  const res = await api('POST', 'api/send/message', { from: $('#send-from').value, text: f.get('text'), direct, to: sendTarget() });
   e.target.querySelector('textarea').value = '';
-  toast(`Message delivered to ${res.delivered} device(s)`);
+  toast(`${direct ? 'Direct message' : 'Message'} delivered to ${res.delivered} device(s)` + (res.skipped ? `; ${res.skipped} skipped (no position report yet)` : ''));
   loadSend();
 }));
 

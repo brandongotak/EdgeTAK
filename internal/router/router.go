@@ -31,7 +31,23 @@ type Router struct {
 	clients  map[uint64]*Client
 	hooks    []Hook
 	missions MissionResolver
+	presence func() *cot.Event // server-originated event every new client receives
 	nextID   atomic.Uint64
+}
+
+// SetPresence registers a function whose event (if non-nil) is sent to each
+// client as it connects, e.g. the server's own contact.
+func (r *Router) SetPresence(fn func() *cot.Event) {
+	r.mu.Lock()
+	r.presence = fn
+	r.mu.Unlock()
+}
+
+// Broadcast sends a server-originated event to every connected client.
+func (r *Router) Broadcast(ev *cot.Event) {
+	for _, c := range r.Clients() {
+		c.Send(ev)
+	}
 }
 
 func New(log *slog.Logger, sendLatestSA bool) *Router {
@@ -73,7 +89,13 @@ func (r *Router) Register(c *Client) {
 	c.ID = r.nextID.Add(1)
 	r.mu.Lock()
 	r.clients[c.ID] = c
+	presence := r.presence
 	r.mu.Unlock()
+	if presence != nil {
+		if ev := presence(); ev != nil {
+			c.Send(ev)
+		}
+	}
 	r.replayTo(c)
 	r.log.Info("client connected", "id", c.ID, "remote", c.Remote, "user", c.Username, "transport", c.Transport,
 		"groups_in", c.InGroups(), "groups_out", c.OutGroups())
