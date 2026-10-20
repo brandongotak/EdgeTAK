@@ -101,6 +101,28 @@ td.actions { text-align: right; display: flex; gap: 6px; justify-content: flex-e
 .qr:empty { display: none; }
 .uri { display: block; margin-top: 8px; word-break: break-all; color: var(--muted); }
 
+.member { display: inline-flex; align-items: center; gap: 4px; margin: 2px 4px 2px 0; }
+.member .dir { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.member button { padding: 0 5px; font-size: 12px; line-height: 16px; border: none; background: transparent; color: var(--muted); }
+.member button:hover { color: var(--danger); }
+.addmember { display: flex; gap: 4px; }
+.addmember select { padding: 3px 6px; font-size: 12px; }
+
+.stack.wide { max-width: none; }
+.picker-label { margin-bottom: 6px; font-size: 13px; }
+.group-picker { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.group-picker label.chip {
+  flex-direction: row; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line);
+  border-radius: 999px; color: var(--text); cursor: pointer; user-select: none;
+}
+.group-picker label.chip:has(input:checked) { border-color: var(--accent); color: var(--accent); }
+.dialog { color: var(--text); width: min(520px, calc(100% - 32px)); padding: 20px; }
+.dialog::backdrop { background: #0008; }
+.group-rows { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
+.group-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.group-row select { min-width: 150px; }
+.spacer { flex: 1; }
+
 .toast {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 2000;
   background: var(--panel-2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; max-width: calc(100% - 32px);

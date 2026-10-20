@@ -36,12 +36,12 @@ func (s *Server) martiRoutes(mux *http.ServeMux) {
 	// Certificate enrollment (ATAK/WinTAK/iTAK "enroll for client certificate").
 	mux.HandleFunc("GET /Marti/api/tls/config", s.named(s.tlsConfig))
 	mux.HandleFunc("POST /Marti/api/tls/signClient/v2", s.named(s.signClient))
-	noContent := func(w http.ResponseWriter, r *http.Request, _ *identity) { w.WriteHeader(http.StatusNoContent) }
-	mux.HandleFunc("GET /Marti/api/tls/profile/enrollment", s.named(noContent))
-	mux.HandleFunc("GET /Marti/api/device/profile/connection", s.authed(noContent))
+	// Device profiles pushed at enrollment and on every connect (official
+	// ProfileAPI). They carry the preferences that turn on ATAK's Channels.
+	mux.HandleFunc("GET /Marti/api/tls/profile/enrollment", s.named(s.deviceProfile("Enrollment")))
+	mux.HandleFunc("GET /Marti/api/device/profile/connection", s.authed(s.deviceProfile("Connection")))
 
 	mux.HandleFunc("GET /Marti/api/clientEndPoints", s.authed(s.clientEndpoints))
-	mux.HandleFunc("GET /Marti/api/groups/all", s.authed(s.groupsAll))
 	for _, p := range []string{"/Marti/api/contacts/all", "/Marti/api/contacts/all/lite", "/Marti/api/contacts/all/full"} {
 		mux.HandleFunc("GET "+p, s.authed(s.contacts))
 	}
@@ -125,7 +125,7 @@ func (s *Server) signClient(w http.ResponseWriter, r *http.Request, id *identity
 func (s *Server) clientEndpoints(w http.ResponseWriter, r *http.Request, id *identity) {
 	data := []map[string]string{}
 	for _, c := range s.Router.Clients() {
-		if !id.canSee(c.Groups) {
+		if !id.canSee(c.OutGroups()) { // contacts whose traffic reaches the caller
 			continue
 		}
 		uid, cs := c.Identity()
@@ -146,10 +146,10 @@ func (s *Server) contacts(w http.ResponseWriter, r *http.Request, id *identity) 
 	out := []map[string]any{}
 	for _, c := range s.Router.Clients() {
 		uid, cs := c.Identity()
-		if uid == "" || !id.canSee(c.Groups) {
+		if uid == "" || !id.canSee(c.OutGroups()) {
 			continue
 		}
-		entry := map[string]any{"uid": uid, "callsign": cs, "filterGroups": c.Groups, "notes": "", "username": c.Username}
+		entry := map[string]any{"uid": uid, "callsign": cs, "filterGroups": c.OutGroups(), "notes": "", "username": c.Username}
 		if sa := c.LastSA(); sa != nil {
 			if g := sa.Detail.Group; g != nil {
 				entry["team"], entry["role"] = g.Name, g.Role
@@ -161,19 +161,6 @@ func (s *Server) contacts(w http.ResponseWriter, r *http.Request, id *identity) 
 		out = append(out, entry)
 	}
 	writeJSON(w, http.StatusOK, out)
-}
-
-func (s *Server) groupsAll(w http.ResponseWriter, r *http.Request, id *identity) {
-	data := []map[string]any{}
-	for i, g := range id.Groups {
-		for _, dir := range []string{"IN", "OUT"} {
-			data = append(data, map[string]any{
-				"name": g, "direction": dir, "created": s.Started.Format("2006-01-02"),
-				"type": "SYSTEM", "bitpos": i, "active": true,
-			})
-		}
-	}
-	writeJSON(w, http.StatusOK, s.martiEnvelope("com.bbn.marti.remote.groups.Group", data))
 }
 
 // ---- data packages ----
@@ -274,7 +261,11 @@ func (s *Server) savePackage(src io.Reader, name, mimeType, creatorUID string, k
 	if err := os.Rename(tmp.Name(), filepath.Join(s.PackageDir, hash)); err != nil {
 		return nil, err
 	}
-	groups := slices.Clone(id.Groups)
+	// Uploads are shared with the uploader's OUT groups (IN for receive-only users).
+	groups := slices.Clone(id.OutGroups)
+	if len(groups) == 0 {
+		groups = slices.Clone(id.Groups)
+	}
 	if old, ok := s.Store.Package(hash); ok {
 		// Re-uploading identical content must not hide it from earlier groups.
 		for _, g := range old.Groups {

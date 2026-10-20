@@ -59,10 +59,13 @@ const (
 	csrfHeader    = "X-EdgeTAK"
 )
 
-// identity is the authenticated principal of an HTTP request.
+// identity is the authenticated principal of an HTTP request. Groups are its
+// IN groups (what it may see); OutGroups are where its uploads and new
+// missions go.
 type identity struct {
 	Username  string
 	Groups    []string
+	OutGroups []string
 	Admin     bool
 	Anonymous bool
 	Session   bool // authenticated via admin console cookie
@@ -78,6 +81,8 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.martiRoutes(mux)
 	s.oauthRoutes(mux)
 	s.adminRoutes(mux)
+	s.groupRoutes(mux)
+	s.channelRoutes(mux)
 
 	sub, _ := fs.Sub(staticFS, "static")
 	files := http.StripPrefix("/admin/", http.FileServerFS(sub))
@@ -224,7 +229,8 @@ func (s *Server) identify(r *http.Request) *identity {
 		}
 	}
 	if r.TLS == nil && s.Cfg.AllowAnonymousHTTP {
-		return &identity{Username: "anonymous", Groups: []string{s.Cfg.AnonymousGroup}, Anonymous: true}
+		anon := []string{s.Cfg.AnonymousGroup}
+		return &identity{Username: "anonymous", Groups: anon, OutGroups: anon, Anonymous: true}
 	}
 	return nil
 }
@@ -237,15 +243,13 @@ func (s *Server) userIdentity(name string) *identity {
 	if u, ok := s.Store.User(name); ok {
 		return s.fromUser(u)
 	}
-	return &identity{Username: name, Groups: []string{s.Cfg.AnonymousGroup}}
+	anon := []string{s.Cfg.AnonymousGroup}
+	return &identity{Username: name, Groups: anon, OutGroups: anon}
 }
 
 func (s *Server) fromUser(u *store.User) *identity {
-	groups := u.Groups
-	if len(groups) == 0 {
-		groups = []string{s.Cfg.AnonymousGroup}
-	}
-	return &identity{Username: u.Username, Groups: groups, Admin: u.Admin}
+	in, out := u.Effective(s.Cfg.AnonymousGroup)
+	return &identity{Username: u.Username, Groups: in, OutGroups: out, Admin: u.Admin}
 }
 
 func (id *identity) canSee(groups []string) bool {

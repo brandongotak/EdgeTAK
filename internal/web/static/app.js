@@ -139,6 +139,7 @@ $('#logout').addEventListener('click', async () => {
 const loaders = {
   dashboard: loadDashboard,
   users: loadUsers,
+  groups: loadGroups,
   certs: loadCerts,
   packages: loadPackages,
   missions: loadMissions,
@@ -282,18 +283,39 @@ function updateMap(clients) {
 
 // ---------- users ----------
 
-const splitGroups = (s) => String(s || '').split(',').map((g) => g.trim()).filter(Boolean);
+let allGroups = [];
+let usersByName = {};
+
+function renderNewUserPicker() {
+  const checked = new Set([...document.querySelectorAll('#new-user-groups input:checked')].map((i) => i.value));
+  $('#new-user-groups').innerHTML = allGroups.map((g) => `<label class="chip" title="${esc(g.description)}">
+      <input type="checkbox" name="g" value="${esc(g.name)}"${checked.has(g.name) ? ' checked' : ''}>${esc(g.name)}</label>`).join('')
+    + '<button type="button" class="small" id="new-user-new-group">+ New group</button>';
+}
+
+// promptNewGroup creates a group from the Users tab and refreshes the list.
+async function promptNewGroup() {
+  const name = prompt('Name of the new group');
+  if (!name) return null;
+  await api('POST', 'api/groups', { name: name.trim() });
+  allGroups = await api('GET', 'api/groups');
+  toast(`Group ${name.trim()} created`);
+  return name.trim();
+}
 
 async function loadUsers() {
-  const users = await api('GET', 'api/users');
+  const [users, groups] = await Promise.all([api('GET', 'api/users'), api('GET', 'api/groups')]);
+  allGroups = groups;
+  usersByName = Object.fromEntries(users.map((u) => [u.username, u]));
+  renderNewUserPicker();
   $('#users-table tbody').innerHTML = users.map((u) => `<tr>
     <td><strong>${esc(u.username)}</strong></td>
-    <td>${groupPills(u.groups)}</td>
+    <td>${userGroupPills(u)}</td>
     <td>${u.admin ? '<span class="pill ok">admin</span>' : 'user'}</td>
     <td>${u.online ? `<span class="pill ok">${u.online} online</span>` : '<span class="muted">offline</span>'}</td>
     <td>${esc(date(u.created))}</td>
     <td class="actions">
-      <button class="small" data-act="groups" data-user="${esc(u.username)}" data-groups="${esc((u.groups || []).join(', '))}">Groups</button>
+      <button class="small" data-act="groups" data-user="${esc(u.username)}">Groups</button>
       <button class="small" data-act="password" data-user="${esc(u.username)}">Password</button>
       <button class="small" data-act="admin" data-user="${esc(u.username)}" data-admin="${u.admin}">${u.admin ? 'Revoke admin' : 'Make admin'}</button>
       <button class="small" data-act="p12" data-user="${esc(u.username)}">Issue .p12</button>
@@ -305,10 +327,76 @@ $('#user-form').addEventListener('submit', guard(async (e) => {
   e.preventDefault();
   const f = new FormData(e.target);
   await api('POST', 'api/users', {
-    username: f.get('username'), password: f.get('password'), groups: splitGroups(f.get('groups')), admin: f.get('admin') === 'on',
+    username: f.get('username'), password: f.get('password'), groups: f.getAll('g'), admin: f.get('admin') === 'on',
   });
   e.target.reset();
   toast('User created');
+  loadUsers();
+}));
+
+$('#new-user-groups').addEventListener('click', guard(async (e) => {
+  if (e.target.id !== 'new-user-new-group') return;
+  const name = await promptNewGroup();
+  renderNewUserPicker();
+  if (name) {
+    const box = [...document.querySelectorAll('#new-user-groups input')].find((i) => i.value === name);
+    if (box) box.checked = true;
+  }
+}));
+
+// ---- per-user groups dialog ----
+
+let dialogUser = null;
+
+function userDirection(u, group) {
+  if ((u.groups || []).includes(group)) return 'both';
+  if ((u.groups_in || []).includes(group)) return 'in';
+  if ((u.groups_out || []).includes(group)) return 'out';
+  return '';
+}
+
+function renderGroupsDialog(selected) {
+  $('#groups-dialog-list').innerHTML = allGroups.map((g) => {
+    const cur = selected[g.name] || '';
+    const opt = (v, label) => `<option value="${v}"${cur === v ? ' selected' : ''}>${label}</option>`;
+    return `<div class="group-row">
+      <div><strong>${esc(g.name)}</strong>${g.description ? `<div class="muted">${esc(g.description)}</div>` : ''}</div>
+      <select data-group="${esc(g.name)}">${opt('', 'not a member')}${opt('both', 'in + out')}${opt('in', 'in (receive only)')}${opt('out', 'out (send only)')}</select>
+    </div>`;
+  }).join('') || '<p class="muted">No groups yet. Create one with "+ New group".</p>';
+}
+
+function dialogSelections() {
+  return Object.fromEntries([...document.querySelectorAll('#groups-dialog-list select')].map((s) => [s.dataset.group, s.value]));
+}
+
+function openGroupsDialog(username) {
+  const u = usersByName[username];
+  dialogUser = username;
+  $('#groups-dialog-title').textContent = `Groups for ${username}`;
+  renderGroupsDialog(Object.fromEntries(allGroups.map((g) => [g.name, userDirection(u, g.name)])));
+  $('#groups-dialog').showModal();
+}
+
+$('#groups-dialog-new').addEventListener('click', guard(async () => {
+  const selected = dialogSelections();
+  const name = await promptNewGroup();
+  if (name) selected[name] = 'both';
+  renderGroupsDialog(selected);
+}));
+
+$('#groups-dialog-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const dialog = $('#groups-dialog');
+  if (e.submitter?.value !== 'save') {
+    dialog.close();
+    return;
+  }
+  const sel = Object.entries(dialogSelections());
+  const pick = (dir) => sel.filter(([, d]) => d === dir).map(([g]) => g);
+  await api('PATCH', `api/users/${encodeURIComponent(dialogUser)}`, { groups: pick('both'), groups_in: pick('in'), groups_out: pick('out') });
+  dialog.close();
+  toast(`Groups updated for ${dialogUser}`);
   loadUsers();
 }));
 
@@ -318,13 +406,9 @@ $('#users-table').addEventListener('click', guard(async (e) => {
   const user = b.dataset.user;
   const path = `api/users/${encodeURIComponent(user)}`;
   switch (b.dataset.act) {
-    case 'groups': {
-      const g = prompt(`Groups for ${user} (comma separated, blank = __ANON__). Users must reconnect for changes to apply.`, b.dataset.groups);
-      if (g === null) return;
-      await api('PATCH', path, { groups: splitGroups(g) });
-      toast('Groups updated');
-      break;
-    }
+    case 'groups':
+      openGroupsDialog(user);
+      return;
     case 'password': {
       const pw = prompt(`New password for ${user} (8+ characters)`);
       if (!pw) return;
@@ -349,6 +433,97 @@ $('#users-table').addEventListener('click', guard(async (e) => {
       break;
   }
   loadUsers();
+}));
+
+// ---------- groups ----------
+
+const DIR_LABEL = { both: '', in: 'in', out: 'out' };
+
+function userGroupPills(u) {
+  const parts = [
+    ...(u.groups || []).map((g) => [g, 'both']),
+    ...(u.groups_in || []).map((g) => [g, 'in']),
+    ...(u.groups_out || []).map((g) => [g, 'out']),
+  ];
+  if (!parts.length) return '<span class="pill">__ANON__</span>';
+  const off = new Set(u.inactive || []);
+  return parts.map(([g, d]) => {
+    const dirs = d === 'both' ? ['IN', 'OUT'] : [d.toUpperCase()];
+    const allOff = dirs.every((x) => off.has(`${g}:${x}`));
+    const someOff = dirs.some((x) => off.has(`${g}:${x}`));
+    const note = allOff ? ' <span class="muted" title="switched off by the user in their client (Channels)">off</span>' : someOff ? ' <span class="muted">partly off</span>' : '';
+    return `<span class="pill"${allOff ? ' style="opacity:.55"' : ''}>${esc(g)}${d !== 'both' ? ` <span class="muted">${d}</span>` : ''}${note}</span>`;
+  }).join('');
+}
+
+async function loadGroups() {
+  const [groups, users] = await Promise.all([api('GET', 'api/groups'), api('GET', 'api/users')]);
+  const userOptions = users.map((u) => `<option value="${esc(u.username)}">${esc(u.username)}</option>`).join('');
+  $('#groups-table tbody').innerHTML = groups.map((g) => {
+    const members = g.members.map((m) => `<span class="member pill">${esc(m.username)}${DIR_LABEL[m.direction] ? ` <span class="dir">${DIR_LABEL[m.direction]}</span>` : ''}<button title="Remove from group" data-remove="${esc(m.username)}" data-group="${esc(g.name)}">×</button></span>`).join('');
+    const implicit = g.builtin ? '<div class="muted">Also: users without groups and plaintext TCP clients</div>' : '';
+    return `<tr>
+      <td><strong>${esc(g.name)}</strong>${g.description ? `<div class="muted">${esc(g.description)}</div>` : ''}</td>
+      <td>${members || '<span class="muted">no members</span>'}${implicit}</td>
+      <td><form class="addmember" data-group="${esc(g.name)}">
+        <select name="user" required><option value="">user…</option>${userOptions}</select>
+        <select name="direction"><option value="both">in + out</option><option value="in">in (receive)</option><option value="out">out (send)</option></select>
+        <button class="small" type="submit">Add</button>
+      </form></td>
+      <td>${g.online}</td>
+      <td>${esc(g.created)}</td>
+      <td class="actions">
+        <button class="small" data-act="describe" data-group="${esc(g.name)}" data-desc="${esc(g.description)}">Description</button>
+        ${g.builtin ? '' : `<button class="small" data-act="rename" data-group="${esc(g.name)}">Rename</button>
+        <button class="small danger" data-act="delete" data-group="${esc(g.name)}">Delete</button>`}
+      </td></tr>`;
+  }).join('') || emptyRow(6, 'No groups');
+}
+
+$('#group-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  await api('POST', 'api/groups', { name: f.get('name'), description: f.get('description') });
+  e.target.reset();
+  toast('Group created');
+  loadGroups();
+}));
+
+$('#groups-table').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const form = e.target.closest('form.addmember');
+  const f = new FormData(form);
+  if (!f.get('user')) return;
+  await api('PUT', `api/groups/${encodeURIComponent(form.dataset.group)}/members/${encodeURIComponent(f.get('user'))}`, { direction: f.get('direction') });
+  toast(`${f.get('user')} added to ${form.dataset.group}`);
+  loadGroups();
+}));
+
+$('#groups-table').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('button');
+  if (!b || b.type === 'submit') return;
+  const group = b.dataset.group;
+  const path = `api/groups/${encodeURIComponent(group)}`;
+  if (b.dataset.remove) {
+    await api('DELETE', `${path}/members/${encodeURIComponent(b.dataset.remove)}`);
+    toast(`${b.dataset.remove} removed from ${group}`);
+  } else if (b.dataset.act === 'describe') {
+    const d = prompt(`Description for ${group}`, b.dataset.desc);
+    if (d === null) return;
+    await api('PATCH', path, { description: d });
+  } else if (b.dataset.act === 'rename') {
+    const n = prompt(`New name for ${group}. Members, data packages and missions follow the rename.`, group);
+    if (!n || n === group) return;
+    await api('PATCH', path, { name: n });
+    toast('Group renamed');
+  } else if (b.dataset.act === 'delete') {
+    if (!confirm(`Delete group ${group}? Its members lose access to what it shares.`)) return;
+    await api('DELETE', path);
+    toast('Group deleted');
+  } else {
+    return;
+  }
+  loadGroups();
 }));
 
 // ---------- certificates ----------

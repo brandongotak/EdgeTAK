@@ -51,6 +51,15 @@ Working and covered by an end-to-end test (`internal/app/app_test.go`):
     them when it presents a client certificate
   - `log_level: debug` logs every HTTP request and traces failed TLS
     handshakes, for diagnosing new clients
+- **Groups and channels**, modelled on the official server
+  - Groups tab: create, describe, rename and delete groups and manage their
+    members. Users tab: pick a user's groups from a list.
+  - Each membership has a direction: **in** (receive what the group shares),
+    **out** (send to it) or both. Routing, contacts, data packages and
+    missions all follow it, and changes apply to connected devices at once.
+  - Channels: users switch their memberships on and off from ATAK, WinTAK or
+    TAKX (`/Marti/api/groups/active`). ATAK gets the Channels button through
+    the device profile pushed at enrollment and on connect.
 - **Web admin console**: `https://<host>:8443/admin/`
   - Live map and connected-client table (callsign, team, battery, device, traffic)
   - Users and groups, issuing `.p12` certificates, revoking certificates

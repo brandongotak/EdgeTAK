@@ -61,3 +61,17 @@ func (s *Service) SubscriberUIDs(name string, c Caller) ([]string, error) {
 	}
 	return subscriberUIDs(m), nil
 }
+
+// RenameGroup follows a group rename in every mission's group list.
+func (s *Service) RenameGroup(old, new string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, m := range s.missions {
+		if i := slices.Index(m.Groups, old); i >= 0 {
+			m.Groups[i] = new
+			if err := s.save(m); err != nil {
+				s.log.Error("save mission", "mission", m.Name, "err", err)
+			}
+		}
+	}
+}

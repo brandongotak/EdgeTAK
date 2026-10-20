@@ -79,6 +79,11 @@ var prefTmpl = template.Must(template.New("pref").Parse(`<?xml version='1.0' enc
     <entry key="caLocation" class="class java.lang.String">cert/{{.Truststore}}</entry>
 {{- end}}
   </preference>
+{{- if .SSL}}
+  <preference version="1" name="com.atakmap.app.civ_preferences">
+    {{.ChannelPrefs}}
+  </preference>
+{{- end}}
 </preferences>
 `))
 
@@ -118,6 +123,9 @@ func (s *Server) buildConnectionPackage(mode, host, username string) ([]byte, er
 		"Password":   xmlEscape(s.Cfg.TruststorePassword),
 		"Username":   xmlEscape(username),
 		"UID":        uuid(),
+		// Channels and profile updates on connect, so devices set up from
+		// this package see Channels without re-enrolling.
+		"ChannelPrefs": channelPrefEntries(host),
 	}
 
 	var buf bytes.Buffer

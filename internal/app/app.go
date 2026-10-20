@@ -66,6 +66,11 @@ func New(cfg config.Config, dataDir, version string, log *slog.Logger) (*App, er
 	if err := a.ensureAdmin(); err != nil {
 		return nil, err
 	}
+	if _, ok := a.Store.Group(cfg.AnonymousGroup); !ok {
+		if _, err := a.Store.CreateGroup(cfg.AnonymousGroup, "Users without groups and anonymous (plaintext) clients"); err != nil {
+			return nil, err
+		}
+	}
 	hosts := append(pki.DetectHosts(), cfg.Hostnames...)
 	if a.Cfg.PublicHost != "" {
 		hosts = append([]string{a.Cfg.PublicHost}, hosts...)

@@ -73,23 +73,44 @@ func (r *Router) Register(c *Client) {
 	c.ID = r.nextID.Add(1)
 	r.mu.Lock()
 	r.clients[c.ID] = c
+	r.mu.Unlock()
+	r.replayTo(c)
+	r.log.Info("client connected", "id", c.ID, "remote", c.Remote, "user", c.Username, "transport", c.Transport,
+		"groups_in", c.InGroups(), "groups_out", c.OutGroups())
+}
+
+// replayTo sends c the latest SA of every peer whose traffic it may see.
+func (r *Router) replayTo(c *Client) {
+	if !r.sendLatestSA {
+		return
+	}
+	now := time.Now()
 	var replay []*cot.Event
-	if r.sendLatestSA {
-		now := time.Now()
-		for _, o := range r.clients {
-			if o == c || !sharesGroup(o.Groups, c.Groups) {
-				continue
-			}
-			if sa := o.LastSA(); sa != nil && !sa.IsStale(now) {
-				replay = append(replay, sa)
-			}
+	r.mu.RLock()
+	for _, o := range r.clients {
+		if o == c || !sharesGroup(o.OutGroups(), c.InGroups()) {
+			continue
+		}
+		if sa := o.LastSA(); sa != nil && !sa.IsStale(now) {
+			replay = append(replay, sa)
 		}
 	}
-	r.mu.Unlock()
+	r.mu.RUnlock()
 	for _, sa := range replay {
 		c.Send(sa)
 	}
-	r.log.Info("client connected", "id", c.ID, "remote", c.Remote, "user", c.Username, "transport", c.Transport, "groups", c.Groups)
+}
+
+// SetUserGroups applies new group memberships to username's live
+// connections, so changes take effect without reconnecting.
+func (r *Router) SetUserGroups(username string, in, out []string) {
+	for _, c := range r.Clients() {
+		if c.Username == username {
+			c.SetGroups(in, out)
+			r.log.Info("client groups changed", "id", c.ID, "user", username, "groups_in", in, "groups_out", out)
+			r.replayTo(c)
+		}
+	}
 }
 
 func (r *Router) Unregister(c *Client) {
@@ -124,7 +145,7 @@ func (r *Router) Client(id uint64) (*Client, bool) {
 // with it, or only to the addressed clients when the event carries
 // <marti><dest uid|callsign|mission/></marti> entries.
 func (r *Router) Route(src *Client, ev *cot.Event) {
-	r.deliver(src, src.Groups, ev)
+	r.deliver(src, src.OutGroups(), ev)
 }
 
 // Inject delivers a server-originated event to clients in any of groups.
@@ -167,7 +188,7 @@ func (r *Router) deliver(src *Client, groups []string, ev *cot.Event) {
 			continue
 		}
 		if !directed {
-			if sharesGroup(groups, c.Groups) {
+			if sharesGroup(groups, c.InGroups()) {
 				c.Send(ev)
 			}
 			continue
@@ -176,7 +197,7 @@ func (r *Router) deliver(src *Client, groups []string, ev *cot.Event) {
 		switch {
 		case uid != "" && slices.Contains(missionUIDs, uid):
 			c.Send(ev)
-		case sharesGroup(groups, c.Groups) && (slices.Contains(uids, uid) || slices.Contains(callsigns, cs)):
+		case sharesGroup(groups, c.InGroups()) && (slices.Contains(uids, uid) || slices.Contains(callsigns, cs)):
 			c.Send(ev)
 		}
 	}
@@ -202,7 +223,6 @@ type Client struct {
 	Transport   string // "tcp" or "tls"
 	Username    string // empty for anonymous TCP clients
 	CertSerial  string // hex serial of the client certificate (TLS only)
-	Groups      []string
 	ConnectedAt time.Time
 
 	In, Out, Dropped atomic.Uint64
@@ -214,21 +234,44 @@ type Client struct {
 	once   sync.Once
 	close  func()
 
-	mu       sync.RWMutex
-	uid      string
-	callsign string
-	lastSA   *cot.Event
-	lastSeen time.Time
+	mu        sync.RWMutex
+	groupsIn  []string // receives traffic sent to these groups
+	groupsOut []string // its own traffic goes to these groups
+	uid       string
+	callsign  string
+	lastSA    *cot.Event
+	lastSeen  time.Time
 }
 
 // NewClient creates a client whose Close calls closeFn (typically conn.Close).
-func NewClient(remote, transport, username string, groups []string, closeFn func()) *Client {
+func NewClient(remote, transport, username string, in, out []string, closeFn func()) *Client {
 	now := time.Now()
 	return &Client{
-		Remote: remote, Transport: transport, Username: username, Groups: groups,
+		Remote: remote, Transport: transport, Username: username, groupsIn: in, groupsOut: out,
 		ConnectedAt: now, lastSeen: now,
 		queue: make(chan *cot.Event, queueSize), closed: make(chan struct{}), close: closeFn,
 	}
+}
+
+// InGroups returns the groups whose traffic the client receives.
+func (c *Client) InGroups() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.groupsIn
+}
+
+// OutGroups returns the groups the client's own traffic is delivered to.
+func (c *Client) OutGroups() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.groupsOut
+}
+
+// SetGroups replaces the client's memberships (see Router.SetUserGroups).
+func (c *Client) SetGroups(in, out []string) {
+	c.mu.Lock()
+	c.groupsIn, c.groupsOut = slices.Clone(in), slices.Clone(out)
+	c.mu.Unlock()
 }
 
 // Send queues ev without blocking; events are dropped for clients that

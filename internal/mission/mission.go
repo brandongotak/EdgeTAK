@@ -179,7 +179,8 @@ func (m *Mission) addChange(c Change) {
 // Caller identifies who is acting on a mission.
 type Caller struct {
 	Username  string
-	Groups    []string
+	Groups    []string // IN groups: which missions the caller can see
+	OutGroups []string // OUT groups: where the caller's new missions go
 	Admin     bool
 	Anonymous bool
 	ClientUID string // device UID from the request (uid/creatorUid/clientUid)

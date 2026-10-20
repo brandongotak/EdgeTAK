@@ -103,22 +103,12 @@ func (s *Server) missionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /Marti/api/sync/content", s.authed(s.content))
 	mux.HandleFunc("HEAD /Marti/api/sync/content", s.authed(s.content))
 	mux.HandleFunc("POST /Marti/api/sync/upload", s.authed(s.rawUpload))
-	// Active-group selection is not supported yet; accept it so clients proceed.
-	for _, path := range []string{"/Marti/api/groups/active", "/Marti/api/groups/activebits"} {
-		mux.HandleFunc("PUT "+path, s.authed(func(w http.ResponseWriter, r *http.Request, _ *identity) {
-			io.Copy(io.Discard, io.LimitReader(r.Body, 64<<10))
-			w.WriteHeader(http.StatusOK)
-		}))
-	}
 
 	// Latest CoT by UID (official CotApi), used to fetch announced mission items.
 	h("GET /Marti/api/cot/xml/{uid}", s.cotXML(false))
 	h("GET /Marti/api/cot/xml/{uid}/all", s.cotXML(true))
 	h("GET /Marti/api/cot", s.cotEvents)
 	h("POST /Marti/api/cot", s.cotEvents)
-	mux.HandleFunc("GET /Marti/api/groups/groupCacheEnabled", s.authed(func(w http.ResponseWriter, r *http.Request, _ *identity) {
-		writeJSON(w, http.StatusOK, s.martiEnvelope("java.lang.Boolean", false))
-	}))
 }
 
 const xmlHeader = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
@@ -191,7 +181,7 @@ func missionCaller(r *http.Request, id *identity) mission.Caller {
 	}
 	token, _ = strings.CutPrefix(token, "Bearer ")
 	return mission.Caller{
-		Username: id.Username, Groups: id.Groups, Admin: id.Admin, Anonymous: id.Anonymous,
+		Username: id.Username, Groups: id.Groups, OutGroups: id.OutGroups, Admin: id.Admin, Anonymous: id.Anonymous,
 		ClientUID: firstNonEmpty(q.Get("uid"), q.Get("clientUid"), q.Get("creatorUid")),
 		Token:     strings.TrimSpace(token),
 	}

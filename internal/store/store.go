@@ -11,18 +11,104 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
+// User group membership follows the official server's directions: IN groups
+// are what the user receives and sees, OUT groups are what the user's own
+// traffic and uploads go to. Groups lists memberships in both directions.
 type User struct {
-	Username     string    `json:"username"`
-	PasswordHash string    `json:"password_hash"`
-	Groups       []string  `json:"groups"`
-	Admin        bool      `json:"admin"`
-	Created      time.Time `json:"created"`
+	Username     string   `json:"username"`
+	PasswordHash string   `json:"password_hash"`
+	Groups       []string `json:"groups"`               // IN and OUT
+	GroupsIn     []string `json:"groups_in,omitempty"`  // receive only
+	GroupsOut    []string `json:"groups_out,omitempty"` // send only
+	// Inactive lists memberships the user switched off from their client
+	// (ATAK "Channels"), as "group:IN" / "group:OUT".
+	Inactive []string  `json:"inactive,omitempty"`
+	Admin    bool      `json:"admin"`
+	Created  time.Time `json:"created"`
+}
+
+// Memberships returns all of the user's IN and OUT groups, active or not. A
+// user without any group is in anon both ways, like anonymous clients.
+func (u *User) Memberships(anon string) (in, out []string) {
+	if len(u.Groups)+len(u.GroupsIn)+len(u.GroupsOut) == 0 {
+		return []string{anon}, []string{anon}
+	}
+	return union(u.Groups, u.GroupsIn), union(u.Groups, u.GroupsOut)
+}
+
+// Effective returns the IN and OUT groups currently in force: memberships
+// minus those the user deactivated.
+func (u *User) Effective(anon string) (in, out []string) {
+	in, out = u.Memberships(anon)
+	active := func(l []string, dir string) []string {
+		return slices.DeleteFunc(l, func(g string) bool { return !u.IsActive(g, dir) })
+	}
+	return active(in, "IN"), active(out, "OUT")
+}
+
+// IsActive reports whether the membership group/dir ("IN" or "OUT") is on.
+func (u *User) IsActive(group, dir string) bool {
+	return !slices.Contains(u.Inactive, group+":"+dir)
+}
+
+// Direction returns how the user belongs to group: "both", "in", "out" or "".
+func (u *User) Direction(group string) string {
+	switch {
+	case slices.Contains(u.Groups, group):
+		return "both"
+	case slices.Contains(u.GroupsIn, group):
+		return "in"
+	case slices.Contains(u.GroupsOut, group):
+		return "out"
+	}
+	return ""
+}
+
+// SetDirection makes the user a member of group in direction ("both", "in",
+// "out"), or removes the membership for "".
+func (u *User) SetDirection(group, dir string) {
+	drop := func(l []string) []string {
+		return slices.DeleteFunc(slices.Clone(l), func(g string) bool { return g == group })
+	}
+	u.Groups, u.GroupsIn, u.GroupsOut = drop(u.Groups), drop(u.GroupsIn), drop(u.GroupsOut)
+	if dir == "" {
+		u.Inactive = slices.DeleteFunc(slices.Clone(u.Inactive), func(k string) bool { return strings.HasPrefix(k, group+":") })
+	}
+	switch dir {
+	case "both":
+		u.Groups = append(u.Groups, group)
+	case "in":
+		u.GroupsIn = append(u.GroupsIn, group)
+	case "out":
+		u.GroupsOut = append(u.GroupsOut, group)
+	}
+}
+
+func union(a, b []string) []string {
+	out := slices.Clone(a)
+	for _, g := range b {
+		if !slices.Contains(out, g) {
+			out = append(out, g)
+		}
+	}
+	if out == nil {
+		out = []string{}
+	}
+	return out
+}
+
+// Group is a named group managed in the admin console.
+type Group struct {
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Created     time.Time `json:"created"`
 }
 
 type Cert struct {
@@ -52,6 +138,7 @@ type db struct {
 	Users    map[string]*User    `json:"users"`
 	Certs    map[string]*Cert    `json:"certs"`
 	Packages map[string]*Package `json:"packages"`
+	Groups   map[string]*Group   `json:"groups"`
 	NextSeq  int64               `json:"next_seq"`
 }
 
@@ -68,7 +155,7 @@ type Store struct {
 
 // Open loads the store at path, creating an empty one if needed.
 func Open(path string) (*Store, error) {
-	s := &Store{path: path, db: db{Users: map[string]*User{}, Certs: map[string]*Cert{}, Packages: map[string]*Package{}, NextSeq: 1}}
+	s := &Store{path: path, db: db{Users: map[string]*User{}, Certs: map[string]*Cert{}, Packages: map[string]*Package{}, Groups: map[string]*Group{}, NextSeq: 1}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, s.save()
@@ -87,6 +174,13 @@ func Open(path string) (*Store, error) {
 	}
 	if s.db.Packages == nil {
 		s.db.Packages = map[string]*Package{}
+	}
+	if s.db.Groups == nil {
+		s.db.Groups = map[string]*Group{}
+	}
+	// Groups used to exist only as names on users; give them records.
+	for _, u := range s.db.Users {
+		s.ensureGroupsLocked(append(append(slices.Clone(u.Groups), u.GroupsIn...), u.GroupsOut...))
 	}
 	return s, nil
 }
@@ -112,7 +206,164 @@ func (s *Store) save() error {
 func cloneUser(u *User) *User {
 	c := *u
 	c.Groups = slices.Clone(u.Groups)
+	c.GroupsIn = slices.Clone(u.GroupsIn)
+	c.GroupsOut = slices.Clone(u.GroupsOut)
+	c.Inactive = slices.Clone(u.Inactive)
 	return &c
+}
+
+// SetActive records which of username's memberships are switched on;
+// active maps "group:IN" / "group:OUT" to its state. Memberships not named
+// keep their current state.
+func (s *Store) SetActive(username string, active map[string]bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.db.Users[username]
+	if !ok {
+		return ErrNotFound
+	}
+	for key, on := range active {
+		has := slices.Contains(u.Inactive, key)
+		if on && has {
+			u.Inactive = slices.DeleteFunc(u.Inactive, func(k string) bool { return k == key })
+		} else if !on && !has {
+			u.Inactive = append(u.Inactive, key)
+		}
+	}
+	return s.save()
+}
+
+// ---- groups ----
+
+// GroupInfo is a group with its current members.
+type GroupInfo struct {
+	Group
+	Members []Member `json:"members"`
+}
+
+type Member struct {
+	Username  string `json:"username"`
+	Direction string `json:"direction"` // both, in, out
+}
+
+// ensureGroupsLocked creates records for unknown group names. Callers hold s.mu.
+func (s *Store) ensureGroupsLocked(names []string) {
+	for _, n := range names {
+		if _, ok := s.db.Groups[n]; !ok && n != "" {
+			s.db.Groups[n] = &Group{Name: n, Created: time.Now().UTC()}
+		}
+	}
+}
+
+// Groups lists every group with its members, sorted by name.
+func (s *Store) Groups() []GroupInfo {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]GroupInfo, 0, len(s.db.Groups))
+	for _, g := range s.db.Groups {
+		gi := GroupInfo{Group: *g, Members: []Member{}}
+		for _, u := range s.db.Users {
+			if d := u.Direction(g.Name); d != "" {
+				gi.Members = append(gi.Members, Member{u.Username, d})
+			}
+		}
+		sort.Slice(gi.Members, func(i, j int) bool { return gi.Members[i].Username < gi.Members[j].Username })
+		out = append(out, gi)
+	}
+	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name) })
+	return out
+}
+
+func (s *Store) Group(name string) (*Group, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	g, ok := s.db.Groups[name]
+	if !ok {
+		return nil, false
+	}
+	c := *g
+	return &c, true
+}
+
+func (s *Store) CreateGroup(name, description string) (*Group, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.db.Groups[name]; ok {
+		return nil, ErrExists
+	}
+	g := &Group{Name: name, Description: description, Created: time.Now().UTC()}
+	s.db.Groups[name] = g
+	c := *g
+	return &c, s.save()
+}
+
+// UpdateGroup changes a group's description and optionally renames it; a
+// rename is applied to every user and data package. It returns the users
+// whose memberships changed.
+func (s *Store) UpdateGroup(name, newName, description string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	g, ok := s.db.Groups[name]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	g.Description = description
+	var affected []string
+	if newName != "" && newName != name {
+		if _, ok := s.db.Groups[newName]; ok {
+			return nil, ErrExists
+		}
+		delete(s.db.Groups, name)
+		g.Name = newName
+		s.db.Groups[newName] = g
+		for _, u := range s.db.Users {
+			if d := u.Direction(name); d != "" {
+				u.SetDirection(name, "")
+				u.SetDirection(newName, d)
+				affected = append(affected, u.Username)
+			}
+		}
+		for _, p := range s.db.Packages {
+			if i := slices.Index(p.Groups, name); i >= 0 {
+				p.Groups[i] = newName
+			}
+		}
+	}
+	return affected, s.save()
+}
+
+// DeleteGroup removes a group and every membership in it. It returns the
+// users whose memberships changed.
+func (s *Store) DeleteGroup(name string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.db.Groups[name]; !ok {
+		return nil, ErrNotFound
+	}
+	delete(s.db.Groups, name)
+	var affected []string
+	for _, u := range s.db.Users {
+		if u.Direction(name) != "" {
+			u.SetDirection(name, "")
+			affected = append(affected, u.Username)
+		}
+	}
+	return affected, s.save()
+}
+
+// SetMembership sets username's direction in group ("" removes it).
+func (s *Store) SetMembership(group, username, dir string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.db.Groups[group]; !ok {
+		return ErrNotFound
+	}
+	u, ok := s.db.Users[username]
+	if !ok {
+		return ErrNotFound
+	}
+	u.SetDirection(group, dir)
+	return s.save()
 }
 
 func HashPassword(pw string) (string, error) {
@@ -165,6 +416,7 @@ func (s *Store) CreateUser(name, password string, groups []string, admin bool) (
 	}
 	u := &User{Username: name, PasswordHash: hash, Groups: slices.Clone(groups), Admin: admin, Created: time.Now().UTC()}
 	s.db.Users[name] = u
+	s.ensureGroupsLocked(groups)
 	return cloneUser(u), s.save()
 }
 
@@ -182,6 +434,7 @@ func (s *Store) UpdateUser(name string, fn func(u *User) error) (*User, error) {
 	}
 	c.Username = name
 	s.db.Users[name] = c
+	s.ensureGroupsLocked(append(append(slices.Clone(c.Groups), c.GroupsIn...), c.GroupsOut...))
 	return cloneUser(c), s.save()
 }
 

@@ -26,6 +26,7 @@
     <nav id="tabs" class="tabs" role="tablist">
       <button data-tab="dashboard" class="active">Dashboard</button>
       <button data-tab="users">Users</button>
+      <button data-tab="groups">Groups</button>
       <button data-tab="certs">Certificates</button>
       <button data-tab="packages">Data Packages</button>
       <button data-tab="missions">Missions</button>
@@ -56,18 +57,55 @@
     <section id="tab-users" class="tab" hidden>
       <div class="card">
         <h2>Add user</h2>
-        <form id="user-form" class="inline-form">
-          <input name="username" placeholder="username" required>
-          <input name="password" type="password" placeholder="password (8+ chars)" minlength="8" required>
-          <input name="groups" placeholder="groups, comma separated (blank = __ANON__)">
-          <label class="check"><input type="checkbox" name="admin"> Administrator</label>
-          <button class="primary" type="submit">Create</button>
+        <form id="user-form" class="stack wide">
+          <div class="inline-form">
+            <input name="username" placeholder="username" required>
+            <input name="password" type="password" placeholder="password (8+ chars)" minlength="8" required>
+            <label class="check"><input type="checkbox" name="admin"> Administrator</label>
+          </div>
+          <div>
+            <div class="muted picker-label">Groups (none selected = __ANON__)</div>
+            <div id="new-user-groups" class="group-picker"></div>
+          </div>
+          <div><button class="primary" type="submit">Create</button></div>
         </form>
       </div>
+      <dialog id="groups-dialog" class="card dialog">
+        <form method="dialog" id="groups-dialog-form" class="stack wide">
+          <h2 id="groups-dialog-title">Groups</h2>
+          <p class="muted">Changes apply to the user's connected devices immediately.</p>
+          <div id="groups-dialog-list" class="group-rows"></div>
+          <div class="inline-form">
+            <button type="button" class="small" id="groups-dialog-new">+ New group</button>
+            <span class="spacer"></span>
+            <button value="cancel" formnovalidate>Cancel</button>
+            <button class="primary" value="save">Save</button>
+          </div>
+        </form>
+      </dialog>
       <div class="card">
         <h2>Users</h2>
         <div class="table-wrap"><table id="users-table">
           <thead><tr><th>Username</th><th>Groups</th><th>Role</th><th>Online</th><th>Created</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section id="tab-groups" class="tab" hidden>
+      <div class="card">
+        <h2>Create group</h2>
+        <form id="group-form" class="inline-form">
+          <input name="name" placeholder="group name (e.g. Cyan, Command)" required>
+          <input name="description" placeholder="description (optional)">
+          <button class="primary" type="submit">Create</button>
+        </form>
+        <p class="muted">Members receive what a group shares (<span class="pill">in</span>), send to it (<span class="pill">out</span>), or both. Changes apply to connected devices immediately.</p>
+      </div>
+      <div class="card">
+        <h2>Groups</h2>
+        <div class="table-wrap"><table id="groups-table">
+          <thead><tr><th>Group</th><th>Members</th><th>Add member</th><th>Online</th><th>Created</th><th></th></tr></thead>
           <tbody></tbody>
         </table></div>
       </div>

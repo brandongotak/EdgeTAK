@@ -56,7 +56,8 @@ func (s *Server) handle(ctx context.Context, conn net.Conn, transport string) {
 		tc.SetKeepAlivePeriod(30 * time.Second)
 	}
 
-	username, serial, groups := "", "", []string{s.AnonymousGroup}
+	username, serial := "", ""
+	in, out := []string{s.AnonymousGroup}, []string{s.AnonymousGroup}
 	if tlsConn, ok := conn.(*tls.Conn); ok {
 		conn.SetDeadline(time.Now().Add(15 * time.Second))
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
@@ -74,12 +75,12 @@ func (s *Server) handle(ctx context.Context, conn net.Conn, transport string) {
 			return
 		}
 		username, serial = leaf.Subject.CommonName, pki.SerialHex(leaf)
-		if u, ok := s.Store.User(username); ok && len(u.Groups) > 0 {
-			groups = u.Groups
+		if u, ok := s.Store.User(username); ok {
+			in, out = u.Effective(s.AnonymousGroup)
 		}
 	}
 
-	c := router.NewClient(remote, transport, username, groups, func() { conn.Close() })
+	c := router.NewClient(remote, transport, username, in, out, func() { conn.Close() })
 	c.CertSerial = serial
 	defer c.Close()
 

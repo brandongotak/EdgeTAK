@@ -176,7 +176,7 @@ func TestDataSync(t *testing.T) {
 	if _, _, many := bob.do("POST", "/Marti/api/cot", []string{"marker-1", "ANDROID-alice", "nope"}); bytes.Count(many, []byte("<event ")) != 2 {
 		t.Errorf("POST cot = %s", many)
 	}
-	if env := bob.want(200, "GET", "/Marti/api/groups/groupCacheEnabled", nil); env["data"] != false {
+	if env := bob.want(200, "GET", "/Marti/api/groups/groupCacheEnabled", nil); env["data"] != true {
 		t.Errorf("groupCacheEnabled = %v", env)
 	}
 

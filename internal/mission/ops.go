@@ -147,18 +147,22 @@ func (s *Service) ownerToken(m *Mission, c Caller) string {
 	return s.newToken(m, c.ClientUID, RoleOwner)
 }
 
-// missionGroups keeps the requested groups the caller belongs to, falling
-// back to all of the caller's groups.
+// missionGroups keeps the requested groups the caller may publish to (its
+// OUT groups), falling back to all of them.
 func missionGroups(requested []string, c Caller) []string {
+	mine := c.OutGroups
+	if len(mine) == 0 {
+		mine = c.Groups
+	}
 	var out []string
 	for _, g := range requested {
 		g = strings.TrimSpace(g)
-		if g != "" && (c.Admin || slices.Contains(c.Groups, g)) && !slices.Contains(out, g) {
+		if g != "" && (c.Admin || slices.Contains(mine, g)) && !slices.Contains(out, g) {
 			out = append(out, g)
 		}
 	}
 	if len(out) == 0 {
-		out = slices.Clone(c.Groups)
+		out = slices.Clone(mine)
 	}
 	return out
 }
@@ -747,7 +751,7 @@ func (s *Service) hook(src *router.Client, ev *cot.Event) bool {
 	}
 	var groups []string
 	if src != nil {
-		groups = src.Groups
+		groups = src.OutGroups()
 	}
 	s.latest.put(ev, groups)
 
@@ -807,7 +811,7 @@ func (s *Service) resolve(src *router.Client, name string) []string {
 
 func callerFor(c *router.Client) Caller {
 	uid, _ := c.Identity()
-	return Caller{Username: c.Username, Groups: c.Groups, Anonymous: c.Username == "", ClientUID: uid}
+	return Caller{Username: c.Username, Groups: c.InGroups(), OutGroups: c.OutGroups(), Anonymous: c.Username == "", ClientUID: uid}
 }
 
 // markDirty schedules a debounced save for frequent CoT updates.

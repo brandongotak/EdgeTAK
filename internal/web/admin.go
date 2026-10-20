@@ -137,7 +137,8 @@ type clientView struct {
 	Remote      string    `json:"remote"`
 	Transport   string    `json:"transport"`
 	Format      string    `json:"format"`
-	Groups      []string  `json:"groups"`
+	GroupsIn    []string  `json:"groups_in"`
+	GroupsOut   []string  `json:"groups_out"`
 	ConnectedAt time.Time `json:"connected_at"`
 	LastSeen    time.Time `json:"last_seen"`
 	In          uint64    `json:"in"`
@@ -161,7 +162,7 @@ func (s *Server) listClients(w http.ResponseWriter, r *http.Request, _ *identity
 		uid, cs := c.Identity()
 		v := clientView{
 			ID: c.ID, UID: uid, Callsign: cs, Username: c.Username, Remote: c.Remote, Transport: c.Transport, Format: c.Format(),
-			Groups: c.Groups, ConnectedAt: c.ConnectedAt, LastSeen: c.LastSeen(),
+			GroupsIn: c.InGroups(), GroupsOut: c.OutGroups(), ConnectedAt: c.ConnectedAt, LastSeen: c.LastSeen(),
 			In: c.In.Load(), Out: c.Out.Load(), Dropped: c.Dropped.Load(),
 		}
 		if sa := c.LastSA(); sa != nil {
@@ -208,11 +209,32 @@ func (s *Server) disconnectClient(w http.ResponseWriter, r *http.Request, id *id
 var usernameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$`)
 
 type userView struct {
-	Username string    `json:"username"`
-	Groups   []string  `json:"groups"`
-	Admin    bool      `json:"admin"`
-	Created  time.Time `json:"created"`
-	Online   int       `json:"online"`
+	Username  string    `json:"username"`
+	Groups    []string  `json:"groups"`     // both directions
+	GroupsIn  []string  `json:"groups_in"`  // receive only
+	GroupsOut []string  `json:"groups_out"` // send only
+	Inactive  []string  `json:"inactive"`   // channels the user switched off ("group:IN")
+	Admin     bool      `json:"admin"`
+	Created   time.Time `json:"created"`
+	Online    int       `json:"online"`
+}
+
+func newUserView(u *store.User, online int) userView {
+	nn := func(l []string) []string {
+		if l == nil {
+			return []string{}
+		}
+		return l
+	}
+	return userView{u.Username, nn(u.Groups), nn(u.GroupsIn), nn(u.GroupsOut), nn(u.Inactive), u.Admin, u.Created, online}
+}
+
+// applyUserGroups pushes a user's current memberships to their live connections.
+func (s *Server) applyUserGroups(username string) {
+	if u, ok := s.Store.User(username); ok {
+		in, out := u.Effective(s.Cfg.AnonymousGroup)
+		s.Router.SetUserGroups(username, in, out)
+	}
 }
 
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request, _ *identity) {
@@ -222,7 +244,7 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request, _ *identity) 
 	}
 	out := []userView{}
 	for _, u := range s.Store.Users() {
-		out = append(out, userView{u.Username, u.Groups, u.Admin, u.Created, online[u.Username]})
+		out = append(out, newUserView(u, online[u.Username]))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -266,15 +288,17 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request, id *identity
 		return
 	}
 	s.Log.Info("user created", "admin", id.Username, "user", u.Username, "groups", u.Groups)
-	writeJSON(w, http.StatusCreated, userView{u.Username, u.Groups, u.Admin, u.Created, 0})
+	writeJSON(w, http.StatusCreated, newUserView(u, 0))
 }
 
 func (s *Server) updateUser(w http.ResponseWriter, r *http.Request, id *identity) {
 	name := r.PathValue("name")
 	var req struct {
-		Password *string   `json:"password"`
-		Groups   *[]string `json:"groups"`
-		Admin    *bool     `json:"admin"`
+		Password  *string   `json:"password"`
+		Groups    *[]string `json:"groups"`
+		GroupsIn  *[]string `json:"groups_in"`
+		GroupsOut *[]string `json:"groups_out"`
+		Admin     *bool     `json:"admin"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid request")
@@ -303,6 +327,12 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request, id *identity
 		if req.Groups != nil {
 			u.Groups = cleanGroups(*req.Groups)
 		}
+		if req.GroupsIn != nil {
+			u.GroupsIn = cleanGroups(*req.GroupsIn)
+		}
+		if req.GroupsOut != nil {
+			u.GroupsOut = cleanGroups(*req.GroupsOut)
+		}
 		if req.Admin != nil {
 			u.Admin = *req.Admin
 		}
@@ -315,8 +345,9 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request, id *identity
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.applyUserGroups(name)
 	s.Log.Info("user updated", "admin", id.Username, "user", name)
-	writeJSON(w, http.StatusOK, userView{u.Username, u.Groups, u.Admin, u.Created, 0})
+	writeJSON(w, http.StatusOK, newUserView(u, 0))
 }
 
 func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request, id *identity) {

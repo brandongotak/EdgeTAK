@@ -15,6 +15,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"log/slog"
@@ -579,6 +580,15 @@ func TestEndToEnd(t *testing.T) {
 		}
 		if !bytes.Contains(files["certs/server.pref"], []byte("127.0.0.1:"+port(a.Addrs["tls"])+":ssl")) {
 			t.Errorf("pref missing connect string:\n%s", files["certs/server.pref"])
+		}
+		if !bytes.Contains(files["certs/server.pref"], []byte(`key="prefs_enable_channels_host-127.0.0.1"`)) ||
+			!bytes.Contains(files["certs/server.pref"], []byte(`key="deviceProfileEnableOnConnect" class="class java.lang.Boolean"`)) {
+			t.Errorf("connection package lacks the channel preferences:\n%s", files["certs/server.pref"])
+		}
+		dec := xml.NewDecoder(bytes.NewReader(files["certs/server.pref"]))
+		dec.CharsetReader = func(_ string, r io.Reader) (io.Reader, error) { return r, nil } // ATAK prefs declare ASCII
+		if err := dec.Decode(new(struct{ XMLName xml.Name })); err != nil {
+			t.Errorf("connection package pref is not well-formed XML: %v", err)
 		}
 		var ts []byte
 		for name, data := range files {
