@@ -360,6 +360,8 @@ function initMap() {
   buildLayers();
   guard(loadMapSources)();
   if (view) fittedOnce = true;
+  // Bring back the packages this viewer had on the map.
+  for (const hash of prefs.get('map.packages', [])) showPackage(hash, { quiet: true }).catch(() => forgetPackage(hash));
 }
 
 // buildLayers (re)creates the layer switcher from the built-in base maps and
@@ -377,6 +379,7 @@ function buildLayers() {
   baseLayers = {};
   for (const [name, def] of BASEMAPS) baseLayers[name] = buildBase(def);
   overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer };
+  for (const p of packageLayers.values()) overlayLayers[p.name] = p.layer;
   for (const s of mapSources) {
     const layer = tileLayer(s.url, {
       minZoom: 0, maxNativeZoom: s.max_zoom || 19, attribution: esc(s.attribution || ''),
@@ -529,6 +532,176 @@ $('#map-source-file').addEventListener('change', guard(async (e) => {
   renderMapSources();
   toast(`Imported ${files.length} map source${files.length === 1 ? '' : 's'}`);
 }));
+
+// ---- data packages on the map ----
+//
+// A package is fetched like a download and drawn in the browser: CoT items
+// (markers, routes, polylines, polygons, rectangles, circles) and any KML,
+// KMZ or GeoJSON inside it. Each shown package is an overlay.
+
+const packageLayers = new Map(); // hash -> { name, layer }
+let packagesByHash = {};
+
+function rememberPackages() {
+  prefs.set('map.packages', [...packageLayers.keys()]);
+}
+
+function forgetPackage(hash) {
+  const p = packageLayers.get(hash);
+  if (p) {
+    map?.removeLayer(p.layer);
+    layersControl?.removeLayer(p.layer);
+    delete overlayLayers[p.name];
+    packageLayers.delete(hash);
+  }
+  rememberPackages();
+}
+
+async function showPackage(hash, { quiet = false } = {}) {
+  initMap();
+  if (!map) throw new Error('The map library could not be loaded');
+  if (packageLayers.has(hash)) {
+    const p = packageLayers.get(hash);
+    p.layer.addTo(map);
+    if (!quiet) fitLayer(p.layer);
+    return;
+  }
+  const r = await fetch(`/Marti/sync/content?hash=${encodeURIComponent(hash)}`);
+  if (!r.ok) throw new Error(`Could not fetch the package (${r.status})`);
+  const meta = packagesByHash[hash];
+  const fileName = meta?.name || r.headers.get('content-disposition')?.match(/filename="?([^";]+)"?/)?.[1] || hash.slice(0, 12);
+  const layer = L.featureGroup();
+  const count = await drawFile(layer, fileName, new Uint8Array(await r.arrayBuffer()));
+  if (!count) {
+    if (!quiet) toast(`${fileName} has nothing to show on a map`, true);
+    forgetPackage(hash);
+    return;
+  }
+  let name = `Package: ${fileName}`;
+  if (Object.prototype.hasOwnProperty.call(overlayLayers, name)) name += ` (${hash.slice(0, 6)})`;
+  packageLayers.set(hash, { name, layer });
+  overlayLayers[name] = layer;
+  layersControl.addOverlay(layer, name);
+  layer.addTo(map);
+  rememberPackages();
+  if (!quiet) {
+    fitLayer(layer);
+    toast(`${fileName}: ${count} item${count === 1 ? '' : 's'} on the map`);
+  }
+}
+
+function fitLayer(layer) {
+  setMapVisible(true, false);
+  const b = layer.getBounds();
+  if (b.isValid()) map.fitBounds(b.pad(0.2), { maxZoom: 16 });
+}
+
+const isZip = (b) => b[0] === 0x50 && b[1] === 0x4b;
+const text = (b) => new TextDecoder().decode(b);
+
+// drawFile adds whatever it understands in one file (recursing into zips)
+// and returns how many items it drew.
+async function drawFile(layer, name, bytes) {
+  const lower = name.toLowerCase();
+  if (isZip(bytes)) {
+    if (!window.JSZip) throw new Error('The zip library could not be loaded');
+    const zip = await JSZip.loadAsync(bytes);
+    let n = 0;
+    for (const f of Object.values(zip.files)) {
+      if (f.dir || /(^|\/)manifest\.xml$/i.test(f.name) || !/\.(cot|xml|kml|kmz|geojson|json|zip)$/i.test(f.name)) continue;
+      n += await drawFile(layer, f.name, await f.async('uint8array'));
+    }
+    return n;
+  }
+  if (/\.(geo)?json$/.test(lower)) {
+    try { return drawGeoJSON(layer, JSON.parse(text(bytes))); } catch { return 0; }
+  }
+  const doc = new DOMParser().parseFromString(text(bytes), 'application/xml');
+  if (doc.querySelector('parsererror')) return 0;
+  const root = doc.documentElement;
+  if (root.localName === 'kml' && window.toGeoJSON) return drawGeoJSON(layer, toGeoJSON.kml(doc));
+  if (root.localName === 'event') return drawCoT(layer, root);
+  if (root.localName === 'events' || root.querySelector('event')) {
+    let n = 0;
+    for (const ev of doc.querySelectorAll('event')) n += drawCoT(layer, ev);
+    return n;
+  }
+  return 0;
+}
+
+// ATAK stores colours as signed 32-bit ARGB integers.
+function argb(v, fallback) {
+  const n = Number(v);
+  if (v == null || v === '' || !Number.isFinite(n)) return fallback;
+  const u = n >>> 0;
+  return { color: '#' + (u & 0xffffff).toString(16).padStart(6, '0'), opacity: ((u >>> 24) & 0xff) / 255 };
+}
+
+function cotPopup(title, type, remarks) {
+  return `<strong>${esc(title)}</strong><br><span class="muted mono">${esc(type)}</span>${remarks ? `<br>${esc(remarks)}` : ''}`;
+}
+
+function drawCoT(layer, ev) {
+  const type = ev.getAttribute('type') || '';
+  if (type.startsWith('t-x-') || type === 'b-t-f' || type.startsWith('b-f-t')) return 0; // control, chat, file transfers
+  const detail = ev.querySelector('detail');
+  const pt = ev.querySelector(':scope > point');
+  const lat = Number(pt?.getAttribute('lat')), lon = Number(pt?.getAttribute('lon'));
+  const title = detail?.querySelector('contact')?.getAttribute('callsign') || ev.getAttribute('uid') || type;
+  const remarks = detail?.querySelector('remarks')?.textContent?.trim() || '';
+  const stroke = argb(detail?.querySelector('strokeColor')?.getAttribute('value'), { color: '#ffff00', opacity: 1 });
+  const fill = argb(detail?.querySelector('fillColor')?.getAttribute('value'), null);
+  const weight = Number(detail?.querySelector('strokeWeight')?.getAttribute('value')) || 3;
+  const style = { color: stroke.color, opacity: stroke.opacity || 1, weight, fillColor: fill?.color || stroke.color, fillOpacity: fill ? fill.opacity : 0 };
+  const popup = cotPopup(title, type, remarks);
+
+  // Shapes and routes list their vertices as <link point="lat,lon,hae">.
+  const verts = [...(detail?.querySelectorAll('link[point]') || [])]
+    .map((l) => l.getAttribute('point').split(',').map(Number)).filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b)).map(([a, b]) => [a, b]);
+  const ellipse = detail?.querySelector('shape ellipse');
+  let item = null;
+  if (ellipse && Number.isFinite(lat)) {
+    item = L.circle([lat, lon], { radius: Number(ellipse.getAttribute('major')) || 1, ...style });
+  } else if (verts.length >= 2) {
+    const closed = type === 'u-d-r' || detail?.querySelector('closed')?.getAttribute('value') === 'true' ||
+      (verts.length > 2 && verts[0][0] === verts.at(-1)[0] && verts[0][1] === verts.at(-1)[1]) || /^u-d-f/.test(type) && fill;
+    item = closed ? L.polygon(verts, style) : L.polyline(verts, type.startsWith('b-m-r') ? { ...style, dashArray: '8 6' } : style);
+  } else if (Number.isFinite(lat) && Number.isFinite(lon) && !(lat === 0 && lon === 0)) {
+    const color = argb(detail?.querySelector('color')?.getAttribute('argb'), null)?.color || cotAffiliationColor(type);
+    item = L.circleMarker([lat, lon], { radius: 7, weight: 2, color: '#000', fillColor: color, fillOpacity: 0.9 });
+  }
+  if (!item) return 0;
+  item.bindPopup(popup);
+  if (item instanceof L.CircleMarker && !(item instanceof L.Circle)) item.bindTooltip(esc(title), { permanent: true, direction: 'right', offset: [8, 0] });
+  else item.bindTooltip(esc(title), { sticky: true });
+  item.addTo(layer);
+  return 1;
+}
+
+// MIL-STD-2525 affiliation colours for points without their own colour.
+function cotAffiliationColor(type) {
+  const aff = type.startsWith('a-') ? type[2] : '';
+  return { f: '#80e0ff', a: '#80e0ff', h: '#ff8080', j: '#ff8080', k: '#ff8080', n: '#aaffaa', u: '#ffff80', p: '#ffff80' }[aff] || '#ffd24c';
+}
+
+function drawGeoJSON(layer, gj) {
+  let n = 0;
+  L.geoJSON(gj, {
+    style: (f) => {
+      const p = f.properties || {};
+      return { color: p.stroke || '#ffd24c', weight: p['stroke-width'] || 3, opacity: p['stroke-opacity'] ?? 1, fillColor: p.fill || p.stroke || '#ffd24c', fillOpacity: p['fill-opacity'] ?? 0.2 };
+    },
+    pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 7, weight: 2, color: '#000', fillColor: f.properties?.['marker-color'] || '#ffd24c', fillOpacity: 0.9 }),
+    onEachFeature: (f, l) => {
+      n++;
+      const p = f.properties || {};
+      if (p.name) l.bindTooltip(esc(p.name), f.geometry?.type === 'Point' ? { permanent: true, direction: 'right', offset: [8, 0] } : { sticky: true });
+      const desc = typeof p.description === 'string' ? p.description.replace(/<[^>]*>/g, ' ').trim() : '';
+      l.bindPopup(`<strong>${esc(p.name || 'Feature')}</strong>${desc ? `<br>${esc(desc)}` : ''}`);
+    },
+  }).eachLayer((l) => l.addTo(layer));
+  return n;
+}
 
 // Drag the panel's left edge to resize it.
 (() => {
@@ -943,6 +1116,8 @@ $('#certs-table').addEventListener('click', guard(async (e) => {
 
 async function loadPackages() {
   const pkgs = await api('GET', 'api/packages');
+  packagesByHash = Object.fromEntries(pkgs.map((p) => [p.hash, p]));
+  const onMap = (h) => packageLayers.has(h) && map?.hasLayer(packageLayers.get(h).layer);
   $('#packages-table tbody').innerHTML = pkgs.map((p) => `<tr>
     <td><strong>${esc(p.name)}</strong><div class="muted mono" title="${esc(p.hash)}">${esc(p.hash.slice(0, 16))}…</div></td>
     <td>${bytes(p.size)}</td>
@@ -951,6 +1126,7 @@ async function loadPackages() {
     <td>${p.tool === 'public' ? '<span class="pill ok">public</span>' : `<span class="pill">${esc(p.tool || 'private')}</span>`}</td>
     <td>${esc(date(p.submitted))}</td>
     <td class="actions">
+      <button class="small" data-map="${esc(p.hash)}">${onMap(p.hash) ? 'Hide from map' : 'Show on map'}</button>
       <a class="button small" href="/Marti/sync/content?hash=${esc(p.hash)}">Download</a>
       <button class="small danger" data-del="${esc(p.hash)}" data-name="${esc(p.name)}">Delete</button>
     </td></tr>`).join('') || emptyRow(7, 'No data packages');
@@ -969,8 +1145,17 @@ $('#package-form').addEventListener('submit', guard(async (e) => {
 }));
 
 $('#packages-table').addEventListener('click', guard(async (e) => {
+  const show = e.target.dataset.map;
+  if (show) {
+    const p = packageLayers.get(show);
+    if (p && map?.hasLayer(p.layer)) forgetPackage(show);
+    else await showPackage(show);
+    loadPackages();
+    return;
+  }
   const hash = e.target.dataset.del;
   if (!hash || !confirm(`Delete ${e.target.dataset.name}?`)) return;
+  forgetPackage(hash);
   await api('DELETE', `api/packages/${hash}`);
   toast('Package deleted');
   loadPackages();

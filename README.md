@@ -54,6 +54,9 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   maps like ATAK's: Streets, Satellite, Hybrid, Google Hybrid, Topo, USGS Topo, USGS
   Imagery Topo and Dark. Add your own tile sources or import ATAK map source
   `.xml` files; overlays for devices, callsigns and the server contact.
+  **Show on map** on the Data Packages tab draws a package's CoT markers,
+  routes, polygons, rectangles and circles, and any KML, KMZ or GeoJSON in
+  it, as its own overlay.
 - **Web admin console**: connected clients, users, groups,
   certificates, data packages, missions, and connection packages for each
   client.
