@@ -20,6 +20,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/mission"
 	"github.com/brandongotak/EdgeTAK/internal/pki"
+	"github.com/brandongotak/EdgeTAK/internal/publiccert"
 	"github.com/brandongotak/EdgeTAK/internal/router"
 	"github.com/brandongotak/EdgeTAK/internal/store"
 	"github.com/brandongotak/EdgeTAK/internal/stream"
@@ -37,6 +38,7 @@ type App struct {
 	CA       *pki.CA
 	Router   *router.Router
 	Missions *mission.Service
+	Public   *publiccert.Provider // nil unless public_cert is configured
 
 	// Addrs holds the bound address of each listener after Start.
 	Addrs map[string]string
@@ -80,6 +82,9 @@ func New(cfg config.Config, dataDir, version string, log *slog.Logger) (*App, er
 		return nil, fmt.Errorf("open missions: %w", err)
 	}
 	a.Missions.PackageDir = filepath.Join(dataDir, "packages")
+	if a.Public, err = publiccert.New(cfg.PublicCert.Normalized(a.Cfg.PublicHost), dataDir, &a.CA.ServerCert, log); err != nil {
+		return nil, err
+	}
 	return a, nil
 }
 
@@ -154,7 +159,7 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		ServerUID:   "EdgeTAK-" + a.nodeID, Version: "EdgeTAK " + a.Version,
 	}
 	ws := &web.Server{
-		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Log: a.Log,
+		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, Log: a.Log,
 		PackageDir: filepath.Join(a.DataDir, "packages"), NodeID: a.nodeID, Version: a.Version, Started: time.Now(),
 	}
 
@@ -182,6 +187,13 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		if sp.addr == "" {
 			continue
 		}
+		if sp.tls != nil && a.Public.Uses(sp.name) {
+			// Present the publicly trusted certificate; client certificates
+			// are still verified against the EdgeTAK CA.
+			sp.tls = sp.tls.Clone()
+			sp.tls.Certificates = nil
+			sp.tls.GetCertificate = a.Public.GetCertificate
+		}
 		ln, err := a.Listen("tcp", sp.addr)
 		if err != nil {
 			for _, b := range binds {
@@ -197,6 +209,18 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 			ln = tls.NewListener(ln, sp.tls)
 		}
 		binds = append(binds, bound{sp.name, ln, sp.web, sp.tls != nil})
+	}
+	var acmeLn net.Listener
+	if h := a.Public.ChallengeHandler(port(a.Addrs["enroll"])); h != nil {
+		addr := a.Cfg.PublicCert.Normalized(a.Cfg.PublicHost).ACMEHTTPAddr
+		if acmeLn, err = a.Listen("tcp", addr); err != nil {
+			for _, b := range binds {
+				b.ln.Close()
+			}
+			return nil, fmt.Errorf("Let's Encrypt challenge listener %s (needs port 80 reachable from the internet): %w", addr, err)
+		}
+		a.Addrs["acme"] = acmeLn.Addr().String()
+		a.Public.Warm(ctx)
 	}
 	ws.Addrs = a.Addrs
 
@@ -230,6 +254,17 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 			}
 		}()
 	}
+	if acmeLn != nil {
+		srv := &http.Server{Handler: a.Public.ChallengeHandler(port(a.Addrs["enroll"])), ReadHeaderTimeout: 15 * time.Second, ErrorLog: errLog}
+		servers = append(servers, srv)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := srv.Serve(acmeLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				a.Log.Error("Let's Encrypt challenge listener stopped", "err", err)
+			}
+		}()
+	}
 
 	go func() {
 		<-ctx.Done()
@@ -249,6 +284,12 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	}
 	a.Log.Info("EdgeTAK started", "version", a.Version, "public_host", a.Cfg.PublicHost, "listeners", strings.Join(names, " "))
 	return wg.Wait, nil
+}
+
+// port returns the port of a host:port address ("" if none).
+func port(addr string) string {
+	_, p, _ := net.SplitHostPort(addr)
+	return p
 }
 
 func readOrCreate(path string, gen func() string) (string, error) {

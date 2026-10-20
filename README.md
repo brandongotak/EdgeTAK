@@ -112,6 +112,38 @@ Reset a forgotten password: `./edgetak -data ./data -reset-password admin`
 Cross-compile: `GOOS=linux GOARCH=arm64 go build ./cmd/edgetak` (Pi 4/5), or
 run `./build.sh` to build every target into `dist/`.
 
+### Internet-facing server with Let's Encrypt (quick connect)
+
+```sh
+sudo sh edgetak-<version>-rpi-installer.sh --public-host tak.example.com \
+    --letsencrypt you@example.com --no-plaintext
+```
+
+Users then add the server in ATAK, WinTAK, TAKX or iTAK with only its
+**address, username and password** ("Enroll for client certificate" and
+"Use authentication"). No data package or truststore is needed.
+
+This follows installTAK's design. Port 8446 (enrollment) presents a
+Let's Encrypt certificate, which devices already trust. The enrollment reply
+gives the client the EdgeTAK CA, and the client uses that to trust 8089 (CoT)
+and 8443 (API), which keep the EdgeTAK certificate. Connection packages work
+exactly as before.
+
+- EdgeTAK requests and renews the certificate itself through ACME HTTP-01, so
+  **port 80 must stay reachable** and the domain must resolve to the server.
+  No certbot or cron is needed, and renewal does not restart the server.
+- While no certificate is available yet (DNS not propagated, rate limit),
+  8446 serves the EdgeTAK certificate, so enrollment still works for clients
+  that have a truststore.
+- The admin console at `https://tak.example.com:8446/admin/` gets a trusted
+  certificate, so browsers show no warning.
+- `--no-plaintext` turns off the anonymous ports 8087 and 8080. In a cloud
+  firewall, open 80, 8089, 8443 and 8446.
+- To use existing certificates instead, for example from certbot, set
+  `"public_cert": {"mode": "files", "cert_file": "...", "key_file": "..."}`.
+  The `edgetak` user must be able to read both files, and they are reloaded
+  when they change.
+
 ### Ports
 
 | Port | Purpose |

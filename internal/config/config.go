@@ -44,6 +44,46 @@ type Config struct {
 	MaxUploadMB int64 `json:"max_upload_mb"`
 
 	LogLevel string `json:"log_level"` // debug, info, warn, error
+
+	// PublicCert serves a publicly trusted certificate (e.g. Let's Encrypt)
+	// on selected listeners instead of the EdgeTAK CA's server certificate.
+	PublicCert PublicCert `json:"public_cert"`
+}
+
+// PublicCert configures a publicly trusted server certificate. Like
+// installTAK, it is meant for the enrollment port: clients enroll trusting
+// the public CA, then receive the EdgeTAK CA for streaming and the API.
+type PublicCert struct {
+	// Mode is "" (off), "letsencrypt" (EdgeTAK obtains and renews the
+	// certificate via ACME HTTP-01) or "files" (CertFile/KeyFile, e.g. from
+	// certbot, reloaded when they change).
+	Mode string `json:"mode"`
+	// Domains to certify; defaults to public_host. Must resolve to this server.
+	Domains []string `json:"domains"`
+	// Email for the Let's Encrypt account (expiry notices).
+	Email string `json:"email"`
+	// ACMEHTTPAddr serves HTTP-01 challenges; Let's Encrypt connects to port 80.
+	ACMEHTTPAddr string `json:"acme_http_addr"`
+	// Staging uses the Let's Encrypt staging CA (untrusted, high rate limits).
+	Staging  bool   `json:"staging"`
+	CertFile string `json:"cert_file"`
+	KeyFile  string `json:"key_file"`
+	// Listeners that present the public certificate (tcp, tls, https, enroll).
+	Listeners []string `json:"listeners"`
+}
+
+// Normalized fills defaults that older config files lack.
+func (p PublicCert) Normalized(publicHost string) PublicCert {
+	if len(p.Domains) == 0 && publicHost != "" {
+		p.Domains = []string{publicHost}
+	}
+	if len(p.Listeners) == 0 {
+		p.Listeners = []string{"enroll"}
+	}
+	if p.ACMEHTTPAddr == "" {
+		p.ACMEHTTPAddr = ":80"
+	}
+	return p
 }
 
 // Default returns the configuration used when no file exists.
@@ -65,6 +105,7 @@ func Default() Config {
 		IdleTimeoutSeconds: 180,
 		MaxUploadMB:        500,
 		LogLevel:           "info",
+		PublicCert:         PublicCert{Domains: []string{}, ACMEHTTPAddr: ":80", Listeners: []string{"enroll"}},
 	}
 }
 

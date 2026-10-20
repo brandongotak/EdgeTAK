@@ -125,6 +125,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request, _ *identity) {
 		"memory_mb": mem.Alloc >> 20, "goroutines": runtime.NumGoroutine(),
 		"listeners":  s.Addrs,
 		"ca_subject": s.CA.Cert.Subject.CommonName, "ca_expires": s.CA.Cert.NotAfter,
+		"public_cert": s.Public.Info(),
 	})
 }
 

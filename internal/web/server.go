@@ -20,6 +20,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/mission"
 	"github.com/brandongotak/EdgeTAK/internal/pki"
+	"github.com/brandongotak/EdgeTAK/internal/publiccert"
 	"github.com/brandongotak/EdgeTAK/internal/router"
 	"github.com/brandongotak/EdgeTAK/internal/store"
 )
@@ -33,6 +34,7 @@ type Server struct {
 	CA         *pki.CA
 	Router     *router.Router
 	Missions   *mission.Service
+	Public     *publiccert.Provider // nil unless a public certificate is configured
 	Log        *slog.Logger
 	PackageDir string
 	NodeID     string

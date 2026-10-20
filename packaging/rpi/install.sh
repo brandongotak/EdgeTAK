@@ -15,14 +15,14 @@ BIN_PATH=/usr/local/bin/edgetak
 DATA_DIR=/var/lib/edgetak
 SVC_USER=edgetak
 UNIT=/etc/systemd/system/edgetak.service
-PORTS="8087 8089 8443 8446 8080"
-
 ACTION=install
 PUBLIC_HOST=""
 FIREWALL=1
 PURGE=0
 BINARY=""
 IMPORT_DATA=""
+LE_EMAIL=""
+NO_PLAINTEXT=0
 
 usage() {
 	cat <<EOF
@@ -32,6 +32,12 @@ Usage: sudo sh $SELF [options]
 
   --public-host HOST   address clients use to reach this server
                        (default: detected automatically at each start)
+  --letsencrypt EMAIL  serve a Let's Encrypt certificate on the enrollment port
+                       (8446) so clients can connect with only address,
+                       username and password. Needs --public-host to be a
+                       domain pointing at this server and port 80 reachable.
+  --no-plaintext       disable the anonymous plaintext ports 8087 (CoT) and
+                       8080 (HTTP API); recommended on internet-facing servers
   --no-firewall        do not open ports in ufw/firewalld
   --binary PATH        install this edgetak binary instead of the bundled one
   --import-data DIR    copy an existing EdgeTAK data directory (e.g. from a
@@ -54,6 +60,9 @@ while [ $# -gt 0 ]; do
 		--binary=*) BINARY=${1#*=}; shift ;;
 		--import-data) [ $# -ge 2 ] || die "--import-data needs a value"; IMPORT_DATA=$2; shift 2 ;;
 		--import-data=*) IMPORT_DATA=${1#*=}; shift ;;
+		--letsencrypt) [ $# -ge 2 ] || die "--letsencrypt needs an email address"; LE_EMAIL=$2; shift 2 ;;
+		--letsencrypt=*) LE_EMAIL=${1#*=}; shift ;;
+		--no-plaintext) NO_PLAINTEXT=1; shift ;;
 		--no-firewall) FIREWALL=0; shift ;;
 		--uninstall) ACTION=uninstall; shift ;;
 		--purge) PURGE=1; shift ;;
@@ -67,6 +76,15 @@ done
 if [ -n "$PUBLIC_HOST" ]; then
 	printf '%s' "$PUBLIC_HOST" | grep -Eq '^[A-Za-z0-9.:-]+$' || die "invalid --public-host: $PUBLIC_HOST"
 fi
+if [ -n "$LE_EMAIL" ]; then
+	printf '%s' "$PUBLIC_HOST" | grep -Eq '[A-Za-z]' || die "--letsencrypt needs --public-host set to a domain name (not an IP address)"
+	printf '%s' "$LE_EMAIL" | grep -Eq '^[^@ ]+@[^@ ]+$' || die "invalid --letsencrypt email: $LE_EMAIL"
+fi
+
+# Ports to open in the host firewall and to check for conflicts.
+PORTS="8089 8443 8446"
+[ "$NO_PLAINTEXT" -eq 1 ] || PORTS="8087 $PORTS 8080"
+[ -z "$LE_EMAIL" ] || PORTS="80 $PORTS"
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 
@@ -166,7 +184,9 @@ ProtectHostname=yes
 ProtectKernelLogs=yes
 ProtectProc=invisible
 ProcSubset=pid
-CapabilityBoundingSet=
+# Only to bind port 80 for Let's Encrypt challenges.
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
@@ -224,14 +244,25 @@ do_install() {
 
 	# Create config, CA, server certificate and admin account on first install.
 	if ! out=$(as_service_user "$BIN_PATH" -data "$DATA_DIR" -init 2>&1); then
-		printf '%s
-' "$out" >&2
+		printf '%s\n' "$out" >&2
 		die "initialising $DATA_DIR failed"
 	fi
 
+	cfg="$DATA_DIR/edgetak.json"
 	if [ -n "$PUBLIC_HOST" ]; then
-		sed -i "s|^\(  \"public_host\": \)\".*\"|\1\"$PUBLIC_HOST\"|" "$DATA_DIR/edgetak.json"
+		sed -i "s|^\(  \"public_host\": \)\".*\"|\1\"$PUBLIC_HOST\"|" "$cfg"
 		say "Set public_host to $PUBLIC_HOST"
+	fi
+	if [ "$NO_PLAINTEXT" -eq 1 ]; then
+		sed -i 's|^\(  "tcp_addr": \)".*"|\1""|; s|^\(  "http_addr": \)".*"|\1""|' "$cfg"
+		say "Disabled plaintext ports 8087 and 8080"
+	fi
+	if [ -n "$LE_EMAIL" ]; then
+		if ! out=$(as_service_user "$BIN_PATH" -data "$DATA_DIR" -enable-letsencrypt "$LE_EMAIL" 2>&1); then
+			printf '%s\n' "$out" >&2
+			die "enabling Let's Encrypt failed"
+		fi
+		say "$out"
 	fi
 
 	write_unit
@@ -248,7 +279,9 @@ do_install() {
 			die "EdgeTAK failed to start (see log above)"
 		fi
 		if command -v curl >/dev/null 2>&1; then
-			curl -fs -o /dev/null http://127.0.0.1:8080/Marti/api/version && break
+			# The enrollment port is always on; -k because it may not have its
+			# public certificate yet and localhost is not in it anyway.
+			curl -fsk -o /dev/null https://127.0.0.1:8446/Marti/api/version && break
 		else
 			sleep 2 && break
 		fi
@@ -271,13 +304,29 @@ do_install() {
 	else
 		say "EdgeTAK $VERSION is installed and running"
 	fi
-	cat <<EOF
+	if grep -q '"mode": "letsencrypt"' "$cfg"; then
+		cat <<EOF
+
+  Admin console   https://$host:8446/admin/   (Let's Encrypt, no browser warning)
+  Quick connect   in ATAK/WinTAK/TAKX/iTAK add server $host with
+                  "Enroll for client certificate" and "Use authentication",
+                  then just enter a username and password.
+  CoT TLS         $host:8089
+
+  The certificate is requested from Let's Encrypt now; watch for
+  "Let's Encrypt certificate ready" in the log. Port 80 must stay open
+  for issuance and renewal.
+
+EOF
+	else
+		cat <<EOF
 
   Admin console   https://$host:8443/admin/
   CoT TCP / TLS   $host:8087  /  $host:8089
   Enrollment      $host:8446
 
 EOF
+	fi
 	if [ -f "$DATA_DIR/initial-admin-password.txt" ] && [ "$upgrading" -eq 1 ]; then
 		warn "$DATA_DIR/initial-admin-password.txt still exists. Delete it once you have changed the admin password."
 		echo

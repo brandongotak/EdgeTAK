@@ -173,6 +173,13 @@ async function refreshStatus() {
   document.title = `${status.server_name} Console`;
 }
 
+function publicCertText(pc) {
+  if (!pc || pc.mode === 'off') return 'off (enrollment uses the EdgeTAK CA)';
+  const where = `${(pc.domains || []).join(', ')} on ${(pc.listeners || []).join(', ')}`;
+  if (pc.status === 'pending') return `${pc.mode}: pending for ${where}`;
+  return `${pc.mode}${pc.staging ? ' (staging)' : ''}: ${pc.issuer}, expires ${new Date(pc.not_after).toLocaleDateString()} (${where})`;
+}
+
 async function loadDashboard() {
   const [st, clients] = await Promise.all([api('GET', 'api/status'), api('GET', 'api/clients')]);
   status = st;
@@ -198,6 +205,7 @@ async function loadDashboard() {
     ['HTTP API', l.http || 'disabled'],
     ['CA', st.ca_subject],
     ['CA expires', new Date(st.ca_expires).toLocaleDateString()],
+    ['Public certificate', publicCertText(st.public_cert)],
   ];
   $('#server-info').innerHTML = info.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
 

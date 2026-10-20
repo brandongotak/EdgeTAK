@@ -35,13 +35,20 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/pki"
 )
 
-func startApp(t *testing.T) *App {
+func startApp(t *testing.T) *App { return startAppWith(t, nil) }
+
+// startAppWith starts a server on the in-memory network after applying edit
+// to the test configuration.
+func startAppWith(t *testing.T, edit func(*config.Config)) *App {
 	t.Helper()
 	cfg := config.Default()
 	for _, p := range []*string{&cfg.TCPAddr, &cfg.TLSAddr, &cfg.HTTPSAddr, &cfg.EnrollAddr, &cfg.HTTPAddr} {
 		*p = "127.0.0.1:0"
 	}
 	cfg.PublicHost = "127.0.0.1"
+	if edit != nil {
+		edit(&cfg)
+	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	if testing.Verbose() {
 		log = slog.New(slog.NewTextHandler(&testWriter{t}, &slog.HandlerOptions{Level: slog.LevelDebug}))
@@ -646,9 +653,4 @@ func readFile(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(b)
-}
-
-func port(addr string) string {
-	_, p, _ := net.SplitHostPort(addr)
-	return p
 }

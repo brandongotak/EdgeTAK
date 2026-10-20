@@ -7,3 +7,8 @@ require (
 	google.golang.org/protobuf v1.36.10
 	software.sslmate.com/src/go-pkcs12 v0.6.0
 )
+
+require (
+	golang.org/x/net v0.45.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
+)

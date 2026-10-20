@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -33,6 +34,7 @@ func main() {
 	cfgPath := flag.String("config", "", "config file (default <data>/edgetak.json)")
 	resetPassword := flag.String("reset-password", "", "set a new random password for `user`, print it and exit")
 	initOnly := flag.Bool("init", false, "create the data directory, config, CA and admin account, then exit")
+	enableLE := flag.String("enable-letsencrypt", "", "use a Let's Encrypt certificate on the enrollment port, registered to `email`; needs public_host to be a domain pointing here and port 80 reachable")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -63,6 +65,18 @@ func main() {
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
 		fatal(err)
+	}
+	if *enableLE != "" {
+		if cfg.PublicHost == "" || net.ParseIP(cfg.PublicHost) != nil {
+			fatal(fmt.Errorf("Let's Encrypt needs public_host set to a domain name (it is %q)", cfg.PublicHost))
+		}
+		cfg.PublicCert = cfg.PublicCert.Normalized(cfg.PublicHost)
+		cfg.PublicCert.Mode, cfg.PublicCert.Email, cfg.PublicCert.Domains = "letsencrypt", *enableLE, []string{cfg.PublicHost}
+		if err := config.Save(*cfgPath, cfg); err != nil {
+			fatal(err)
+		}
+		fmt.Printf("Let's Encrypt enabled for %s on %v (restart EdgeTAK to apply)\n", cfg.PublicHost, cfg.PublicCert.Listeners)
+		return
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: parseLevel(cfg.LogLevel)}))
 
