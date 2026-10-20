@@ -44,7 +44,8 @@ type Server struct {
 	// bound addresses. It is set before serving starts and not modified.
 	Addrs map[string]string
 
-	history sendHistory // admin "send to devices" log
+	history       sendHistory  // admin "send to devices" log
+	signupLimiter *rateLimiter // public sign-up attempts per address
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -76,9 +77,14 @@ type identity struct {
 // Handler returns the HTTP handler. tlsListener reports whether it is served
 // over TLS; over plaintext the admin console is only reachable from loopback.
 func (s *Server) Handler(tlsListener bool) http.Handler {
+	s.sessMu.Lock()
 	if s.sessions == nil {
 		s.sessions = map[string]session{}
 	}
+	if s.signupLimiter == nil {
+		s.signupLimiter = newRateLimiter(10, time.Hour)
+	}
+	s.sessMu.Unlock()
 	mux := http.NewServeMux()
 	s.martiRoutes(mux)
 	s.oauthRoutes(mux)
@@ -86,9 +92,9 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.groupRoutes(mux)
 	s.channelRoutes(mux)
 	s.sendRoutes(mux)
+	s.registerRoutes(mux)
 
-	sub, _ := fs.Sub(staticFS, "static")
-	files := http.StripPrefix("/admin/", http.FileServerFS(sub))
+	files := http.StripPrefix("/admin/", http.FileServerFS(staticSub()))
 	mux.HandleFunc("GET /admin/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		files.ServeHTTP(w, r)
@@ -105,6 +111,10 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 		rec.Header().Set("X-Content-Type-Options", "nosniff")
 		if !tlsListener && isAdminPath(r.URL.Path) && !isLoopback(r.RemoteAddr) {
 			http.Error(rec, "the admin console is only available over HTTPS (port 8443) or from localhost", http.StatusForbidden)
+			return
+		}
+		if !tlsListener && isRegisterPath(r.URL.Path) && !isLoopback(r.RemoteAddr) {
+			http.Error(rec, "sign-up is only available over HTTPS", http.StatusForbidden)
 			return
 		}
 		if !s.rewriteMissionGUID(r) {
@@ -183,6 +193,15 @@ func (s *Server) logRequest(r *http.Request, rec *statusRecorder, d time.Duratio
 }
 
 func isAdminPath(p string) bool { return p == "/" || len(p) >= 6 && p[:6] == "/admin" }
+
+func isRegisterPath(p string) bool {
+	return strings.HasPrefix(p, "/register") || strings.HasPrefix(p, "/api/register")
+}
+
+func staticSub() fs.FS {
+	sub, _ := fs.Sub(staticFS, "static")
+	return sub
+}
 
 func isLoopback(remote string) bool {
 	host, _, err := net.SplitHostPort(remote)

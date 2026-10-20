@@ -28,6 +28,7 @@
       <button data-tab="dashboard" class="active">Dashboard</button>
       <button data-tab="users">Users</button>
       <button data-tab="groups">Groups</button>
+      <button data-tab="signups">Sign-ups</button>
       <button data-tab="certs">Certificates</button>
       <button data-tab="packages">Data Packages</button>
       <button data-tab="missions">Missions</button>
@@ -111,6 +112,65 @@
           <tbody></tbody>
         </table></div>
       </div>
+    </section>
+
+    <section id="tab-signups" class="tab" hidden>
+      <div class="grid-2 even">
+        <div class="card">
+          <h2>Invite link</h2>
+          <p class="muted">Anyone with the link creates their own account, in the groups you pick. No approval needed.</p>
+          <form id="invite-form" class="stack wide">
+            <label>Label <input name="label" placeholder="e.g. Search team, October exercise"></label>
+            <div>
+              <div class="muted picker-label">Groups (none selected = __ANON__)</div>
+              <div id="invite-groups" class="group-picker"></div>
+            </div>
+            <div class="inline-form">
+              <label>Uses <input name="max_uses" type="number" min="0" value="1" title="0 = unlimited"></label>
+              <label>Expires after (days) <input name="expires_days" type="number" min="0" value="7" title="0 = never"></label>
+            </div>
+            <p class="muted">0 uses = unlimited, 0 days = never expires.</p>
+            <div><button class="primary" type="submit">Create invite link</button></div>
+          </form>
+        </div>
+        <div class="card">
+          <h2>Sign-up without an invite</h2>
+          <form id="registration-form" class="stack wide">
+            <label class="check"><input type="radio" name="mode" value="off"> Off: invite links only</label>
+            <label class="check"><input type="radio" name="mode" value="approval"> Approval: people request an account, you approve it</label>
+            <label class="check"><input type="radio" name="mode" value="open"> Open: anyone who reaches the server can sign up</label>
+            <div>
+              <div class="muted picker-label">Groups for new accounts (none selected = __ANON__)</div>
+              <div id="registration-groups" class="group-picker"></div>
+            </div>
+            <div><button class="primary" type="submit">Save</button></div>
+          </form>
+          <p class="muted">Sign-up page: <a id="register-url" class="mono invite-url" target="_blank" rel="noopener"></a></p>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Pending requests</h2>
+        <div class="table-wrap"><table id="requests-table">
+          <thead><tr><th>Username</th><th>Note</th><th>From</th><th>Requested</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <h2>Invites</h2>
+        <div class="table-wrap"><table id="invites-table">
+          <thead><tr><th>Label</th><th>Groups</th><th>Used</th><th>Expires</th><th>Status</th><th>Created</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <dialog id="invite-dialog" class="card dialog">
+        <form method="dialog" class="stack wide">
+          <h2 id="invite-dialog-title">Invite link</h2>
+          <p class="muted">Share the link or let people scan the code with their phone camera.</p>
+          <code id="invite-dialog-url" class="uri"></code>
+          <div id="invite-qr" class="qr"></div>
+          <div class="inline-form"><button type="button" id="invite-copy">Copy link</button><span class="spacer"></span><button class="primary" value="close">Done</button></div>
+        </form>
+      </dialog>
     </section>
 
     <section id="tab-certs" class="tab" hidden>

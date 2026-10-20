@@ -46,6 +46,10 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   - **Direct messages**: the server can appear on devices as an HQ contact.
     Its messages open as a private conversation, users can reply, and
     replies show up in the console's Inbox.
+- **Self-registration**: invite links (with groups, a use limit and an expiry)
+  let people create their own account. Without an invite, sign-up can be
+  off, require admin approval, or be open. Afterwards the sign-up page shows
+  how to connect.
 - **Web admin console**: live map and connected clients, users, groups,
   certificates, data packages, missions, and connection packages for each
   client.
@@ -186,9 +190,31 @@ to read both files, and EdgeTAK reloads them when they change.
    - **out**: send only.
 
    Give each person or device its own user, so you can revoke one without
-   affecting the rest.
+   affecting the rest. You can also let people create their own accounts;
+   see [Self-registration](#self-registration).
 4. Check that **Public host** on the **Dashboard** shows the address clients
    will use.
+
+### Self-registration
+
+The **Sign-ups** tab lets people make their own accounts on the sign-up page,
+`https://<public host>:8446/register`:
+
+- **Invite links**: pick the groups, how many people may use the link
+  (`0` = unlimited) and how long it lasts. Share the link or its QR code.
+  Anyone with it gets an account right away, in those groups.
+- **Sign-up without an invite**:
+  - **Off** (the default): invite links only.
+  - **Approval**: people request an account, and it appears under **Pending
+    requests** for you to approve or reject.
+  - **Open**: anyone who can reach the server gets an account.
+
+  Approval and Open accounts go into the **groups for new accounts**.
+
+After signing up, the page shows the server address, an ATAK quick-connect QR
+code (on servers with Let's Encrypt), and connection packages for ATAK, WinTAK,
+TAKX and iTAK. Sign-up only works over HTTPS, and attempts are rate-limited per
+address. Use **Open** only on servers you are happy for anyone to join.
 
 ## Connect clients
 

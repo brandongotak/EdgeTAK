@@ -143,6 +143,46 @@ type db struct {
 
 	ServerContact ServerContact  `json:"server_contact"`
 	Inbox         []InboxMessage `json:"inbox"`
+
+	Registration RegistrationSettings     `json:"registration"`
+	Invites      map[string]*Invite       `json:"invites"`  // by code
+	Requests     map[string]*SignupRequest `json:"requests"` // by id
+}
+
+// RegistrationSettings controls sign-up without an invite: "off" (default),
+// "approval" (requests wait for an admin) or "open" (accounts are created
+// at once in DefaultGroups). Invites work in every mode.
+type RegistrationSettings struct {
+	Mode          string   `json:"mode"`
+	DefaultGroups []string `json:"default_groups"`
+}
+
+// Invite lets people create their own account in Groups.
+type Invite struct {
+	Code      string    `json:"code"`
+	Label     string    `json:"label"`
+	Groups    []string  `json:"groups"`
+	MaxUses   int       `json:"max_uses"` // 0 = unlimited
+	Uses      int       `json:"uses"`
+	Expires   time.Time `json:"expires"` // zero = never
+	Created   time.Time `json:"created"`
+	CreatedBy string    `json:"created_by"`
+	Revoked   bool      `json:"revoked"`
+}
+
+// Usable reports whether the invite can still create an account.
+func (i *Invite) Usable(now time.Time) bool {
+	return !i.Revoked && (i.MaxUses == 0 || i.Uses < i.MaxUses) && (i.Expires.IsZero() || now.Before(i.Expires))
+}
+
+// SignupRequest is a pending self-registration awaiting approval.
+type SignupRequest struct {
+	ID           string    `json:"id"`
+	Username     string    `json:"username"`
+	PasswordHash string    `json:"password_hash,omitempty"`
+	Note        string    `json:"note"`
+	Remote       string    `json:"remote"`
+	Created      time.Time `json:"created"`
 }
 
 // ServerContact is the server's presence as a contact on devices, which
@@ -179,7 +219,8 @@ type Store struct {
 
 // Open loads the store at path, creating an empty one if needed.
 func Open(path string) (*Store, error) {
-	s := &Store{path: path, db: db{Users: map[string]*User{}, Certs: map[string]*Cert{}, Packages: map[string]*Package{}, Groups: map[string]*Group{}, NextSeq: 1}}
+	s := &Store{path: path, db: db{Users: map[string]*User{}, Certs: map[string]*Cert{}, Packages: map[string]*Package{}, Groups: map[string]*Group{},
+		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, NextSeq: 1}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, s.save()
@@ -201,6 +242,12 @@ func Open(path string) (*Store, error) {
 	}
 	if s.db.Groups == nil {
 		s.db.Groups = map[string]*Group{}
+	}
+	if s.db.Invites == nil {
+		s.db.Invites = map[string]*Invite{}
+	}
+	if s.db.Requests == nil {
+		s.db.Requests = map[string]*SignupRequest{}
 	}
 	// Groups used to exist only as names on users; give them records.
 	for _, u := range s.db.Users {
@@ -234,6 +281,165 @@ func cloneUser(u *User) *User {
 	c.GroupsOut = slices.Clone(u.GroupsOut)
 	c.Inactive = slices.Clone(u.Inactive)
 	return &c
+}
+
+// ---- self-registration ----
+
+func (s *Store) Registration() RegistrationSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	r := s.db.Registration
+	r.DefaultGroups = slices.Clone(r.DefaultGroups)
+	if r.Mode == "" {
+		r.Mode = "off"
+	}
+	return r
+}
+
+func (s *Store) SetRegistration(r RegistrationSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Registration = r
+	s.ensureGroupsLocked(r.DefaultGroups)
+	return s.save()
+}
+
+func cloneInvite(i *Invite) *Invite {
+	c := *i
+	c.Groups = slices.Clone(i.Groups)
+	return &c
+}
+
+func (s *Store) CreateInvite(i Invite) (*Invite, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.db.Invites[i.Code]; ok || i.Code == "" {
+		return nil, ErrExists
+	}
+	s.db.Invites[i.Code] = &i
+	s.ensureGroupsLocked(i.Groups)
+	return cloneInvite(&i), s.save()
+}
+
+// Invites lists invites, newest first.
+func (s *Store) Invites() []*Invite {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*Invite, 0, len(s.db.Invites))
+	for _, i := range s.db.Invites {
+		out = append(out, cloneInvite(i))
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].Created.After(out[b].Created) })
+	return out
+}
+
+func (s *Store) Invite(code string) (*Invite, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	i, ok := s.db.Invites[code]
+	if !ok {
+		return nil, false
+	}
+	return cloneInvite(i), true
+}
+
+func (s *Store) RevokeInvite(code string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i, ok := s.db.Invites[code]
+	if !ok {
+		return ErrNotFound
+	}
+	i.Revoked = true
+	return s.save()
+}
+
+var ErrInviteUnusable = errors.New("invite expired, used up or revoked")
+
+// RegisterWithInvite creates a user in the invite's groups and counts the
+// use, atomically, so a single-use invite cannot be used twice.
+func (s *Store) RegisterWithInvite(code, username, passwordHash string) (*User, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	inv, ok := s.db.Invites[code]
+	if !ok || !inv.Usable(time.Now()) {
+		return nil, ErrInviteUnusable
+	}
+	if err := s.usernameFreeLocked(username); err != nil {
+		return nil, err
+	}
+	inv.Uses++
+	u := &User{Username: username, PasswordHash: passwordHash, Groups: slices.Clone(inv.Groups), Created: time.Now().UTC()}
+	s.db.Users[username] = u
+	return cloneUser(u), s.save()
+}
+
+// CreateUserWithHash adds a user whose password is already hashed.
+func (s *Store) CreateUserWithHash(username, passwordHash string, groups []string) (*User, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.usernameFreeLocked(username); err != nil {
+		return nil, err
+	}
+	u := &User{Username: username, PasswordHash: passwordHash, Groups: slices.Clone(groups), Created: time.Now().UTC()}
+	s.db.Users[username] = u
+	s.ensureGroupsLocked(groups)
+	return cloneUser(u), s.save()
+}
+
+// usernameFreeLocked fails if the name is taken by a user or a pending
+// request (case-insensitively, to avoid look-alike accounts).
+func (s *Store) usernameFreeLocked(name string) error {
+	for n := range s.db.Users {
+		if strings.EqualFold(n, name) {
+			return ErrExists
+		}
+	}
+	for _, r := range s.db.Requests {
+		if strings.EqualFold(r.Username, name) {
+			return ErrExists
+		}
+	}
+	return nil
+}
+
+func (s *Store) AddRequest(r SignupRequest) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.usernameFreeLocked(r.Username); err != nil {
+		return err
+	}
+	if len(s.db.Requests) >= 200 {
+		return errors.New("too many pending requests")
+	}
+	s.db.Requests[r.ID] = &r
+	return s.save()
+}
+
+// Requests lists pending sign-ups, oldest first. Password hashes are omitted.
+func (s *Store) Requests() []SignupRequest {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]SignupRequest, 0, len(s.db.Requests))
+	for _, r := range s.db.Requests {
+		c := *r
+		c.PasswordHash = ""
+		out = append(out, c)
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].Created.Before(out[b].Created) })
+	return out
+}
+
+// TakeRequest removes and returns a pending request.
+func (s *Store) TakeRequest(id string) (*SignupRequest, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.db.Requests[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	delete(s.db.Requests, id)
+	return r, s.save()
 }
 
 func (s *Store) ServerContact() ServerContact {

@@ -129,9 +129,14 @@ td.actions { text-align: right; display: flex; gap: 6px; justify-content: flex-e
 }
 .version-tag:empty { display: none; }
 .login .version { margin: 0; font-size: 12px; text-align: center; }
+.register-card { width: min(460px, 100%); }
+.register-card h2 { margin: 8px 0 4px; }
+.register-card p { margin: 0; }
+.invite-url { word-break: break-all; }
 
-#tab-send .grid-2.even { grid-template-columns: 1fr 1fr; }
-@media (max-width: 900px) { #tab-send .grid-2.even { grid-template-columns: 1fr; } }
+#tab-send .grid-2.even, #tab-signups .grid-2.even { grid-template-columns: 1fr 1fr; }
+@media (max-width: 900px) { #tab-send .grid-2.even, #tab-signups .grid-2.even { grid-template-columns: 1fr; } }
+td.wrap { white-space: normal; max-width: 320px; }
 textarea {
   font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
   border-radius: 7px; padding: 7px 10px; resize: vertical;

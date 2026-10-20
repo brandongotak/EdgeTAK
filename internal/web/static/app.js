@@ -140,6 +140,7 @@ const loaders = {
   dashboard: loadDashboard,
   users: loadUsers,
   groups: loadGroups,
+  signups: loadSignups,
   certs: loadCerts,
   packages: loadPackages,
   missions: loadMissions,
@@ -437,6 +438,115 @@ $('#users-table').addEventListener('click', guard(async (e) => {
       break;
   }
   loadUsers();
+}));
+
+// ---------- sign-ups ----------
+
+function renderChips(sel, selected) {
+  const on = new Set(selected);
+  $(sel).innerHTML = allGroups.map((g) => `<label class="chip" title="${esc(g.description)}">
+      <input type="checkbox" name="g" value="${esc(g.name)}"${on.has(g.name) ? ' checked' : ''}>${esc(g.name)}</label>`).join('')
+    || '<span class="muted">No groups yet; create them in the Groups tab.</span>';
+}
+
+const checkedIn = (sel) => [...document.querySelectorAll(`${sel} input:checked`)].map((i) => i.value);
+
+let invitesByCode = {};
+
+async function loadSignups() {
+  const [reg, groups] = await Promise.all([api('GET', 'api/registration'), api('GET', 'api/groups')]);
+  allGroups = groups;
+  const inviteSel = checkedIn('#invite-groups');
+  renderChips('#invite-groups', inviteSel);
+  renderChips('#registration-groups', reg.settings.default_groups || []);
+  for (const r of document.querySelectorAll('#registration-form input[name="mode"]')) r.checked = r.value === reg.settings.mode;
+  $('#register-url').textContent = reg.register_url;
+  $('#register-url').href = reg.register_url;
+
+  $('#requests-table tbody').innerHTML = reg.requests.map((q) => `<tr>
+    <td><strong>${esc(q.username)}</strong></td>
+    <td class="wrap">${esc(q.note) || '<span class="muted">-</span>'}</td>
+    <td class="mono">${esc(q.remote)}</td>
+    <td>${esc(ago(q.created))}</td>
+    <td class="actions">
+      <button class="small primary" data-act="approve" data-id="${esc(q.id)}" title="Creates the account in the groups for new accounts">Approve</button>
+      <button class="small danger" data-act="reject" data-id="${esc(q.id)}">Reject</button>
+    </td></tr>`).join('') || '<tr class="empty"><td colspan="5">No pending requests</td></tr>';
+
+  invitesByCode = Object.fromEntries(reg.invites.map((i) => [i.code, i]));
+  $('#invites-table tbody').innerHTML = reg.invites.map((i) => {
+    const st = i.revoked ? '<span class="pill bad">revoked</span>' : i.usable ? '<span class="pill ok">active</span>' : '<span class="pill warn">used up / expired</span>';
+    const groupsHTML = (i.groups || []).map((g) => `<span class="pill">${esc(g)}</span>`).join('') || '<span class="pill">__ANON__</span>';
+    return `<tr>
+    <td>${esc(i.label) || '<span class="muted">(no label)</span>'}</td>
+    <td>${groupsHTML}</td>
+    <td>${i.uses} / ${i.max_uses || '∞'}</td>
+    <td>${i.expires && !i.expires.startsWith('0001') ? esc(date(i.expires)) : 'never'}</td>
+    <td>${st}</td>
+    <td>${esc(ago(i.created))} by ${esc(i.created_by)}</td>
+    <td class="actions">${i.usable ? `<button class="small" data-act="show" data-code="${esc(i.code)}">Link / QR</button>
+      <button class="small danger" data-act="revoke" data-code="${esc(i.code)}">Revoke</button>` : ''}</td></tr>`;
+  }).join('') || '<tr class="empty"><td colspan="7">No invites yet</td></tr>';
+}
+
+function showInvite(inv) {
+  $('#invite-dialog-title').textContent = inv.label ? `Invite: ${inv.label}` : 'Invite link';
+  $('#invite-dialog-url').textContent = inv.url;
+  const box = $('#invite-qr');
+  box.innerHTML = '';
+  if (window.QRCode) new QRCode(box, { text: inv.url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+  $('#invite-dialog').showModal();
+}
+
+$('#invite-copy').addEventListener('click', guard(async () => {
+  await navigator.clipboard.writeText($('#invite-dialog-url').textContent);
+  toast('Link copied');
+}));
+
+$('#invite-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const inv = await api('POST', 'api/registration/invites', {
+    label: f.get('label'), groups: checkedIn('#invite-groups'),
+    max_uses: Number(f.get('max_uses')) || 0, expires_days: Number(f.get('expires_days')) || 0,
+  });
+  e.target.querySelector('input[name="label"]').value = '';
+  await loadSignups();
+  showInvite(inv);
+}));
+
+$('#registration-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const mode = new FormData(e.target).get('mode') || 'off';
+  await api('PUT', 'api/registration', { mode, default_groups: checkedIn('#registration-groups') });
+  toast('Sign-up settings saved');
+  loadSignups();
+}));
+
+$('#tab-signups').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  switch (b.dataset.act) {
+    case 'show':
+      showInvite(invitesByCode[b.dataset.code]);
+      return;
+    case 'revoke':
+      if (!confirm('Revoke this invite? The link stops working; accounts already created stay.')) return;
+      await api('DELETE', `api/registration/invites/${encodeURIComponent(b.dataset.code)}`);
+      toast('Invite revoked');
+      break;
+    case 'approve': {
+      const u = await api('POST', `api/registration/requests/${encodeURIComponent(b.dataset.id)}/approve`, {});
+      toast(`Account ${u.username} created`);
+      break;
+    }
+    case 'reject':
+      if (!confirm('Reject this request?')) return;
+      await api('DELETE', `api/registration/requests/${encodeURIComponent(b.dataset.id)}`);
+      toast('Request rejected');
+      break;
+  }
+  loadSignups();
 }));
 
 // ---------- groups ----------

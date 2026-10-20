@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>EdgeTAK Sign-up</title>
+<link rel="stylesheet" href="/admin/style.css">
+</head>
+<body>
+
+<section class="login">
+  <div class="card login-card register-card">
+    <div class="brand"><span class="logo">◆</span> <span id="server-name">EdgeTAK</span></div>
+
+    <p id="loading" class="muted">Loading…</p>
+
+    <div id="closed" hidden>
+      <h2>Sign-up is closed</h2>
+      <p class="muted" id="closed-text">This server does not accept new accounts right now. Ask an administrator for an invite link.</p>
+    </div>
+
+    <form id="register-form" class="stack wide" hidden>
+      <p id="intro" class="muted"></p>
+      <label>Username <input name="username" autocomplete="username" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._@\-]{0,63}" title="Letters, digits, . _ @ -"></label>
+      <label>Password <input name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+      <label>Confirm password <input name="confirm" type="password" autocomplete="new-password" minlength="8" required></label>
+      <label id="note-field" hidden>Note for the administrator (optional) <input name="note" maxlength="300" placeholder="who you are, unit, callsign…"></label>
+      <button class="primary" type="submit" id="register-submit">Create account</button>
+      <p id="register-error" class="error" role="alert"></p>
+    </form>
+
+    <div id="pending" hidden>
+      <h2>Request sent</h2>
+      <p class="muted">An administrator will review your request. Once it is approved, sign in on your device with the username <strong id="pending-user"></strong> and the password you chose.</p>
+    </div>
+
+    <div id="done" class="stack wide" hidden>
+      <h2>Your account is ready</h2>
+      <p class="muted">Signed up as <strong id="done-user"></strong>. Connect your device:</p>
+      <dl class="kv">
+        <dt>Server</dt><dd class="mono" id="done-host"></dd>
+        <dt>Port</dt><dd class="mono" id="done-port"></dd>
+        <dt>Protocol</dt><dd>SSL</dd>
+      </dl>
+
+      <div id="quick" hidden>
+        <h2>ATAK, WinTAK, TAKX</h2>
+        <p class="muted">Add a server with the address above, tick <em>Use authentication</em> and <em>Enroll for client certificate</em>, and enter your username and password. On ATAK you can instead scan this code (<em>Settings → Network → Servers → Quick connect</em>). It contains your password; don't share it.</p>
+        <div id="qr" class="qr"></div>
+      </div>
+      <div id="package-only" hidden>
+        <p class="muted">Import the connection package for your app, then sign in with your username and password.</p>
+      </div>
+
+      <h2>Connection packages</h2>
+      <div class="inline-form">
+        <button type="button" data-pkg="ssl">ATAK / WinTAK / TAKX package</button>
+        <button type="button" data-pkg="itak">iTAK package</button>
+      </div>
+      <p id="pkg-error" class="error" role="alert"></p>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="/admin/register.js"></script>
+</body>
+</html>
