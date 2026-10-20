@@ -56,27 +56,43 @@ Pick the setup that fits:
 | Clients connect with | a connection package (zip) from the admin console | just address, username and password |
 | Needs | nothing extra | a domain name pointing at the server, and port 80 open |
 
-Both options use the same installer, a single self-extracting file for 64-bit
-and 32-bit Raspberry Pi OS (every Pi, including Zero) and x86-64 Linux. It
-installs a systemd service that starts at boot. To build the installer
-(needs Go 1.24+ and `sh`; on Windows, use Git Bash):
+### One-line install (Raspberry Pi OS and other systemd Linux)
+
+On the device itself, run:
 
 ```sh
-git clone https://github.com/brandongotak/EdgeTAK.git
-cd EdgeTAK
-sh packaging/rpi/build-installer.sh      # writes dist/edgetak-<version>-rpi-installer.sh
+# A. Local network
+curl -fsSL https://github.com/brandongotak/EdgeTAK/releases/latest/download/install.sh | sudo sh -s -- --public-host <device-ip>
+
+# B. Internet server with Let's Encrypt (do the DNS and firewall steps below first)
+curl -fsSL https://github.com/brandongotak/EdgeTAK/releases/latest/download/install.sh | sudo sh -s -- \
+    --public-host tak.example.com --letsencrypt you@example.com --no-plaintext
 ```
 
-The installer is self-contained, so you can copy that one file anywhere.
+The script downloads the latest release's installer, verifies its SHA-256
+checksum, and runs it. Run the same command again to upgrade. To install a
+specific release, use `EDGETAK_VERSION=v0.2.0` (write it after `sudo`, as
+`sudo EDGETAK_VERSION=v0.2.0 sh -s -- ...`). A copy of the installer stays
+in `/usr/local/lib/edgetak/` for `--uninstall`.
+
+The installer supports 64-bit and 32-bit Raspberry Pi OS (every Pi, including
+Zero) and x86-64 Linux, and sets up a systemd service that starts at boot.
+Standalone binaries for Linux, Windows and macOS are attached to each
+[release](https://github.com/brandongotak/EdgeTAK/releases).
+
+**Offline or air-gapped devices:** download `edgetak-installer.sh` from a
+release, or build it yourself (needs Go 1.24+ and `sh`; on Windows, use Git
+Bash) with `sh packaging/rpi/build-installer.sh`. Then copy it over and run
+it as shown below; it needs no internet access.
 
 ### Option A: local network (Raspberry Pi, Linux or Windows)
 
-**Raspberry Pi or any systemd Linux:**
+**Raspberry Pi or any systemd Linux:** use the [one-line install](#one-line-install-raspberry-pi-os-and-other-systemd-linux).
+Without internet on the device, copy the installer over instead:
 
 ```sh
-scp dist/edgetak-<version>-rpi-installer.sh pi@<device-ip>:
-ssh pi@<device-ip>
-sudo sh edgetak-<version>-rpi-installer.sh --public-host <device-ip>
+scp edgetak-installer.sh pi@<device-ip>:
+ssh pi@<device-ip> sudo sh edgetak-installer.sh --public-host <device-ip>
 ```
 
 - `--public-host` is the address phones use to reach the server. Leave it out
@@ -118,12 +134,11 @@ its address, username and password, with no files to transfer.
   (API and admin) and **8446** (enrollment), plus 22 for SSH. On cloud VMs,
   this usually means the provider's firewall as well as the VM's own.
 
-**2. Install**
+**2. Install** on the server:
 
 ```sh
-scp dist/edgetak-<version>-rpi-installer.sh root@tak.example.com:
-ssh root@tak.example.com "sh edgetak-<version>-rpi-installer.sh \
-    --public-host tak.example.com --letsencrypt you@example.com --no-plaintext"
+curl -fsSL https://github.com/brandongotak/EdgeTAK/releases/latest/download/install.sh | sudo sh -s -- \
+    --public-host tak.example.com --letsencrypt you@example.com --no-plaintext
 ```
 
 - `--letsencrypt EMAIL` serves a Let's Encrypt certificate on 8446. EdgeTAK
@@ -201,14 +216,15 @@ authentication. These clients are anonymous and only see `__ANON__`.
 
 ## Upgrade, back up, uninstall
 
-- **Upgrade:** copy the new installer and run it with the **same flags**.
-  Users, groups, certificates, packages and missions are kept. Reconnect
-  clients afterwards, and reload the admin console with Ctrl+F5.
+- **Upgrade:** rerun the one-line install (or a newer installer file) with
+  the **same flags**. Users, groups, certificates, packages and missions are
+  kept. Reconnect clients afterwards, and reload the admin console with Ctrl+F5.
 - **Back up** `/var/lib/edgetak` (or `data/`). `certs/ca-key.pem` is the key
   every enrolled device trusts: if it is lost, every device must enroll again.
 - **Move a manual install into the service:** `--import-data <old data dir>`.
-- **Uninstall:** `sudo sh edgetak-<version>-rpi-installer.sh --uninstall`
-  keeps the data; add `--purge` to delete it and the `edgetak` user.
+- **Uninstall:** `sudo sh /usr/local/lib/edgetak/edgetak-installer.sh --uninstall`
+  keeps the data; add `--purge` to delete it and the `edgetak` user. If you
+  installed from a copied file, run that file with `--uninstall` instead.
 - **Forgotten password:**
   `sudo -u edgetak /usr/local/bin/edgetak -data /var/lib/edgetak -reset-password admin`
   (manual run: `./edgetak -data ./data -reset-password admin`).
@@ -267,11 +283,14 @@ restart after editing. Set any listener address (`tcp_addr`, `tls_addr`,
 
 ```sh
 go test ./...
-go install github.com/brandongotak/EdgeTAK/cmd/edgetak@latest   # one-line install, needs Go 1.24+
+go install github.com/brandongotak/EdgeTAK/cmd/edgetak@latest   # needs Go 1.24+
 ```
 
-While the repository is private, the one-line install needs
-`GOPRIVATE=github.com/brandongotak`, and git must be logged in to GitHub.
+**Releases:** pushing a version tag (`git tag v0.2.0 && git push origin
+v0.2.0`) runs the tests and publishes a GitHub release (see
+`.github/workflows/release.yml`). The release carries `install.sh`,
+`edgetak-installer.sh` (which the one-line install fetches), a versioned copy
+of the installer, standalone binaries and `SHA256SUMS`.
 
 The end-to-end tests use an in-memory network instead of real sockets,
 because some desktop antivirus products intercept local TLS and break mutual
@@ -304,4 +323,4 @@ the starting points for the planned plugin API.
 - Federation with the official TAK Server, OpenTAKServer and FreeTAKServer
 - Data Sync extras: mission feeds, map layers, external data, mission hierarchy
 - CoT history and replay, video stream registry, custom device profiles
-- Packaging: deb/rpm, Docker, Windows service, prebuilt release downloads
+- Packaging: deb/rpm, Docker, Windows service

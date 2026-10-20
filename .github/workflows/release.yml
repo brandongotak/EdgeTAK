@@ -1,0 +1,51 @@
+# Builds and publishes a release when a version tag is pushed:
+#   git tag v0.2.0 && git push origin v0.2.0
+# Assets: the self-extracting Linux installer (under a fixed name for the
+# one-line install and a versioned name), install.sh, standalone binaries
+# and SHA256SUMS.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # git describe needs tags for the version
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build installer and binaries
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          sh packaging/rpi/build-installer.sh
+          sh build.sh
+          cp "dist/edgetak-$VERSION-rpi-installer.sh" dist/edgetak-installer.sh
+          cp install.sh dist/install.sh
+          cd dist
+          ls edgetak-"$VERSION"-* | grep -v installer > binaries.txt
+          sha256sum edgetak-installer.sh "edgetak-$VERSION-rpi-installer.sh" install.sh $(cat binaries.txt) > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          cd dist
+          gh release create "$VERSION" --title "EdgeTAK $VERSION" --generate-notes \
+            edgetak-installer.sh "edgetak-$VERSION-rpi-installer.sh" install.sh SHA256SUMS \
+            $(cat binaries.txt)

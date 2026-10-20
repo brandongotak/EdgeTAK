@@ -121,7 +121,7 @@ do_uninstall() {
 	firewall close
 	if [ "$PURGE" -eq 1 ]; then
 		say "Deleting $DATA_DIR and user $SVC_USER"
-		rm -rf "$DATA_DIR"
+		rm -rf "$DATA_DIR" /usr/local/lib/edgetak # the latter: one-line installer's copy
 		id "$SVC_USER" >/dev/null 2>&1 && userdel "$SVC_USER" 2>/dev/null || true
 	else
 		say "Kept $DATA_DIR (config, users, CA, packages). Use --uninstall --purge to delete it."
