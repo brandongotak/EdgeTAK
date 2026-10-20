@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,11 @@ func (s *Server) missionRoutes(mux *http.ServeMux) {
 	}
 
 	h("GET "+p, s.listMissions)
+	h("GET /Marti/api/pagedmissions", s.pagedMissions)
+	h("GET /Marti/api/missioncount", func(w http.ResponseWriter, r *http.Request, c mission.Caller) {
+		n := len(s.Missions.List(c, boolParamDefault(r, "passwordProtected", true), r.URL.Query().Get("tool")))
+		writeJSON(w, http.StatusOK, s.martiEnvelope("Mission", n))
+	})
 	h("GET "+p+"/{name}", s.getMission)
 	h("PUT "+p+"/{name}", s.createMission)
 	h("POST "+p+"/{name}", s.createMission)
@@ -68,6 +74,42 @@ func (s *Server) missionRoutes(mux *http.ServeMux) {
 		writeJSON(w, http.StatusOK, s.martiEnvelope("MissionLayer", []any{}))
 	}
 	h("GET "+p+"/{name}/layers", empty)
+	h("GET "+p+"/{name}/children", func(w http.ResponseWriter, r *http.Request, c mission.Caller) {
+		if _, err := s.Missions.Get(r.PathValue("name"), c, r.URL.Query().Get("password"), mission.View{}); err != nil {
+			s.missionError(w, err)
+			return
+		}
+		s.missionsResponse(w, http.StatusOK) // mission hierarchies are not supported
+	})
+	h("GET "+p+"/{name}/invitations", func(w http.ResponseWriter, r *http.Request, c mission.Caller) {
+		inv, err := s.Missions.MissionInvitations(r.PathValue("name"), c)
+		if err != nil {
+			s.missionError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, s.martiEnvelope("MissionInvitation", inv))
+	})
+	h("GET "+p+"/{name}/token", func(w http.ResponseWriter, r *http.Request, c mission.Caller) {
+		tok, err := s.Missions.ReadToken(r.PathValue("name"), c)
+		if err != nil {
+			s.missionError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, s.martiEnvelope("java.lang.String", tok))
+	})
+	h("GET "+p+"/{name}/contacts", s.missionContacts)
+
+	// TAKX addresses the file servlets under /Marti/api as well.
+	mux.HandleFunc("GET /Marti/api/sync/content", s.authed(s.content))
+	mux.HandleFunc("HEAD /Marti/api/sync/content", s.authed(s.content))
+	mux.HandleFunc("POST /Marti/api/sync/upload", s.authed(s.rawUpload))
+	// Active-group selection is not supported yet; accept it so clients proceed.
+	for _, path := range []string{"/Marti/api/groups/active", "/Marti/api/groups/activebits"} {
+		mux.HandleFunc("PUT "+path, s.authed(func(w http.ResponseWriter, r *http.Request, _ *identity) {
+			io.Copy(io.Discard, io.LimitReader(r.Body, 64<<10))
+			w.WriteHeader(http.StatusOK)
+		}))
+	}
 
 	// Latest CoT by UID (official CotApi), used to fetch announced mission items.
 	h("GET /Marti/api/cot/xml/{uid}", s.cotXML(false))
@@ -116,6 +158,27 @@ func (s *Server) cotEvents(w http.ResponseWriter, r *http.Request, c mission.Cal
 	b.WriteString("</events>")
 	w.Header().Set("Content-Type", "application/xml")
 	io.WriteString(w, b.String())
+}
+
+// missionContacts lists connected subscribers as ClientEndpoint objects.
+func (s *Server) missionContacts(w http.ResponseWriter, r *http.Request, c mission.Caller) {
+	uids, err := s.Missions.SubscriberUIDs(r.PathValue("name"), c)
+	if err != nil {
+		s.missionError(w, err)
+		return
+	}
+	data := []map[string]string{}
+	for _, cl := range s.Router.Clients() {
+		uid, cs := cl.Identity()
+		if uid == "" || !slices.Contains(uids, uid) {
+			continue
+		}
+		data = append(data, map[string]string{
+			"callsign": cs, "uid": uid, "username": cl.Username,
+			"lastEventTime": cl.LastSeen().UTC().Format("2006-01-02T15:04:05.000Z"), "lastStatus": "Connected",
+		})
+	}
+	writeJSON(w, http.StatusOK, s.martiEnvelope("com.bbn.marti.remote.ClientEndpoint", data))
 }
 
 // missionCaller combines the HTTP identity with the device UID and mission
@@ -178,6 +241,45 @@ func boolParam(r *http.Request, name string) bool {
 
 func (s *Server) listMissions(w http.ResponseWriter, r *http.Request, c mission.Caller) {
 	s.missionsResponse(w, http.StatusOK, s.Missions.List(c, boolParam(r, "passwordProtected"), r.URL.Query().Get("tool"))...)
+}
+
+func boolParamDefault(r *http.Request, name string, def bool) bool {
+	v, err := strconv.ParseBool(r.URL.Query().Get(name))
+	if err != nil {
+		return def
+	}
+	return v
+}
+
+// pagedMissions is the official /Marti/api/pagedmissions (page, pagesize,
+// nameFilter, uidFilter, ascending); missions are sorted by name.
+func (s *Server) pagedMissions(w http.ResponseWriter, r *http.Request, c mission.Caller) {
+	q := r.URL.Query()
+	all := s.Missions.List(c, boolParamDefault(r, "passwordProtected", true), q.Get("tool"))
+	nameFilter, uidFilter := strings.ToLower(q.Get("nameFilter")), strings.ToLower(q.Get("uidFilter"))
+	var list []map[string]any
+	for _, m := range all {
+		if nameFilter != "" && !strings.Contains(strings.ToLower(m["name"].(string)), nameFilter) {
+			continue
+		}
+		if uidFilter != "" && !strings.Contains(strings.ToLower(m["creatorUid"].(string)), uidFilter) {
+			continue
+		}
+		list = append(list, m)
+	}
+	if !boolParamDefault(r, "ascending", true) {
+		slices.Reverse(list)
+	}
+	page, _ := strconv.Atoi(q.Get("page"))
+	size, err := strconv.Atoi(q.Get("pagesize"))
+	if err != nil || size <= 0 {
+		size = 10
+	}
+	start := max(page, 0) * size
+	if start > len(list) {
+		start = len(list)
+	}
+	s.missionsResponse(w, http.StatusOK, list[start:min(start+size, len(list))]...)
 }
 
 func (s *Server) getMission(w http.ResponseWriter, r *http.Request, c mission.Caller) {

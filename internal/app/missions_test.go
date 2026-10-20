@@ -119,6 +119,12 @@ func TestDataSync(t *testing.T) {
 	if data := eve.want(200, "GET", "/Marti/api/missions", nil)["data"].([]any); len(data) != 0 {
 		t.Errorf("eve sees %d missions", len(data))
 	}
+	if env := bob.want(200, "GET", "/Marti/api/pagedmissions?page=0&pagesize=10&nameFilter=OP", nil); len(env["data"].([]any)) != 1 {
+		t.Errorf("pagedmissions = %v", env["data"])
+	}
+	if env := bob.want(200, "GET", "/Marti/api/missioncount", nil); env["data"] != float64(1) {
+		t.Errorf("missioncount = %v", env["data"])
+	}
 	eve.want(404, "GET", base+"ops", nil)
 	eve.want(404, "PUT", base+"ops/subscription?uid=ANDROID-eve", nil)
 
@@ -190,6 +196,20 @@ func TestDataSync(t *testing.T) {
 	if !strings.Contains(change.Detail.XML, "<hash>"+hash+"</hash>") || !strings.Contains(change.Detail.XML, "<filename>plan.txt</filename>") {
 		t.Errorf("file change = %s", change.Detail.XML)
 	}
+
+	// TAKX forms: /Marti/api/sync/content, per-mission contacts/children/token/invitations.
+	if _, _, dl := bob.do("GET", "/Marti/api/sync/content?hash="+hash, nil); !bytes.Equal(dl, file) {
+		t.Errorf("/Marti/api/sync/content returned %q", dl)
+	}
+	if env := bob.want(200, "GET", base+"ops/contacts", nil); len(env["data"].([]any)) != 2 {
+		t.Errorf("mission contacts = %v", env["data"])
+	}
+	bob.want(200, "GET", base+"ops/children", nil)
+	bob.want(200, "GET", base+"ops/invitations", nil)
+	if env := bob.want(200, "GET", base+"ops/token", nil); env["data"] == "" {
+		t.Errorf("mission token = %v", env)
+	}
+	bob.want(200, "PUT", "/Marti/api/groups/active", []byte(`[]`))
 
 	// The change feed and subscriber list.
 	ch := bob.want(200, "GET", base+"ops/changes?secago=3600", nil)["data"].([]any)

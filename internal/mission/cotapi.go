@@ -21,3 +21,43 @@ func (s *Service) LatestCoT(uid string, c Caller) (string, bool) {
 	}
 	return "", false
 }
+
+// MissionInvitations lists a mission's invitations (official MissionInvitation JSON).
+func (s *Service) MissionInvitations(name string, c Caller) ([]map[string]any, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	m, _, err := s.require(name, c, PermRead)
+	if err != nil {
+		return nil, err
+	}
+	out := []map[string]any{}
+	for _, inv := range m.Invitations {
+		out = append(out, map[string]any{
+			"missionName": m.Name, "missionGuid": m.GUID, "invitee": inv.Invitee, "type": inv.Type,
+			"creatorUid": inv.CreatorUID, "createTime": fmtTime(inv.Created), "role": roleJSON(inv.Role),
+		})
+	}
+	return out, nil
+}
+
+// ReadToken issues a token carrying the caller's current role on the mission.
+func (s *Service) ReadToken(name string, c Caller) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	m, role, err := s.require(name, c, PermRead)
+	if err != nil {
+		return "", err
+	}
+	return s.newToken(m, c.ClientUID, role), nil
+}
+
+// SubscriberUIDs lists a mission's subscribers for a caller with read access.
+func (s *Service) SubscriberUIDs(name string, c Caller) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	m, _, err := s.require(name, c, PermRead)
+	if err != nil {
+		return nil, err
+	}
+	return subscriberUIDs(m), nil
+}

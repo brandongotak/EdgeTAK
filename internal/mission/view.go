@@ -39,7 +39,8 @@ func roleXML(role string) string {
 	return b.String()
 }
 
-func resourceJSON(p *store.Package) map[string]any {
+// ResourceJSON renders a stored file as the official Resource JSON.
+func ResourceJSON(p *store.Package) map[string]any {
 	kw := p.Keywords
 	if kw == nil {
 		kw = []string{}
@@ -83,7 +84,7 @@ func (s *Service) render(m *Mission, v View) map[string]any {
 		if !ok {
 			continue // file was deleted from the server
 		}
-		contents = append(contents, map[string]any{"data": resourceJSON(p), "timestamp": fmtTime(c.Timestamp), "creatorUid": c.CreatorUID})
+		contents = append(contents, map[string]any{"data": ResourceJSON(p), "timestamp": fmtTime(c.Timestamp), "creatorUid": c.CreatorUID})
 	}
 	out := map[string]any{
 		"name": m.Name, "guid": m.GUID, "description": m.Description, "chatRoom": m.ChatRoom,
@@ -148,7 +149,7 @@ func (s *Service) changeJSON(m *Mission, ch Change) map[string]any {
 	}
 	if ch.ContentHash != "" {
 		if p, ok := s.store.Package(ch.ContentHash); ok {
-			out["contentResource"] = resourceJSON(p)
+			out["contentResource"] = ResourceJSON(p)
 		} else {
 			out["contentResource"] = map[string]any{"hash": ch.ContentHash, "uid": ch.ContentHash}
 		}

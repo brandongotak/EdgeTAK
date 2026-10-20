@@ -40,6 +40,15 @@ Working and covered by an end-to-end test (`internal/app/app_test.go`):
     subscribers only and is added to the mission automatically. `t-x-m-c` /
     `-n` / `-d` / `-i` / `-r` notifications are sent like the official server's.
   - Stored as one JSON file per mission in `data/missions/`
+- **Client compatibility**: verified with ATAK, WinTAK 5.6 and TAKX-MIL 5.8,
+  including Data Sync between them
+  - OAuth2 password login (`/oauth/token`) issuing RS256 JWTs signed by the
+    server key, accepted as Bearer tokens on every API (TAKX)
+  - Newer `/Marti/api/...` forms of the file, search, contacts and CoT APIs
+  - No TLS session tickets on HTTPS: Windows SChannel (WinTAK) cannot handle
+    them when it presents a client certificate
+  - `log_level: debug` logs every HTTP request and traces failed TLS
+    handshakes, for diagnosing new clients
 - **Web admin console**: `https://<host>:8443/admin/`
   - Live map and connected-client table (callsign, team, battery, device, traffic)
   - Users and groups, issuing `.p12` certificates, revoking certificates

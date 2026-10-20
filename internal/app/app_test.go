@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -362,6 +363,107 @@ func TestEndToEnd(t *testing.T) {
 		resp.Body.Close()
 		if resp.StatusCode != 200 {
 			t.Errorf("missionquery = %d", resp.StatusCode)
+		}
+
+		// The newer API forms (TAKX): /Marti/api/sync/search and /Marti/api/files/{hash}.
+		apiSearch := func(cert tls.Certificate) []any {
+			resp, err := https(cert).Get(base + "/Marti/api/sync/search?keyword=missionpackage")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			var env map[string]any
+			json.NewDecoder(resp.Body).Decode(&env)
+			if resp.StatusCode != 200 || env["type"] != "Resource" {
+				t.Fatalf("api search = %d %v", resp.StatusCode, env)
+			}
+			data, _ := env["data"].([]any)
+			return data
+		}
+		if res := apiSearch(bobCert); len(res) != 1 || res[0].(map[string]any)["hash"] != hash || res[0].(map[string]any)["size"] != float64(len(content)) {
+			t.Errorf("api search for bob = %v", res)
+		}
+		if res := apiSearch(eveCert); len(res) != 0 {
+			t.Errorf("api search leaked across groups: %v", res)
+		}
+		resp, _ = https(bobCert).Get(base + "/Marti/api/files/" + hash)
+		got, _ = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != 200 || !bytes.Equal(got, content) {
+			t.Errorf("api files download = %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("oauth password grant and bearer access (TAKX)", func(t *testing.T) {
+		hc := &http.Client{Transport: memTransport(&tls.Config{RootCAs: a.CA.Pool()})} // no client cert
+		base := "https://" + a.Addrs["https"]
+		token := func(form string) (int, map[string]any) {
+			resp, err := hc.Post(base+"/oauth/token?"+form, "application/x-www-form-urlencoded", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			var m map[string]any
+			json.NewDecoder(resp.Body).Decode(&m)
+			return resp.StatusCode, m
+		}
+		if st, m := token("grant_type=password&username=alice&password=wrong"); st != 400 || m["error"] != "invalid_grant" {
+			t.Errorf("bad password = %d %v", st, m)
+		}
+		st, m := token("grant_type=password&username=alice&password=password-alice")
+		access, _ := m["access_token"].(string)
+		if st != 200 || access == "" || m["token_type"] != "Bearer" || m["scope"] != "openid profile" || m["expires_in"] == nil {
+			t.Fatalf("token = %d %v", st, m)
+		}
+		// Like the official server, the token is an RS256 JWT signed by the
+		// server's TLS key, verifiable against the certificate the client sees.
+		parts := strings.Split(access, ".")
+		if len(parts) != 3 {
+			t.Fatalf("not a JWT: %s", access)
+		}
+		hdr, _ := base64.RawURLEncoding.DecodeString(parts[0])
+		payload, _ := base64.RawURLEncoding.DecodeString(parts[1])
+		sig, _ := base64.RawURLEncoding.DecodeString(parts[2])
+		digest := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
+		if err := rsa.VerifyPKCS1v15(a.CA.ServerCert.Leaf.PublicKey.(*rsa.PublicKey), crypto.SHA256, digest[:], sig); err != nil {
+			t.Errorf("token signature does not verify with the server certificate: %v (header %s)", err, hdr)
+		}
+		var claims map[string]any
+		json.Unmarshal(payload, &claims)
+		if claims["sub"] != "alice" || claims["exp"] == nil || claims["iat"] == nil || claims["jti"] == nil {
+			t.Errorf("claims = %v", claims)
+		}
+		if scope, _ := claims["scope"].([]any); len(scope) != 2 {
+			t.Errorf("scope claim = %v", claims["scope"])
+		}
+		get := func(path, tok string) (int, []byte) {
+			req, _ := http.NewRequest("GET", base+path, nil)
+			req.Header.Set("Authorization", "Bearer "+tok)
+			resp, err := hc.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			b, _ := io.ReadAll(resp.Body)
+			return resp.StatusCode, b
+		}
+		st, body := get("/Marti/api/contacts/all", access)
+		var contacts []map[string]any
+		json.Unmarshal(body, &contacts)
+		found := false
+		for _, c := range contacts {
+			if c["callsign"] == "BOB" && c["team"] == "Cyan" {
+				found = true
+			}
+		}
+		if st != 200 || !found {
+			t.Errorf("contacts with bearer = %d %s", st, body)
+		}
+		if st, _ := get("/Marti/api/clientEndPoints", access[:len(access)-2]+"xx"); st != 401 {
+			t.Errorf("tampered token = %d, want 401", st)
+		}
+		if st, m := token("grant_type=client_credentials"); st != 400 || m["error"] != "unsupported_grant_type" {
+			t.Errorf("unsupported grant = %d %v", st, m)
 		}
 	})
 

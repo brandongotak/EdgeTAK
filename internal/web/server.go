@@ -74,6 +74,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	}
 	mux := http.NewServeMux()
 	s.martiRoutes(mux)
+	s.oauthRoutes(mux)
 	s.adminRoutes(mux)
 
 	sub, _ := fs.Sub(staticFS, "static")
@@ -163,6 +164,8 @@ func (s *Server) logRequest(r *http.Request, rec *statusRecorder, d time.Duratio
 		who = "cert:" + r.TLS.PeerCertificates[0].Subject.CommonName
 	} else if u, _, ok := r.BasicAuth(); ok {
 		who = "basic:" + u
+	} else if bearerToken(r) != "" {
+		who = "bearer"
 	}
 	s.Log.Debug("http", "method", r.Method, "path", r.URL.Path, "query", redactedQuery(r.URL.Query()),
 		"status", rec.status, "bytes", rec.bytes, "ms", d.Milliseconds(), "remote", r.RemoteAddr,
@@ -190,6 +193,9 @@ func (s *Server) identify(r *http.Request) *identity {
 			return nil
 		}
 		return s.userIdentity(leaf.Subject.CommonName)
+	}
+	if id := s.bearerIdentity(r); id != nil {
+		return id
 	}
 	if name, pw, ok := r.BasicAuth(); ok {
 		u, ok := s.Store.Authenticate(name, pw)
