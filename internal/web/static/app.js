@@ -95,6 +95,7 @@ const emptyRow = (cols, text) => `<tr class="empty"><td colspan="${cols}">${esc(
 
 function showLogin() {
   clearInterval(pollTimer);
+  clearInterval(mapTimer);
   $('#shell').hidden = true;
   $('#login').hidden = false;
   $('#login-form [name=username]').focus();
@@ -111,6 +112,8 @@ async function start() {
   $('#shell').hidden = false;
   await refreshStatus();
   selectTab(location.hash.slice(1) || 'dashboard');
+  // The map is open by default beside the tabs; on phones it opens on demand.
+  setMapVisible(!isNarrow() && prefs.get('map.open', true), false);
 }
 
 $('#login-form').addEventListener('submit', async (e) => {
@@ -148,8 +151,11 @@ const loaders = {
   connect: loadConnect,
 };
 
+let currentTab = '';
+
 function selectTab(name) {
   if (!loaders[name]) name = 'dashboard';
+  currentTab = name;
   history.replaceState(null, '', '#' + name);
   for (const b of $('#tabs').children) b.classList.toggle('active', b.dataset.tab === name);
   for (const s of document.querySelectorAll('.tab')) s.hidden = s.id !== 'tab-' + name;
@@ -157,14 +163,15 @@ function selectTab(name) {
   guard(loaders[name])();
   if (name === 'dashboard') {
     pollTimer = setInterval(guard(loadDashboard), 3000);
-    if (map) setTimeout(() => map.invalidateSize(), 0);
   } else if (name === 'send') {
     pollTimer = setInterval(guard(loadSendLive), 5000); // Inbox updates
   }
 }
 $('#tabs').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-tab]');
-  if (b) selectTab(b.dataset.tab);
+  if (!b) return;
+  if (isNarrow() && mapVisible()) setMapVisible(false); // the map covers the tabs on phones
+  selectTab(b.dataset.tab);
 });
 
 // ---------- dashboard ----------
@@ -222,7 +229,7 @@ async function loadDashboard() {
     const batt = c.battery != null ? `<span class="pill ${c.battery < 20 ? 'bad' : c.battery < 50 ? 'warn' : 'ok'}">${c.battery}%</span>` : '—';
     const transport = `<span class="pill ${c.transport === 'tls' ? 'ok' : 'warn'}">${esc(c.transport.toUpperCase())}</span>`;
     return `<tr>
-      <td><strong>${esc(c.callsign || '(no SA yet)')}</strong><div class="muted mono">${esc(c.uid)}</div></td>
+      <td><strong${hasPos(c) ? ` class="callsign-link" data-focus="${esc(c.uid || String(c.id))}" title="Show on the map"` : ''}>${esc(c.callsign || '(no SA yet)')}</strong><div class="muted mono">${esc(c.uid)}</div></td>
       <td>${esc(c.username || 'anonymous')}</td>
       <td>${team}</td>
       <td>${transport}</td>
@@ -242,6 +249,10 @@ async function loadDashboard() {
 }
 
 $('#clients-table').addEventListener('click', guard(async (e) => {
+  if (e.target.dataset.focus) {
+    focusClient(e.target.dataset.focus);
+    return;
+  }
   const id = e.target.dataset.kick;
   if (!id) return;
   await api('POST', `api/clients/${id}/disconnect`);
@@ -249,42 +260,301 @@ $('#clients-table').addEventListener('click', guard(async (e) => {
   loadDashboard();
 }));
 
-function updateMap(clients) {
-  if (!window.L) return;
-  const withPos = clients.filter(hasPos);
-  if (!map) {
-    if (!withPos.length) return;
-    const el = $('#map');
-    el.innerHTML = '';
-    map = L.map(el, { worldCopyJump: true }).setView([withPos[0].lat, withPos[0].lon], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map);
+// ---------- map ----------
+//
+// One map beside every tab (full screen on narrow screens), with base maps
+// and overlays like ATAK's map sources. Admins can add their own sources,
+// including ATAK map source XML files.
+
+const prefs = {
+  get(k, d) { try { const v = localStorage.getItem('edgetak.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('edgetak.' + k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
+};
+
+const MAX_ZOOM = 21;
+const esri = (svc) => `https://server.arcgisonline.com/ArcGIS/rest/services/${svc}/MapServer/tile/{z}/{y}/{x}`;
+const usgs = (svc) => `https://basemap.nationalmap.gov/arcgis/rest/services/${svc}/MapServer/tile/{z}/{y}/{x}`;
+const OSM_ATTR = '&copy; OpenStreetMap contributors';
+// [name, layers: [url, options]...]
+const BASEMAPS = [
+  ['Streets', [['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, attribution: OSM_ATTR }]]],
+  ['Satellite', [[esri('World_Imagery'), { maxNativeZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' }]]],
+  ['Hybrid', [[esri('World_Imagery'), { maxNativeZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' }],
+    [esri('Reference/World_Boundaries_and_Places'), { maxNativeZoom: 19 }]]],
+  ['Topo', [['https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxNativeZoom: 17, attribution: 'Map data ' + OSM_ATTR + ', SRTM | style &copy; OpenTopoMap (CC-BY-SA)' }]]],
+  ['USGS Topo', [[usgs('USGSTopo'), { maxNativeZoom: 16, attribution: 'USGS The National Map' }]]],
+  ['USGS Imagery Topo', [[usgs('USGSImageryTopo'), { maxNativeZoom: 16, attribution: 'USGS The National Map' }]]],
+  ['Dark', [['https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxNativeZoom: 20, subdomains: 'abcd', attribution: OSM_ATTR + ' &copy; CARTO' }]]],
+];
+
+let baseLayers = {};   // name -> layer
+let overlayLayers = {}; // name -> layer
+let layersControl = null;
+let rebuildingLayers = false;
+let devicesLayer = null;
+let contactLayer = null;
+let labelsLayer = null;
+let mapSources = [];
+let mapTimer = null;
+let latestClients = [];
+
+const isNarrow = () => window.matchMedia('(max-width: 1000px)').matches;
+const mapVisible = () => !$('#map-panel').hidden;
+
+function setMapVisible(on, remember = true) {
+  $('#map-panel').hidden = !on;
+  $('#workspace').classList.toggle('with-map', on);
+  $('#map-toggle').setAttribute('aria-pressed', String(on));
+  if (remember && !isNarrow()) prefs.set('map.open', on);
+  clearInterval(mapTimer);
+  if (!on) return;
+  initMap();
+  if (map) setTimeout(() => map.invalidateSize(), 0);
+  refreshMap();
+  // The dashboard refreshes clients itself; elsewhere the map polls.
+  mapTimer = setInterval(() => { if (currentTab !== 'dashboard') refreshMap(); }, 3000);
+}
+
+$('#map-toggle').addEventListener('click', () => setMapVisible(!mapVisible()));
+$('#map-close').addEventListener('click', () => setMapVisible(false));
+$('#map-fit').addEventListener('click', () => fitDevices(true));
+
+function tileLayer(url, opts) {
+  return L.tileLayer(url, { maxZoom: MAX_ZOOM, ...opts });
+}
+
+function buildBase(def) {
+  const layers = def.map(([url, opts]) => tileLayer(url, opts));
+  return layers.length === 1 ? layers[0] : L.layerGroup(layers);
+}
+
+function initMap() {
+  if (map || !window.L) return;
+  const el = $('#map');
+  el.innerHTML = '';
+  const view = prefs.get('map.view', null);
+  map = L.map(el, { worldCopyJump: true, maxZoom: MAX_ZOOM, zoomControl: true });
+  if (view) map.setView([view.lat, view.lon], view.zoom);
+  else map.setView([20, 0], 2);
+  L.control.scale({ imperial: true }).addTo(map);
+  devicesLayer = L.layerGroup().addTo(map);
+  contactLayer = L.layerGroup().addTo(map);
+  // Toggling callsign labels hides the tooltips rather than removing markers.
+  labelsLayer = L.layerGroup();
+  labelsLayer.on('add', () => el.classList.remove('no-labels'));
+  labelsLayer.on('remove', () => el.classList.add('no-labels'));
+  map.on('moveend', () => {
+    const c = map.getCenter();
+    prefs.set('map.view', { lat: c.lat, lon: c.lng, zoom: map.getZoom() });
+  });
+  map.on('baselayerchange', (e) => {
+    if (rebuildingLayers) return;
+    prefs.set('map.base', e.name);
+    $('#basemap').value = e.name;
+  });
+  map.on('overlayadd overlayremove', () => {
+    if (rebuildingLayers) return;
+    prefs.set('map.overlays', Object.entries(overlayLayers).filter(([, l]) => map.hasLayer(l)).map(([n]) => n));
+  });
+  buildLayers();
+  guard(loadMapSources)();
+  if (view) fittedOnce = true;
+}
+
+// buildLayers (re)creates the layer switcher from the built-in base maps and
+// the admin-defined sources, restoring the viewer's last choices.
+function buildLayers() {
+  if (!map) return;
+  const activeBase = prefs.get('map.base', 'Streets');
+  const activeOverlays = new Set(prefs.get('map.overlays', ['Devices', 'Callsigns', 'Server contact']));
+  // Detach the switcher first, or removing the old layers would be saved as
+  // the viewer turning them off.
+  rebuildingLayers = true;
+  if (layersControl) layersControl.remove();
+  for (const l of [...Object.values(baseLayers), ...Object.values(overlayLayers)]) map.removeLayer(l);
+
+  baseLayers = {};
+  for (const [name, def] of BASEMAPS) baseLayers[name] = buildBase(def);
+  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer };
+  for (const s of mapSources) {
+    const layer = tileLayer(s.url, {
+      minZoom: 0, maxNativeZoom: s.max_zoom || 19, attribution: esc(s.attribution || ''),
+      subdomains: s.subdomains ? (s.subdomains.includes(',') ? s.subdomains.split(',') : s.subdomains) : 'abc',
+    });
+    (s.overlay ? overlayLayers : baseLayers)[s.name] = layer;
   }
+
+  (baseLayers[activeBase] || baseLayers.Streets).addTo(map);
+  for (const [name, l] of Object.entries(overlayLayers)) {
+    if (activeOverlays.has(name)) l.addTo(map); else map.removeLayer(l);
+  }
+  if (!map.hasLayer(labelsLayer)) $('#map').classList.add('no-labels');
+  layersControl = L.control.layers(baseLayers, overlayLayers, { collapsed: true, position: 'topright' }).addTo(map);
+  rebuildingLayers = false;
+
+  $('#basemap').innerHTML = Object.keys(baseLayers).map((n) => `<option>${esc(n)}</option>`).join('');
+  $('#basemap').value = baseLayers[activeBase] ? activeBase : 'Streets';
+}
+
+$('#basemap').addEventListener('change', (e) => {
+  for (const l of Object.values(baseLayers)) map.removeLayer(l);
+  baseLayers[e.target.value].addTo(map);
+  map.fire('baselayerchange', { name: e.target.value, layer: baseLayers[e.target.value] });
+});
+
+async function refreshMap() {
+  if (!map || !mapVisible()) return;
+  try {
+    updateMap(await api('GET', 'api/clients'));
+  } catch { /* shown elsewhere */ }
+}
+
+function updateMap(clients) {
+  latestClients = clients;
+  if (!map) return;
+  const withPos = clients.filter(hasPos);
   const seen = new Set();
   for (const c of withPos) {
     const key = c.uid || String(c.id);
     seen.add(key);
     const color = TEAM_COLORS[c.team] || '#4cc38a';
     const label = `<strong>${esc(c.callsign)}</strong><br>${esc(c.team || '')} ${esc(c.role || '')}<br>` +
-      `${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}${c.speed ? `<br>${(c.speed * 3.6).toFixed(1)} km/h` : ''}`;
+      `<span class="mono">${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}</span>` +
+      `${c.speed ? `<br>${(c.speed * 3.6).toFixed(1)} km/h` : ''}${c.battery != null ? `<br>Battery ${c.battery}%` : ''}` +
+      `<br><span class="muted">${esc(c.username || 'anonymous')} · ${esc([c.platform, c.device].filter(Boolean).join(' '))}</span>`;
     let m = markers.get(key);
     if (!m) {
-      m = L.circleMarker([c.lat, c.lon], { radius: 8, weight: 2, color: '#000', fillOpacity: 0.9 }).addTo(map);
+      m = L.circleMarker([c.lat, c.lon], { radius: 8, weight: 2, color: '#000', fillOpacity: 0.9 }).addTo(devicesLayer);
       m.bindTooltip(esc(c.callsign), { permanent: true, direction: 'right', offset: [8, 0] });
+      m.bindPopup('');
       markers.set(key, m);
     }
     m.setLatLng([c.lat, c.lon]).setStyle({ fillColor: color });
-    m.bindPopup(label);
+    m.setTooltipContent(esc(c.callsign));
+    m.setPopupContent(label);
   }
   for (const [key, m] of markers) {
     if (!seen.has(key)) { m.remove(); markers.delete(key); }
   }
-  if (!fittedOnce && withPos.length > 1) {
-    map.fitBounds(L.latLngBounds(withPos.map((c) => [c.lat, c.lon])).pad(0.3));
-    fittedOnce = true;
-  }
+  if (!fittedOnce && withPos.length) fitDevices(false);
 }
+
+function fitDevices(explicit) {
+  const pts = latestClients.filter(hasPos).map((c) => [c.lat, c.lon]);
+  if (!map) return;
+  if (!pts.length) {
+    if (explicit) toast('No devices with a position yet');
+    return;
+  }
+  if (pts.length === 1) map.setView(pts[0], Math.max(map.getZoom(), 14));
+  else map.fitBounds(L.latLngBounds(pts).pad(0.3), { maxZoom: 16 });
+  fittedOnce = true;
+}
+
+// focusClient shows a device on the map (from the clients table).
+function focusClient(uid) {
+  const m = markers.get(uid);
+  if (!m) return;
+  setMapVisible(true, false);
+  map.setView(m.getLatLng(), Math.max(map.getZoom(), 15));
+  m.openPopup();
+}
+
+async function refreshContactMarker() {
+  if (!map) return;
+  let c;
+  try { c = await api('GET', 'api/send/contact'); } catch { return; }
+  contactLayer.clearLayers();
+  if (!c?.enabled || (!c.lat && !c.lon)) return;
+  L.marker([c.lat, c.lon], { title: c.callsign })
+    .bindTooltip(esc(c.callsign || 'Server'), { permanent: true, direction: 'right', offset: [10, -12] })
+    .bindPopup(`<strong>${esc(c.callsign || 'Server')}</strong><br>Server contact (direct messages)`)
+    .addTo(contactLayer);
+}
+
+// ---- custom map sources ----
+
+async function loadMapSources() {
+  mapSources = await api('GET', 'api/map/sources');
+  buildLayers();
+  renderMapSources();
+  refreshContactMarker();
+}
+
+function renderMapSources() {
+  $('#map-sources-list').innerHTML = mapSources.map((s, i) => `<div class="source-row">
+      <div class="grow"><strong>${esc(s.name)}</strong> ${s.overlay ? '<span class="pill">overlay</span>' : '<span class="pill">base map</span>'}
+        <div class="muted mono grow" title="${esc(s.url)}">${esc(s.url)}</div></div>
+      <button type="button" class="small danger" data-remove-source="${i}">Remove</button>
+    </div>`).join('') || '<p class="muted">No custom sources yet. The built-in ones are Streets, Satellite, Hybrid, Topo, USGS Topo, USGS Imagery Topo and Dark.</p>';
+}
+
+async function saveMapSources(list) {
+  mapSources = await api('PUT', 'api/map/sources', list);
+  buildLayers();
+  renderMapSources();
+}
+
+$('#map-sources-open').addEventListener('click', () => {
+  renderMapSources();
+  $('#map-sources-dialog').showModal();
+});
+
+$('#map-sources-list').addEventListener('click', guard(async (e) => {
+  const i = e.target.dataset.removeSource;
+  if (i === undefined) return;
+  await saveMapSources(mapSources.filter((_, j) => j !== Number(i)));
+  toast('Map source removed');
+}));
+
+$('#ms-add').addEventListener('click', guard(async () => {
+  const src = { name: $('#ms-name').value, url: $('#ms-url').value, max_zoom: Number($('#ms-max').value) || 19, overlay: $('#ms-overlay').checked };
+  await saveMapSources([...mapSources, src]);
+  $('#ms-name').value = '';
+  $('#ms-url').value = '';
+  toast(`Added ${src.name}`);
+}));
+
+$('#map-source-file').addEventListener('change', guard(async (e) => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  for (const f of files) {
+    const r = await fetch('api/map/sources/import', { method: 'POST', headers: { 'X-EdgeTAK': '1', 'Content-Type': 'application/xml' }, body: await f.text() });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(`${f.name}: ${body.error || r.statusText}`);
+    mapSources = body;
+  }
+  buildLayers();
+  renderMapSources();
+  toast(`Imported ${files.length} map source${files.length === 1 ? '' : 's'}`);
+}));
+
+// Drag the panel's left edge to resize it.
+(() => {
+  const handle = $('#map-resize');
+  const saved = prefs.get('map.width', null);
+  if (saved) document.documentElement.style.setProperty('--map-w', saved + 'px');
+  handle.addEventListener('pointerdown', (e) => {
+    handle.setPointerCapture(e.pointerId);
+    handle.classList.add('dragging');
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!handle.classList.contains('dragging')) return;
+    const w = Math.min(Math.max(window.innerWidth - e.clientX, 320), window.innerWidth - 420);
+    document.documentElement.style.setProperty('--map-w', w + 'px');
+    map?.invalidateSize();
+  });
+  handle.addEventListener('pointerup', () => {
+    handle.classList.remove('dragging');
+    prefs.set('map.width', parseInt(getComputedStyle(document.documentElement).getPropertyValue('--map-w'), 10) || null);
+  });
+})();
+
+// The sticky map panel sits below the top bar, whose height varies.
+new ResizeObserver(([e]) => {
+  document.documentElement.style.setProperty('--topbar-h', Math.ceil(e.target.getBoundingClientRect().height) + 'px');
+}).observe($('.topbar'));
+window.addEventListener('resize', () => map?.invalidateSize());
 
 // ---------- users ----------
 
@@ -814,6 +1084,7 @@ $('#contact-form').addEventListener('submit', guard(async (e) => {
     enabled: f.enabled.checked, callsign: f.callsign.value, lat: Number(f.lat.value) || 0, lon: Number(f.lon.value) || 0,
   });
   toast(f.enabled.checked ? 'Server contact is on devices' : 'Server contact removed from devices');
+  refreshContactMarker();
 }));
 
 $('#contact-here').addEventListener('click', () => {

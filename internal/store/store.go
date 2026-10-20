@@ -144,9 +144,23 @@ type db struct {
 	ServerContact ServerContact  `json:"server_contact"`
 	Inbox         []InboxMessage `json:"inbox"`
 
-	Registration RegistrationSettings     `json:"registration"`
-	Invites      map[string]*Invite       `json:"invites"`  // by code
+	Registration RegistrationSettings      `json:"registration"`
+	Invites      map[string]*Invite        `json:"invites"`  // by code
 	Requests     map[string]*SignupRequest `json:"requests"` // by id
+
+	MapSources []MapSource `json:"map_sources"`
+}
+
+// MapSource is a custom tile layer for the console map. URL is a template
+// with {z}, {x} and {y} (or {-y} for TMS), optionally {s} for subdomains.
+type MapSource struct {
+	Name        string `json:"name"`
+	URL         string `json:"url"`
+	MinZoom     int    `json:"min_zoom"`
+	MaxZoom     int    `json:"max_zoom"`
+	Overlay     bool   `json:"overlay"`              // drawn on top of the base map
+	Subdomains  string `json:"subdomains,omitempty"` // values for {s}, e.g. "abc" or "mt0,mt1"
+	Attribution string `json:"attribution,omitempty"`
 }
 
 // RegistrationSettings controls sign-up without an invite: "off" (default),
@@ -180,7 +194,7 @@ type SignupRequest struct {
 	ID           string    `json:"id"`
 	Username     string    `json:"username"`
 	PasswordHash string    `json:"password_hash,omitempty"`
-	Note        string    `json:"note"`
+	Note         string    `json:"note"`
 	Remote       string    `json:"remote"`
 	Created      time.Time `json:"created"`
 }
@@ -452,6 +466,19 @@ func (s *Store) SetServerContact(c ServerContact) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.ServerContact = c
+	return s.save()
+}
+
+func (s *Store) MapSources() []MapSource {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]MapSource{}, s.db.MapSources...)
+}
+
+func (s *Store) SetMapSources(m []MapSource) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.MapSources = append([]MapSource{}, m...)
 	return s.save()
 }
 

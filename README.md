@@ -50,7 +50,11 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   let people create their own account. Without an invite, sign-up can be
   off, require admin approval, or be open. Afterwards the sign-up page shows
   how to connect.
-- **Web admin console**: live map and connected clients, users, groups,
+- **Live map** beside every console tab (full screen on phones), with base
+  maps like ATAK's: Streets, Satellite, Hybrid, Topo, USGS Topo, USGS
+  Imagery Topo and Dark. Add your own tile sources or import ATAK map source
+  `.xml` files; overlays for devices, callsigns and the server contact.
+- **Web admin console**: connected clients, users, groups,
   certificates, data packages, missions, and connection packages for each
   client.
 - **Verified clients**: ATAK, WinTAK 5.6, TAKX-MIL 5.8 and iTAK 2.12,

@@ -35,18 +35,16 @@
       <button data-tab="send">Send</button>
       <button data-tab="connect">Connect</button>
     </nav>
-    <div class="who"><span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
+    <div class="who"><button id="map-toggle" class="ghost" aria-pressed="false" title="Show or hide the map">Map</button> <span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
   </header>
 
+  <div id="workspace" class="workspace">
   <main>
     <section id="tab-dashboard" class="tab">
       <div class="stats" id="stats"></div>
-      <div class="grid-2">
-        <div class="card map-card"><div id="map"><p class="muted map-off">Map unavailable (offline or no positions yet).</p></div></div>
-        <div class="card">
-          <h2>Server</h2>
-          <dl id="server-info" class="kv"></dl>
-        </div>
+      <div class="card">
+        <h2>Server</h2>
+        <dl id="server-info" class="kv"></dl>
       </div>
       <div class="card">
         <div class="card-head"><h2>Connected clients</h2><span class="muted" id="clients-updated"></span></div>
@@ -303,6 +301,39 @@
       </div>
     </section>
   </main>
+
+  <aside id="map-panel" class="map-panel" hidden>
+    <div class="map-resize" id="map-resize" title="Drag to resize"></div>
+    <div class="map-toolbar">
+      <select id="basemap" aria-label="Base map"></select>
+      <button class="small" id="map-fit" title="Zoom to all devices">Fit all</button>
+      <button class="small" id="map-sources-open">Map sources</button>
+      <span class="spacer"></span>
+      <button class="small ghost" id="map-close" title="Hide the map">✕</button>
+    </div>
+    <div id="map"><p class="muted map-off">Map unavailable (the map library could not be loaded).</p></div>
+  </aside>
+  </div>
+
+  <dialog id="map-sources-dialog" class="card dialog">
+    <form method="dialog" class="stack wide" id="map-sources-form">
+      <h2>Map sources</h2>
+      <p class="muted">Extra base maps and overlays for this console, shared by all administrators. Import ATAK map source files (<code>.xml</code>) or enter a tile URL.</p>
+      <div id="map-sources-list" class="group-rows"></div>
+      <label>Import ATAK map source (.xml) <input type="file" id="map-source-file" accept=".xml,text/xml" multiple></label>
+      <fieldset class="stack wide plain">
+        <legend class="muted">Or add one by URL</legend>
+        <label>Name <input id="ms-name" placeholder="e.g. County imagery"></label>
+        <label>Tile URL <input id="ms-url" placeholder="https://tiles.example.com/{z}/{x}/{y}.png"></label>
+        <div class="inline-form">
+          <label>Max zoom <input id="ms-max" type="number" min="1" max="24" value="19"></label>
+          <label class="check"><input type="checkbox" id="ms-overlay"> Overlay (drawn on top of the base map)</label>
+        </div>
+        <div><button type="button" id="ms-add">Add</button></div>
+      </fieldset>
+      <div class="inline-form"><span class="spacer"></span><button class="primary" value="close">Done</button></div>
+    </form>
+  </dialog>
 </div>
 
 <div id="toast" class="toast" role="status" hidden></div>

@@ -57,6 +57,7 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .tabs button { background: transparent; border-color: transparent; color: var(--muted); white-space: nowrap; }
 .tabs button.active { color: var(--text); background: var(--panel-2); border-color: var(--line); }
 .who { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+#map-toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 
 main { padding: 16px; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
 .tab { display: flex; flex-direction: column; gap: 16px; }
@@ -72,10 +73,37 @@ main { padding: 16px; max-width: 1400px; margin: 0 auto; display: flex; flex-dir
 .stat .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .stat .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
 
-.map-card { padding: 0; overflow: hidden; }
-#map { height: 380px; display: grid; place-items: center; }
+/* The map sits beside every tab on wide screens and opens full screen on narrow ones. */
+.workspace { display: grid; grid-template-columns: minmax(0, 1fr); }
+.workspace.with-map { grid-template-columns: minmax(0, 1fr) var(--map-w, 42%); }
+.workspace main { width: 100%; }
+.map-panel {
+  position: sticky; top: var(--topbar-h, 54px); height: calc(100vh - var(--topbar-h, 54px));
+  display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--panel); min-width: 0;
+}
+.map-resize { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 1001; }
+.map-resize:hover, .map-resize.dragging { background: var(--accent); opacity: .4; }
+.map-toolbar { display: flex; gap: 6px; align-items: center; padding: 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.map-toolbar select { padding: 4px 8px; font-size: 13px; max-width: 200px; }
+#map { flex: 1; min-height: 0; display: grid; place-items: center; }
 .leaflet-container { background: var(--panel-2); font: inherit; }
 .map-off { padding: 16px; text-align: center; }
+.no-labels .leaflet-tooltip { display: none; }
+.leaflet-control-layers, .leaflet-bar a { background: var(--panel); color: var(--text); border-color: var(--line); }
+.leaflet-control-layers { border: 1px solid var(--line) !important; }
+.leaflet-control-layers-separator { border-top-color: var(--line); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel); color: var(--text); }
+.leaflet-tooltip { background: var(--panel); color: var(--text); border-color: var(--line); }
+.leaflet-tooltip-right::before { border-right-color: var(--line); }
+.callsign-link { cursor: pointer; text-decoration: underline dotted; }
+fieldset.plain { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0; }
+.source-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.source-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1000px) {
+  .workspace.with-map { grid-template-columns: minmax(0, 1fr); }
+  .map-panel { position: fixed; inset: var(--topbar-h, 54px) 0 0 0; height: auto; z-index: 1500; border-left: none; }
+  .map-resize { display: none; }
+}
 
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; }
 .kv dt { color: var(--muted); }
@@ -95,7 +123,7 @@ td.actions { text-align: right; display: flex; gap: 6px; justify-content: flex-e
 .team-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; border: 1px solid #0006; }
 
 .inline-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.inline-form input:not([type=checkbox]) { flex: 1 1 180px; }
+.inline-form > input:not([type=checkbox]), .inline-form > label:not(.check) { flex: 1 1 180px; }
 .stack { display: flex; flex-direction: column; gap: 12px; max-width: 480px; }
 .qr { margin-top: 16px; background: #fff; padding: 12px; border-radius: 8px; width: max-content; }
 .qr:empty { display: none; }
@@ -167,7 +195,6 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .card { padding: 14px; }
   .stats { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .stat .v { font-size: 20px; }
-  #map { height: 280px; }
   .kv { grid-template-columns: 1fr; gap: 2px; }
   .kv dd { margin-bottom: 8px; }
   .inline-form > * { flex: 1 1 100%; }
