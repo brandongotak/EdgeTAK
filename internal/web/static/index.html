@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EdgeTAK Console</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section id="login" class="login" hidden>
+  <form id="login-form" class="card login-card">
+    <div class="brand"><span class="logo">◆</span> EdgeTAK</div>
+    <p class="muted">Sign in with an administrator account.</p>
+    <label>Username <input name="username" autocomplete="username" required></label>
+    <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary" type="submit">Sign in</button>
+    <p id="login-error" class="error" role="alert"></p>
+  </form>
+</section>
+
+<div id="shell" class="shell" hidden>
+  <header class="topbar">
+    <div class="brand"><span class="logo">◆</span> <span id="server-name">EdgeTAK</span></div>
+    <nav id="tabs" class="tabs" role="tablist">
+      <button data-tab="dashboard" class="active">Dashboard</button>
+      <button data-tab="users">Users</button>
+      <button data-tab="certs">Certificates</button>
+      <button data-tab="packages">Data Packages</button>
+      <button data-tab="connect">Connect</button>
+    </nav>
+    <div class="who"><span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
+  </header>
+
+  <main>
+    <section id="tab-dashboard" class="tab">
+      <div class="stats" id="stats"></div>
+      <div class="grid-2">
+        <div class="card map-card"><div id="map"><p class="muted map-off">Map unavailable (offline or no positions yet).</p></div></div>
+        <div class="card">
+          <h2>Server</h2>
+          <dl id="server-info" class="kv"></dl>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Connected clients</h2><span class="muted" id="clients-updated"></span></div>
+        <div class="table-wrap"><table id="clients-table">
+          <thead><tr><th>Callsign</th><th>User</th><th>Team / Role</th><th>Transport</th><th>Format</th><th>Remote</th><th>Position</th><th>Battery</th><th>Device</th><th>Msgs in/out</th><th>Connected</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section id="tab-users" class="tab" hidden>
+      <div class="card">
+        <h2>Add user</h2>
+        <form id="user-form" class="inline-form">
+          <input name="username" placeholder="username" required>
+          <input name="password" type="password" placeholder="password (8+ chars)" minlength="8" required>
+          <input name="groups" placeholder="groups, comma separated (blank = __ANON__)">
+          <label class="check"><input type="checkbox" name="admin"> Administrator</label>
+          <button class="primary" type="submit">Create</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Users</h2>
+        <div class="table-wrap"><table id="users-table">
+          <thead><tr><th>Username</th><th>Groups</th><th>Role</th><th>Online</th><th>Created</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section id="tab-certs" class="tab" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Issued client certificates</h2><a class="button ghost" href="api/ca.pem">Download CA (PEM)</a></div>
+        <div class="table-wrap"><table id="certs-table">
+          <thead><tr><th>Common name</th><th>Client UID</th><th>Serial</th><th>Issued</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section id="tab-packages" class="tab" hidden>
+      <div class="card">
+        <h2>Upload data package</h2>
+        <form id="package-form" class="inline-form">
+          <input type="file" name="assetfile" required>
+          <button class="primary" type="submit">Upload</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Data packages</h2>
+        <div class="table-wrap"><table id="packages-table">
+          <thead><tr><th>Name</th><th>Size</th><th>Submitted by</th><th>Groups</th><th>Visibility</th><th>Submitted</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section id="tab-connect" class="tab" hidden>
+      <div class="grid-2">
+        <div class="card">
+          <h2>Connection data package</h2>
+          <p class="muted">Import this zip in ATAK, WinTAK or iTAK. The SSL package includes the server's trust store and turns on certificate enrollment, so users only enter their username and password.</p>
+          <form id="connect-form" class="stack">
+            <label>Server address <input name="host" id="connect-host" required></label>
+            <label>Username (optional, pre-fills the login) <input name="username" id="connect-user"></label>
+            <label>Transport
+              <select name="mode"><option value="ssl">SSL — certificate enrollment (recommended)</option><option value="tcp">TCP — unencrypted, anonymous</option></select>
+            </label>
+            <button class="primary" type="submit">Download package</button>
+          </form>
+        </div>
+        <div class="card">
+          <h2>Quick-connect QR</h2>
+          <p class="muted">For ATAK 5.x: <em>Settings → Network → Servers → Quick connect</em>. The QR code holds the password, so treat it like the password.</p>
+          <form id="qr-form" class="stack">
+            <label>Username <input name="username" required></label>
+            <label>Password <input name="password" type="password" required></label>
+            <button type="submit">Show QR</button>
+          </form>
+          <div id="qr" class="qr"></div>
+          <code id="qr-uri" class="uri"></code>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
