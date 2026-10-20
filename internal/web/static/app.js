@@ -143,6 +143,7 @@ const loaders = {
   certs: loadCerts,
   packages: loadPackages,
   missions: loadMissions,
+  send: loadSend,
   connect: loadConnect,
 };
 
@@ -627,6 +628,79 @@ $('#missions-table').addEventListener('click', guard(async (e) => {
   await api('DELETE', `api/missions/${encodeURIComponent(name)}`);
   toast('Mission deleted');
   loadMissions();
+}));
+
+// ---------- send to devices ----------
+
+function sendScope() {
+  return document.querySelector('input[name="send-scope"]:checked').value;
+}
+
+function syncSendScope() {
+  const scope = sendScope();
+  $('#send-groups').hidden = scope !== 'groups';
+  $('#send-clients').hidden = scope !== 'clients';
+}
+
+async function loadSend() {
+  const [groups, clients, packages, history] = await Promise.all([
+    api('GET', 'api/groups'), api('GET', 'api/clients'), api('GET', 'api/packages'), api('GET', 'api/send/history'),
+  ]);
+  const keep = (sel) => new Set([...document.querySelectorAll(`${sel} input:checked`)].map((i) => i.value));
+  const gKeep = keep('#send-groups');
+  const cKeep = keep('#send-clients');
+  $('#send-groups').innerHTML = groups.map((g) => `<label class="chip" title="${g.online} connected">
+      <input type="checkbox" value="${esc(g.name)}"${gKeep.has(g.name) ? ' checked' : ''}>${esc(g.name)} <span class="muted">${g.online}</span></label>`).join('')
+    || '<span class="muted">No groups</span>';
+  $('#send-clients').innerHTML = clients.map((c) => `<label class="chip">
+      <input type="checkbox" value="${c.id}"${cKeep.has(String(c.id)) ? ' checked' : ''}>${esc(c.callsign || '(no callsign)')}
+      <span class="muted">${esc(c.username || 'anonymous')}</span></label>`).join('')
+    || '<span class="muted">No devices connected</span>';
+  const pkgSel = $('#send-package');
+  const current = pkgSel.value;
+  pkgSel.innerHTML = packages.map((p) => `<option value="${esc(p.hash)}"${p.hash === current ? ' selected' : ''}>${esc(p.name)} (${bytes(p.size)})</option>`).join('')
+    || '<option value="">No data packages; upload one on the Data Packages tab</option>';
+  if (!$('#send-from').value && status) $('#send-from').value = status.server_name;
+  $('#send-history tbody').innerHTML = history.map((h) => `<tr>
+      <td title="${esc(date(h.time))}">${ago(h.time)}</td>
+      <td><span class="pill">${esc(h.kind)}</span> ${esc(h.summary)}</td>
+      <td>${esc(h.to)}</td><td>${h.delivered}</td><td>${esc(h.admin)}</td></tr>`).join('')
+    || emptyRow(5, 'Nothing sent yet');
+  syncSendScope();
+}
+
+function sendTarget() {
+  const scope = sendScope();
+  const picked = (sel) => [...document.querySelectorAll(`${sel} input:checked`)].map((i) => i.value);
+  if (scope === 'all') return { all: true };
+  if (scope === 'groups') {
+    const groups = picked('#send-groups');
+    if (!groups.length) throw new Error('Pick at least one group');
+    return { groups };
+  }
+  const clients = picked('#send-clients').map(Number);
+  if (!clients.length) throw new Error('Pick at least one device');
+  return { clients };
+}
+
+for (const r of document.querySelectorAll('input[name="send-scope"]')) r.addEventListener('change', syncSendScope);
+
+$('#send-message-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const res = await api('POST', 'api/send/message', { from: f.get('from'), text: f.get('text'), to: sendTarget() });
+  e.target.querySelector('textarea').value = '';
+  toast(`Message delivered to ${res.delivered} device(s)`);
+  loadSend();
+}));
+
+$('#send-package-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const hash = $('#send-package').value;
+  if (!hash) throw new Error('Upload a data package first');
+  const res = await api('POST', 'api/send/package', { from: $('#send-from').value, hash, to: sendTarget() });
+  toast(`Package offered to ${res.delivered} device(s)` + (res.skipped ? `; ${res.skipped} skipped (no download port for their connection)` : ''));
+  loadSend();
 }));
 
 // ---------- connect ----------

@@ -68,7 +68,7 @@ func (s *Server) parseJWT(tok string) (*jwtClaims, error) {
 		return nil, errBadToken
 	}
 	pub, ok := s.CA.ServerCert.Leaf.PublicKey.(*rsa.PublicKey)
-	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
+	sig, err := base64.RawURLEncoding.Strict().DecodeString(parts[2]) // reject altered padding bits
 	if !ok || err != nil {
 		return nil, errBadToken
 	}

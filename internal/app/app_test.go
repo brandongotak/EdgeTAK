@@ -468,7 +468,13 @@ func TestEndToEnd(t *testing.T) {
 		if st != 200 || !found {
 			t.Errorf("contacts with bearer = %d %s", st, body)
 		}
-		if st, _ := get("/Marti/api/clientEndPoints", access[:len(access)-2]+"xx"); st != 401 {
+		// Flip a character in the middle of the signature (the last ones may only hold padding bits).
+		mid := strings.LastIndex(access, ".") + 20
+		flipped := byte('A')
+		if access[mid] == 'A' {
+			flipped = 'B'
+		}
+		if st, _ := get("/Marti/api/clientEndPoints", access[:mid]+string(flipped)+access[mid+1:]); st != 401 {
 			t.Errorf("tampered token = %d, want 401", st)
 		}
 		if st, m := token("grant_type=client_credentials"); st != 400 || m["error"] != "unsupported_grant_type" {

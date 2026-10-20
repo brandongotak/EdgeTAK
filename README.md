@@ -40,6 +40,9 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
 - **Data Sync (missions)**: subscriptions and roles, map items and files, the
   change feed, logs, invitations and export. Changes are pushed live to
   subscribers.
+- **Send to devices**: from the admin console, send a chat message or offer
+  a data package (including settings `.pref` packages) to everyone, chosen
+  groups or chosen devices, with a history of what was sent.
 - **Web admin console**: live map and connected clients, users, groups,
   certificates, data packages, missions, and connection packages for each
   client.

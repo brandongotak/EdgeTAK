@@ -130,6 +130,14 @@ td.actions { text-align: right; display: flex; gap: 6px; justify-content: flex-e
 .version-tag:empty { display: none; }
 .login .version { margin: 0; font-size: 12px; text-align: center; }
 
+#tab-send .grid-2.even { grid-template-columns: 1fr 1fr; }
+@media (max-width: 900px) { #tab-send .grid-2.even { grid-template-columns: 1fr; } }
+textarea {
+  font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 7px; padding: 7px 10px; resize: vertical;
+}
+textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 .toast {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 2000;
   background: var(--panel-2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; max-width: calc(100% - 32px);

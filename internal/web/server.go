@@ -44,6 +44,8 @@ type Server struct {
 	// bound addresses. It is set before serving starts and not modified.
 	Addrs map[string]string
 
+	history sendHistory // admin "send to devices" log
+
 	sessMu   sync.Mutex
 	sessions map[string]session
 }
@@ -83,6 +85,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.adminRoutes(mux)
 	s.groupRoutes(mux)
 	s.channelRoutes(mux)
+	s.sendRoutes(mux)
 
 	sub, _ := fs.Sub(staticFS, "static")
 	files := http.StripPrefix("/admin/", http.FileServerFS(sub))

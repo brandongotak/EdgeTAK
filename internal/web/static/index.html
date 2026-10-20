@@ -31,6 +31,7 @@
       <button data-tab="certs">Certificates</button>
       <button data-tab="packages">Data Packages</button>
       <button data-tab="missions">Missions</button>
+      <button data-tab="send">Send</button>
       <button data-tab="connect">Connect</button>
     </nav>
     <div class="who"><span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
@@ -144,6 +145,45 @@
         <div class="card-head"><h2>Data Sync missions</h2><span class="muted">Created and managed from ATAK / WinTAK / iTAK Data Sync</span></div>
         <div class="table-wrap"><table id="missions-table">
           <thead><tr><th>Mission</th><th>Owner</th><th>Groups</th><th>Access</th><th>Items</th><th>Files</th><th>Subscribers</th><th>Logs</th><th>Last edited</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section id="tab-send" class="tab" hidden>
+      <div class="card">
+        <h2>Recipients</h2>
+        <p class="muted">Only devices connected right now receive it.</p>
+        <div class="stack wide">
+          <label class="check"><input type="radio" name="send-scope" value="all" checked> Everyone connected</label>
+          <label class="check"><input type="radio" name="send-scope" value="groups"> Members of groups</label>
+          <div id="send-groups" class="group-picker" hidden></div>
+          <label class="check"><input type="radio" name="send-scope" value="clients"> Specific devices</label>
+          <div id="send-clients" class="group-picker" hidden></div>
+        </div>
+      </div>
+      <div class="grid-2 even">
+        <div class="card">
+          <h2>Message</h2>
+          <form id="send-message-form" class="stack wide">
+            <label>From <input name="from" id="send-from" placeholder="sender name shown in chat"></label>
+            <label>Message <textarea name="text" rows="4" required placeholder="Arrives in All Chat Rooms on ATAK, WinTAK, TAKX and iTAK"></textarea></label>
+            <div><button class="primary" type="submit">Send message</button></div>
+          </form>
+        </div>
+        <div class="card">
+          <h2>Data package</h2>
+          <form id="send-package-form" class="stack wide">
+            <label>Package <select name="hash" id="send-package" required></select></label>
+            <p class="muted">Devices get a file transfer offer and download it from this server. Recipients are given access to the package. A package with a <code>.pref</code> file applies settings on import.</p>
+            <div><button class="primary" type="submit">Send package</button></div>
+          </form>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Sent</h2>
+        <div class="table-wrap"><table id="send-history">
+          <thead><tr><th>Time</th><th>What</th><th>To</th><th>Devices</th><th>By</th></tr></thead>
           <tbody></tbody>
         </table></div>
       </div>
