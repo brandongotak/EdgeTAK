@@ -17,12 +17,13 @@
     <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
     <button class="primary" type="submit">Sign in</button>
     <p id="login-error" class="error" role="alert"></p>
+    <p id="login-version" class="muted version"></p>
   </form>
 </section>
 
 <div id="shell" class="shell" hidden>
   <header class="topbar">
-    <div class="brand"><span class="logo">◆</span> <span id="server-name">EdgeTAK</span></div>
+    <div class="brand"><span class="logo">◆</span> <span id="server-name">EdgeTAK</span> <span id="server-version" class="version-tag" title="EdgeTAK version"></span></div>
     <nav id="tabs" class="tabs" role="tablist">
       <button data-tab="dashboard" class="active">Dashboard</button>
       <button data-tab="users">Users</button>

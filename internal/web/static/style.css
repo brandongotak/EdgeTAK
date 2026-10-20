@@ -123,6 +123,13 @@ td.actions { text-align: right; display: flex; gap: 6px; justify-content: flex-e
 .group-row select { min-width: 150px; }
 .spacer { flex: 1; }
 
+.version-tag {
+  font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+}
+.version-tag:empty { display: none; }
+.login .version { margin: 0; font-size: 12px; text-align: center; }
+
 .toast {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 2000;
   background: var(--panel-2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; max-width: calc(100% - 32px);

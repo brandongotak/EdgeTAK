@@ -171,6 +171,7 @@ const hasPos = (c) => Number.isFinite(c.lat) && Number.isFinite(c.lon) && !(c.la
 async function refreshStatus() {
   status = await api('GET', 'api/status');
   $('#server-name').textContent = status.server_name;
+  $('#server-version').textContent = status.version;
   document.title = `${status.server_name} Console`;
 }
 
@@ -654,5 +655,10 @@ $('#qr-form').addEventListener('submit', (e) => {
   }
   $('#qr-uri').textContent = uri;
 });
+
+// The version endpoint needs no login, so the sign-in page can show it too.
+fetch('/Marti/api/version').then((r) => (r.ok ? r.text() : '')).then((v) => {
+  $('#login-version').textContent = v;
+}).catch(() => {});
 
 start();
