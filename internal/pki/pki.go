@@ -199,6 +199,16 @@ func (ca *CA) TrustStoreP12(password string) ([]byte, error) {
 	return pkcs12.LegacyDES.EncodeTrustStore([]*x509.Certificate{ca.Cert}, password)
 }
 
+// EnrollmentKeystore is the reply to the original signClient API: a PKCS#12
+// with only certificates, the signed client cert as "signedCert" and the CA
+// as "ca0", protected by "atakatak" as the official server does.
+func (ca *CA) EnrollmentKeystore(signed *x509.Certificate) ([]byte, error) {
+	return pkcs12.LegacyDES.EncodeTrustStoreEntries([]pkcs12.TrustStoreEntry{
+		{Cert: signed, FriendlyName: "signedCert"},
+		{Cert: ca.Cert, FriendlyName: "ca0"},
+	}, "atakatak")
+}
+
 // ClientP12 bundles a client key and certificate (plus the CA) as PKCS#12.
 func (ca *CA) ClientP12(cert *x509.Certificate, key *rsa.PrivateKey, password string) ([]byte, error) {
 	return pkcs12.LegacyDES.Encode(key, cert, []*x509.Certificate{ca.Cert}, password)
@@ -215,11 +225,15 @@ func ParseCSR(body []byte) (*x509.CertificateRequest, error) {
 		}
 		return r
 	}, string(body))
-	der, err := base64.StdEncoding.DecodeString(clean)
-	if err != nil {
-		return nil, fmt.Errorf("csr: not PEM or base64: %w", err)
+	if csr, err := x509.ParseCertificateRequest(body); err == nil {
+		return csr, nil // raw DER
 	}
-	return x509.ParseCertificateRequest(der)
+	for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding} {
+		if der, err := enc.DecodeString(clean); err == nil {
+			return x509.ParseCertificateRequest(der)
+		}
+	}
+	return nil, errors.New("csr: not PEM, DER or base64")
 }
 
 // PEMBody encodes a certificate as PEM without header lines, matching the

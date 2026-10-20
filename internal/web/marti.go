@@ -2,6 +2,7 @@ package web
 
 import (
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -36,6 +37,7 @@ func (s *Server) martiRoutes(mux *http.ServeMux) {
 	// Certificate enrollment (ATAK/WinTAK/iTAK "enroll for client certificate").
 	mux.HandleFunc("GET /Marti/api/tls/config", s.named(s.tlsConfig))
 	mux.HandleFunc("POST /Marti/api/tls/signClient/v2", s.named(s.signClient))
+	mux.HandleFunc("POST /Marti/api/tls/signClient", s.named(s.signClientV1))
 	// Device profiles pushed at enrollment and on every connect (official
 	// ProfileAPI). They carry the preferences that turn on ATAK's Channels.
 	mux.HandleFunc("GET /Marti/api/tls/profile/enrollment", s.named(s.deviceProfile("Enrollment")))
@@ -83,22 +85,25 @@ func (s *Server) tlsConfig(w http.ResponseWriter, r *http.Request, _ *identity) 
 		xmlEscape(s.Cfg.CertOrg), xmlEscape(s.Cfg.CertOrgUnit), s.Cfg.CertValidityDays)
 }
 
-func (s *Server) signClient(w http.ResponseWriter, r *http.Request, id *identity) {
+// issueFromCSR signs the CSR in the request body for the caller and records
+// the certificate. On failure it has already written the error response.
+func (s *Server) issueFromCSR(w http.ResponseWriter, r *http.Request, id *identity) (*x509.Certificate, bool) {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
 	if err != nil {
 		http.Error(w, "read error", http.StatusBadRequest)
-		return
+		return nil, false
 	}
 	csr, err := pki.ParseCSR(body)
 	if err != nil {
+		s.Log.Warn("enrollment failed: unreadable CSR", "user", id.Username, "path", r.URL.Path, "content_type", r.Header.Get("Content-Type"), "err", err)
 		http.Error(w, "invalid CSR", http.StatusBadRequest)
-		return
+		return nil, false
 	}
 	cert, err := s.CA.SignCSR(csr, id.Username)
 	if err != nil {
 		s.Log.Warn("enrollment failed", "user", id.Username, "err", err)
 		http.Error(w, "could not sign CSR", http.StatusBadRequest)
-		return
+		return nil, false
 	}
 	clientUID := r.URL.Query().Get("clientUid")
 	if err := s.Store.AddCert(store.Cert{
@@ -106,18 +111,54 @@ func (s *Server) signClient(w http.ResponseWriter, r *http.Request, id *identity
 		Issued: time.Now().UTC(), Expires: cert.NotAfter.UTC(),
 	}); err != nil {
 		http.Error(w, "storage error", http.StatusInternalServerError)
+		return nil, false
+	}
+	s.Log.Info("issued client certificate", "user", id.Username, "clientUid", clientUID, "serial", pki.SerialHex(cert), "api", r.URL.Path)
+	return cert, true
+}
+
+// signClientV1 is the original enrollment API: the reply is a PKCS#12
+// keystore holding the signed certificate and the CA.
+func (s *Server) signClientV1(w http.ResponseWriter, r *http.Request, id *identity) {
+	cert, ok := s.issueFromCSR(w, r, id)
+	if !ok {
 		return
 	}
-	s.Log.Info("issued client certificate", "user", id.Username, "clientUid", clientUID, "serial", pki.SerialHex(cert))
+	p12, err := s.CA.EnrollmentKeystore(cert)
+	if err != nil {
+		http.Error(w, "could not build keystore", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Write(p12)
+}
 
+func (s *Server) signClient(w http.ResponseWriter, r *http.Request, id *identity) {
+	cert, ok := s.issueFromCSR(w, r, id)
+	if !ok {
+		return
+	}
 	signed, ca := pki.PEMBody(cert), pki.PEMBody(s.CA.Cert)
 	accept := strings.ToLower(r.Header.Get("Accept"))
-	if strings.Contains(accept, "application/xml") && !strings.Contains(accept, "application/json") {
+	iTAK := strings.Contains(r.UserAgent(), "iTAK")
+	switch {
+	case iTAK || strings.Contains(accept, "text/plain") && !strings.Contains(accept, "application/json"):
+		// iTAK quietly drops the reply unless it has the CA as both ca0 and
+		// ca1 (as OpenTAKServer, which iTAK enrolls against, sends it). When
+		// asked for text/plain it also wants that JSON labelled text/plain.
+		body, _ := json.Marshal(map[string]string{"signedCert": signed, "ca0": ca, "ca1": ca})
+		if strings.Contains(accept, "text/plain") {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+		}
+		w.Write(body)
+	case strings.Contains(accept, "application/xml") && !strings.Contains(accept, "application/json"):
 		w.Header().Set("Content-Type", "application/xml")
 		fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?><enrollment><signedCert>%s</signedCert><ca>%s</ca></enrollment>`, signed, ca)
-		return
+	default:
+		writeJSON(w, http.StatusOK, map[string]string{"signedCert": signed, "ca0": ca})
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"signedCert": signed, "ca0": ca})
 }
 
 // ---- contacts and groups ----

@@ -176,7 +176,7 @@ func (s *Server) logRequest(r *http.Request, rec *statusRecorder, d time.Duratio
 	}
 	s.Log.Debug("http", "method", r.Method, "path", r.URL.Path, "query", redactedQuery(r.URL.Query()),
 		"status", rec.status, "bytes", rec.bytes, "ms", d.Milliseconds(), "remote", r.RemoteAddr,
-		"who", who, "agent", r.UserAgent())
+		"who", who, "agent", r.UserAgent(), "accept", r.Header.Get("Accept"))
 }
 
 func isAdminPath(p string) bool { return p == "/" || len(p) >= 6 && p[:6] == "/admin" }
