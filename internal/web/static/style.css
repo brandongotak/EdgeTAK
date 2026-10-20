@@ -148,3 +148,48 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   background: var(--panel-2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; max-width: calc(100% - 32px);
 }
 .toast.err { border-color: var(--danger); color: var(--danger); }
+
+/* ---------- phones ---------- */
+@media (max-width: 700px) {
+  /* 16px inputs stop iOS from zooming in on focus. */
+  input, select, textarea { font-size: 16px; }
+  button, .button { min-height: 38px; }
+  button.small { min-height: 32px; padding: 5px 10px; }
+
+  .topbar { gap: 8px 12px; padding: 8px 12px; }
+  .topbar .brand { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .tabs { order: 3; flex: 1 0 100%; margin: 0 -12px; padding: 0 12px 2px; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .who #me { display: none; }
+
+  main { padding: 12px; gap: 12px; }
+  .tab { gap: 12px; }
+  .card { padding: 14px; }
+  .stats { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat .v { font-size: 20px; }
+  #map { height: 280px; }
+  .kv { grid-template-columns: 1fr; gap: 2px; }
+  .kv dd { margin-bottom: 8px; }
+  .inline-form > * { flex: 1 1 100%; }
+  .inline-form > button, .inline-form > .spacer { flex: 0 0 auto; }
+  .card-head { flex-wrap: wrap; }
+
+  /* Tables become one card per row; app.js labels each cell from its header. */
+  .table-wrap { overflow: visible; }
+  table thead { display: none; }
+  table, tbody, tr, td { display: block; width: 100%; }
+  tbody tr { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+  tbody tr:hover { background: transparent; }
+  td { border: none; padding: 4px 0; white-space: normal; word-break: break-word; display: flex; gap: 12px; }
+  td[data-label]::before { content: attr(data-label); flex: 0 0 34%; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+  td:empty { display: none; }
+  td.actions { justify-content: flex-start; flex-wrap: wrap; padding-top: 8px; }
+  td.actions::before { display: none; }
+  td.wrap { max-width: none; }
+  .empty td { display: block; padding: 12px 0; }
+  .empty td::before { display: none; }
+
+  .dialog { width: calc(100% - 16px); max-height: calc(100% - 16px); padding: 16px; }
+  .group-row { flex-wrap: wrap; }
+  .group-row select { min-width: 0; width: 100%; }
+}

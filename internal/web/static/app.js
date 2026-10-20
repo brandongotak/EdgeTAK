@@ -899,6 +899,21 @@ $('#qr-form').addEventListener('submit', (e) => {
   $('#qr-uri').textContent = uri;
 });
 
+// On phones tables are shown as cards; label every cell with its column
+// header so the CSS can show it.
+function labelCells(table) {
+  const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+  for (const tr of table.querySelectorAll('tbody tr')) {
+    [...tr.children].forEach((td, i) => {
+      if (heads[i] && !td.hasAttribute('colspan') && !td.classList.contains('actions')) td.dataset.label = heads[i];
+    });
+  }
+}
+for (const table of document.querySelectorAll('table')) {
+  const body = table.querySelector('tbody');
+  if (body) new MutationObserver(() => labelCells(table)).observe(body, { childList: true });
+}
+
 // The version endpoint needs no login, so the sign-in page can show it too.
 fetch('/Marti/api/version').then((r) => (r.ok ? r.text() : '')).then((v) => {
   $('#login-version').textContent = v;
