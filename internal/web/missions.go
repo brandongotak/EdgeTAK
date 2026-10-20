@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/edgetak/edgetak/internal/mission"
+	"github.com/brandongotak/EdgeTAK/internal/mission"
 )
 
 // missionRoutes serves the Data Sync API (/Marti/api/missions/...).

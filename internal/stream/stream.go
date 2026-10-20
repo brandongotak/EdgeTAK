@@ -11,10 +11,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/edgetak/edgetak/internal/cot"
-	"github.com/edgetak/edgetak/internal/pki"
-	"github.com/edgetak/edgetak/internal/router"
-	"github.com/edgetak/edgetak/internal/store"
+	"github.com/brandongotak/EdgeTAK/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/pki"
+	"github.com/brandongotak/EdgeTAK/internal/router"
+	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
 type Server struct {

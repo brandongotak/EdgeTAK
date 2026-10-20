@@ -17,11 +17,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/edgetak/edgetak/internal/config"
-	"github.com/edgetak/edgetak/internal/mission"
-	"github.com/edgetak/edgetak/internal/pki"
-	"github.com/edgetak/edgetak/internal/router"
-	"github.com/edgetak/edgetak/internal/store"
+	"github.com/brandongotak/EdgeTAK/internal/config"
+	"github.com/brandongotak/EdgeTAK/internal/mission"
+	"github.com/brandongotak/EdgeTAK/internal/pki"
+	"github.com/brandongotak/EdgeTAK/internal/router"
+	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
 //go:embed static

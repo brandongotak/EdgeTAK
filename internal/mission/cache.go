@@ -4,7 +4,7 @@ import (
 	"container/list"
 	"sync"
 
-	"github.com/edgetak/edgetak/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/cot"
 )
 
 // latestCache remembers the most recent event per UID (bounded, LRU), so an

@@ -25,8 +25,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/edgetak/edgetak/internal/router"
-	"github.com/edgetak/edgetak/internal/store"
+	"github.com/brandongotak/EdgeTAK/internal/router"
+	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
 // Role names and their permissions, as in the official server.

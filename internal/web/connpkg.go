@@ -11,8 +11,8 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/edgetak/edgetak/internal/pki"
-	"github.com/edgetak/edgetak/internal/store"
+	"github.com/brandongotak/EdgeTAK/internal/pki"
+	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
 // connectionPackage builds an ATAK/WinTAK data package that adds this server

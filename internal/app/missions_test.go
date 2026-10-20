@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/edgetak/edgetak/internal/cot"
-	"github.com/edgetak/edgetak/internal/mission"
+	"github.com/brandongotak/EdgeTAK/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/mission"
 )
 
 type apiClient struct {

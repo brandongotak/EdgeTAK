@@ -1,4 +1,4 @@
-module github.com/edgetak/edgetak
+module github.com/brandongotak/EdgeTAK
 
 go 1.26.3
 

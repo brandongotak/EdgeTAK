@@ -10,8 +10,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/edgetak/edgetak/internal/cot"
-	"github.com/edgetak/edgetak/internal/router"
+	"github.com/brandongotak/EdgeTAK/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/router"
 )
 
 // View controls what a mission rendering includes.

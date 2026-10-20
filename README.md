@@ -59,6 +59,19 @@ Working and covered by an end-to-end test (`internal/app/app_test.go`):
   - One-click **connection data package** (truststore + enrollment prefs) and a
     quick-connect QR code
 
+## Quick install (Go 1.24+)
+
+```sh
+go install github.com/brandongotak/EdgeTAK/cmd/edgetak@latest
+edgetak -data ./data
+```
+
+While the repository is private, tell Go to fetch it directly with your
+GitHub credentials (git must be able to clone the repo):
+`GOPRIVATE=github.com/brandongotak go install github.com/brandongotak/EdgeTAK/cmd/edgetak@latest`
+
+For a server that should run at boot, use the installer below instead.
+
 ## Install on a Raspberry Pi (or any systemd Linux)
 
 ```sh

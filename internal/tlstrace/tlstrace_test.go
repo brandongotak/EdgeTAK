@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/edgetak/edgetak/internal/pki"
+	"github.com/brandongotak/EdgeTAK/internal/pki"
 )
 
 // handshake runs a mutual-TLS handshake through a traced server conn and

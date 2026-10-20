@@ -17,14 +17,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/edgetak/edgetak/internal/config"
-	"github.com/edgetak/edgetak/internal/mission"
-	"github.com/edgetak/edgetak/internal/pki"
-	"github.com/edgetak/edgetak/internal/router"
-	"github.com/edgetak/edgetak/internal/store"
-	"github.com/edgetak/edgetak/internal/stream"
-	"github.com/edgetak/edgetak/internal/tlstrace"
-	"github.com/edgetak/edgetak/internal/web"
+	"github.com/brandongotak/EdgeTAK/internal/config"
+	"github.com/brandongotak/EdgeTAK/internal/mission"
+	"github.com/brandongotak/EdgeTAK/internal/pki"
+	"github.com/brandongotak/EdgeTAK/internal/router"
+	"github.com/brandongotak/EdgeTAK/internal/store"
+	"github.com/brandongotak/EdgeTAK/internal/stream"
+	"github.com/brandongotak/EdgeTAK/internal/tlstrace"
+	"github.com/brandongotak/EdgeTAK/internal/web"
 )
 
 type App struct {

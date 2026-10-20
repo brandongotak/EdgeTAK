@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/edgetak/edgetak/internal/cot"
-	"github.com/edgetak/edgetak/internal/store"
+	"github.com/brandongotak/EdgeTAK/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
 // JSON and XML renderings follow the official server's Jackson/JAXB output

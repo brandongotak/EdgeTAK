@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/edgetak/edgetak/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/cot"
 )
 
 // MissionResolver returns the client UIDs subscribed to a mission that src

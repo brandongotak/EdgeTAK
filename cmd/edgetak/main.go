@@ -9,15 +9,24 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"syscall"
 
-	"github.com/edgetak/edgetak/internal/app"
-	"github.com/edgetak/edgetak/internal/config"
-	"github.com/edgetak/edgetak/internal/store"
+	"github.com/brandongotak/EdgeTAK/internal/app"
+	"github.com/brandongotak/EdgeTAK/internal/config"
+	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
+// version is set by -ldflags in release builds; go install builds report the
+// module version instead.
 var version = "0.1.0-dev"
+
+func init() {
+	if bi, ok := debug.ReadBuildInfo(); ok && version == "0.1.0-dev" && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		version = bi.Main.Version
+	}
+}
 
 func main() {
 	dataDir := flag.String("data", envOr("EDGETAK_DATA", "data"), "data directory (config, database, certificates, packages)")

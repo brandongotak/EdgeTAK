@@ -30,9 +30,9 @@ import (
 
 	pkcs12 "software.sslmate.com/src/go-pkcs12"
 
-	"github.com/edgetak/edgetak/internal/config"
-	"github.com/edgetak/edgetak/internal/cot"
-	"github.com/edgetak/edgetak/internal/pki"
+	"github.com/brandongotak/EdgeTAK/internal/config"
+	"github.com/brandongotak/EdgeTAK/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/pki"
 )
 
 func startApp(t *testing.T) *App {

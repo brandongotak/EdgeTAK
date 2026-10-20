@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/edgetak/edgetak/internal/cot"
-	"github.com/edgetak/edgetak/internal/mission"
-	"github.com/edgetak/edgetak/internal/pki"
-	"github.com/edgetak/edgetak/internal/store"
+	"github.com/brandongotak/EdgeTAK/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/mission"
+	"github.com/brandongotak/EdgeTAK/internal/pki"
+	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
 func (s *Server) martiRoutes(mux *http.ServeMux) {
