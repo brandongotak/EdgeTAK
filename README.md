@@ -1,225 +1,307 @@
 # EdgeTAK
 
 A lightweight TAK server in a single Go binary. No Java, no PostgreSQL, no
-Python runtime. Copy one file to a Raspberry Pi, laptop or Windows box, run it,
-and ATAK, WinTAK and iTAK can connect.
+Python runtime. Copy one file to a Raspberry Pi, a Linux server or a Windows PC,
+run it, and ATAK, WinTAK, TAKX and iTAK can connect.
 
 | | Official TAK Server | OpenTAKServer / FreeTAKServer | **EdgeTAK** |
 |---|---|---|---|
 | Runtime | Java 17 + PostgreSQL | Python + deps (+ RabbitMQ for OTS) | single static binary |
-| Idle memory | ~4 GB recommended | hundreds of MB | ~2 MB Go heap (measured at idle) |
-| First run | install guide + cert scripts | install script | `./edgetak` (creates CA, certs, admin) |
+| Idle memory | ~4 GB recommended | hundreds of MB | a few MB |
+| First run | install guide + cert scripts | install script | one installer command (creates CA, certs, admin) |
 
-## Status: MVP
+- [Features](#features)
+- [Install](#install)
+  - [Option A: local network](#option-a-local-network-raspberry-pi-linux-or-windows)
+  - [Option B: internet server with Let's Encrypt](#option-b-internet-server-with-lets-encrypt)
+- [First steps in the admin console](#first-steps-in-the-admin-console)
+- [Connect clients](#connect-clients)
+- [Upgrade, back up, uninstall](#upgrade-back-up-uninstall)
+- [Ports](#ports) · [Configuration](#configuration) · [Troubleshooting](#troubleshooting) · [Development](#development)
 
-Working and covered by an end-to-end test (`internal/app/app_test.go`):
+## Features
 
-- **CoT streaming**: plain TCP `8087` and mutual-TLS `8089`
-  - TAK protocol negotiation (`t-x-takp-v/q/r`) and switching to protobuf on
-    each connection. XML and protobuf clients can share a server, and events
-    are converted between the two formats as they pass through.
-  - Group-scoped routing, directed delivery via `<marti><dest callsign|uid/>`
-    (GeoChat, direct sends), ping/pong, and latest-SA replay to new clients
-  - Slow clients never stall the router: each one has a bounded queue, and
-    events beyond it are dropped and counted
-- **Certificate enrollment**: `8446`, the official `/Marti/api/tls/config` +
-  `/Marti/api/tls/signClient/v2` flow used by ATAK, WinTAK and iTAK
-  - Built-in CA generated on first start; the server cert is reissued
-    automatically when host names or IPs change
-  - Revocation (per cert, or every cert of a deleted user) disconnects live sessions
-- **Data packages**: `missionupload`, `missionquery`, `content`, `search`,
-  `sync/upload`, metadata tool and delete endpoints. Storage is
-  content-addressed by SHA-256, and access is limited to the uploader's groups.
-- **Data Sync / missions**: the `/Marti/api/missions` API used by ATAK, WinTAK
-  and iTAK Data Sync
-  - Create, list, delete; group scoped, optionally password protected or invite only
-  - Subscriptions with owner, subscriber and read-only roles, plus signed mission tokens
-  - Map items and files as mission contents, with a change feed
-    (`/changes`), latest CoT (`/cot`), logs, keywords, invitations and archive export
-  - Live push to subscribers: CoT sent to `<dest mission="..."/>` reaches
-    subscribers only and is added to the mission automatically. `t-x-m-c` /
-    `-n` / `-d` / `-i` / `-r` notifications are sent like the official server's.
-  - Stored as one JSON file per mission in `data/missions/`
-- **Client compatibility**: verified with ATAK, WinTAK 5.6, TAKX-MIL 5.8
-  (including Data Sync between them) and iTAK
-  - iTAK connection packages: a flat zip with a pre-issued client certificate,
-    since iTAK does not enroll; each one is revocable on the Certificates tab
-  - OAuth2 password login (`/oauth/token`) issuing RS256 JWTs signed by the
-    server key, accepted as Bearer tokens on every API (TAKX)
-  - Newer `/Marti/api/...` forms of the file, search, contacts and CoT APIs
-  - No TLS session tickets on HTTPS: Windows SChannel (WinTAK) cannot handle
-    them when it presents a client certificate
-  - `log_level: debug` logs every HTTP request and traces failed TLS
-    handshakes, for diagnosing new clients
-- **Groups and channels**, modelled on the official server
-  - Groups tab: create, describe, rename and delete groups and manage their
-    members. Users tab: pick a user's groups from a list.
-  - Each membership has a direction: **in** (receive what the group shares),
-    **out** (send to it) or both. Routing, contacts, data packages and
-    missions all follow it, and changes apply to connected devices at once.
-  - Channels: users switch their memberships on and off from ATAK, WinTAK or
-    TAKX (`/Marti/api/groups/active`). ATAK gets the Channels button through
-    the device profile pushed at enrollment and on connect.
-- **Web admin console**: `https://<host>:8443/admin/`
-  - Live map and connected-client table (callsign, team, battery, device, traffic)
-  - Users and groups, issuing `.p12` certificates, revoking certificates
-  - Data package upload, download and delete
-  - Missions overview with export and delete
-  - One-click **connection data package** (truststore + enrollment prefs) and a
-    quick-connect QR code
+- **CoT streaming** on plain TCP `8087` and mutual-TLS `8089`. Clients can use
+  XML or TAK protobuf on the same server, and events are converted between
+  the two as they pass through. Routing is group scoped, with directed
+  delivery for GeoChat and direct sends, and new clients receive the latest
+  position of everyone they can see.
+- **Certificate enrollment** on `8446`, using the official `/Marti/api/tls`
+  flow. The CA is created on first start, and certificates can be revoked
+  from the admin console.
+- **Quick connect with Let's Encrypt.** Clients join with only an address,
+  username and password. EdgeTAK requests and renews the certificate itself.
+- **Groups and channels**, as on the official server. Memberships have a
+  direction: **in** (receive), **out** (send) or both. Changes apply to
+  connected devices immediately, and users can switch their groups on and off
+  from the client (ATAK, WinTAK and TAKX Channels).
+- **Data packages**: upload, search, download and delete, limited to the
+  uploader's groups.
+- **Data Sync (missions)**: subscriptions and roles, map items and files, the
+  change feed, logs, invitations and export. Changes are pushed live to
+  subscribers.
+- **Web admin console**: live map and connected clients, users, groups,
+  certificates, data packages, missions, and connection packages for each
+  client.
+- **Verified clients**: ATAK, WinTAK 5.6, TAKX-MIL 5.8 and iTAK 2.12,
+  including Data Sync and channels between them.
 
-## Quick install (Go 1.24+)
+## Install
+
+Pick the setup that fits:
+
+| | **A. Local network** | **B. Internet server with Let's Encrypt** |
+|---|---|---|
+| Typical host | Raspberry Pi, laptop, home or field server | Cloud VM (DigitalOcean, AWS, ...) |
+| Clients connect with | a connection package (zip) from the admin console | just address, username and password |
+| Needs | nothing extra | a domain name pointing at the server, and port 80 open |
+
+Both options use the same installer, a single self-extracting file for 64-bit
+and 32-bit Raspberry Pi OS (every Pi, including Zero) and x86-64 Linux. It
+installs a systemd service that starts at boot. To build the installer
+(needs Go 1.24+ and `sh`; on Windows, use Git Bash):
 
 ```sh
-go install github.com/brandongotak/EdgeTAK/cmd/edgetak@latest
-edgetak -data ./data
+git clone https://github.com/brandongotak/EdgeTAK.git
+cd EdgeTAK
+sh packaging/rpi/build-installer.sh      # writes dist/edgetak-<version>-rpi-installer.sh
 ```
 
-While the repository is private, tell Go to fetch it directly with your
-GitHub credentials (git must be able to clone the repo):
-`GOPRIVATE=github.com/brandongotak go install github.com/brandongotak/EdgeTAK/cmd/edgetak@latest`
+The installer is self-contained, so you can copy that one file anywhere.
 
-For a server that should run at boot, use the installer below instead.
+### Option A: local network (Raspberry Pi, Linux or Windows)
 
-## Install on a Raspberry Pi (or any systemd Linux)
+**Raspberry Pi or any systemd Linux:**
 
 ```sh
-sh packaging/rpi/build-installer.sh        # -> dist/edgetak-<version>-rpi-installer.sh
-scp dist/edgetak-*-rpi-installer.sh pi@<pi>:
-ssh pi@<pi> sudo sh edgetak-*-rpi-installer.sh
+scp dist/edgetak-<version>-rpi-installer.sh pi@<device-ip>:
+ssh pi@<device-ip>
+sudo sh edgetak-<version>-rpi-installer.sh --public-host <device-ip>
 ```
 
-A single self-extracting file covers 64-bit Pi OS, 32-bit Pi OS (every model,
-including Zero and Pi 1) and x86-64 Linux. It installs `/usr/local/bin/edgetak`,
-creates an `edgetak` system user and `/var/lib/edgetak`, sets up a sandboxed
-systemd service enabled at boot, opens the ports in ufw or firewalld, and
-prints the admin login. Rerun the same command to upgrade; the data directory
-is kept. Options: `--public-host HOST`, `--import-data DIR` (move a manual
-install's data, CA and users into the service), `--no-firewall`,
-`--uninstall [--purge]`.
+- `--public-host` is the address phones use to reach the server. Leave it out
+  to detect it automatically. A DHCP reservation in your router keeps the
+  address stable.
+- The installer creates an `edgetak` system user and `/var/lib/edgetak`, sets
+  up a sandboxed service, opens the ports in ufw or firewalld, and prints the
+  **admin login** at the end.
+- From Windows PowerShell, give `scp` the full file name; Windows does not
+  expand `*`.
 
-## Run
+Then open `https://<device-ip>:8443/admin/` and accept the browser's
+certificate warning. The server uses its own CA, which browsers do not know.
+Continue with [First steps](#first-steps-in-the-admin-console).
+
+**Windows, or a quick test anywhere** (no service, runs in the foreground):
 
 ```sh
-go build -o edgetak ./cmd/edgetak
+go build -o edgetak ./cmd/edgetak        # edgetak.exe on Windows
 ./edgetak -data ./data
 ```
 
-On first start the log prints the generated `admin` password, which is also
-saved to `data/initial-admin-password.txt`. Open `https://<server-ip>:8443/admin/`,
-or `http://localhost:8080/admin/` on the server itself. Then:
+The admin password is printed in the log and saved to
+`data/initial-admin-password.txt`. On the same machine, the console is also at
+`http://localhost:8080/admin/`. To keep it running on Windows, wrap it in a
+service manager such as [NSSM](https://nssm.cc); EdgeTAK does not install a
+Windows service itself.
 
-1. **Users** tab: create users and give them groups (e.g. `Cyan`). Users with
-   no groups land in `__ANON__` together with plain-TCP clients.
-2. **Connect** tab: download the SSL connection package and import it in
-   ATAK (*Import → Local SD* or open it from the file manager). ATAK asks for
-   the username and password, enrolls for a certificate on 8446, then
-   connects on 8089.
+### Option B: internet server with Let's Encrypt
 
-Reset a forgotten password: `./edgetak -data ./data -reset-password admin`
+Use this when clients connect over the internet. They add the server with only
+its address, username and password, with no files to transfer.
 
-Cross-compile: `GOOS=linux GOARCH=arm64 go build ./cmd/edgetak` (Pi 4/5), or
-run `./build.sh` to build every target into `dist/`.
+**1. Before installing**
 
-### Internet-facing server with Let's Encrypt (quick connect)
+- **DNS:** create an `A` record such as `tak.example.com` pointing at the
+  server's public IP, and wait until it resolves.
+- **Firewall:** allow inbound **80** (Let's Encrypt), **8089** (CoT), **8443**
+  (API and admin) and **8446** (enrollment), plus 22 for SSH. On cloud VMs,
+  this usually means the provider's firewall as well as the VM's own.
+
+**2. Install**
 
 ```sh
-sudo sh edgetak-<version>-rpi-installer.sh --public-host tak.example.com \
-    --letsencrypt you@example.com --no-plaintext
+scp dist/edgetak-<version>-rpi-installer.sh root@tak.example.com:
+ssh root@tak.example.com "sh edgetak-<version>-rpi-installer.sh \
+    --public-host tak.example.com --letsencrypt you@example.com --no-plaintext"
 ```
 
-Users then add the server in ATAK, WinTAK, TAKX or iTAK with only its
-**address, username and password** ("Enroll for client certificate" and
-"Use authentication"). No data package or truststore is needed.
+- `--letsencrypt EMAIL` serves a Let's Encrypt certificate on 8446. EdgeTAK
+  requests and renews it itself, without certbot, cron or restarts. Port 80
+  must stay reachable for renewal.
+- `--no-plaintext` turns off the anonymous ports 8087 and 8080, which should
+  not be open on the internet.
+- Watch for `Let's Encrypt certificate ready` with `journalctl -u edgetak -f`.
+  Until then, 8446 serves the EdgeTAK certificate, so quick connect starts
+  working once the certificate is issued.
 
-This follows installTAK's design. Port 8446 (enrollment) presents a
-Let's Encrypt certificate, which devices already trust. The enrollment reply
-gives the client the EdgeTAK CA, and the client uses that to trust 8089 (CoT)
-and 8443 (API), which keep the EdgeTAK certificate. Connection packages work
-exactly as before.
+**3. Log in**
 
-- EdgeTAK requests and renews the certificate itself through ACME HTTP-01, so
-  **port 80 must stay reachable** and the domain must resolve to the server.
-  No certbot or cron is needed, and renewal does not restart the server.
-- While no certificate is available yet (DNS not propagated, rate limit),
-  8446 serves the EdgeTAK certificate, so enrollment still works for clients
-  that have a truststore.
-- The admin console at `https://tak.example.com:8446/admin/` gets a trusted
-  certificate, so browsers show no warning.
-- `--no-plaintext` turns off the anonymous ports 8087 and 8080. In a cloud
-  firewall, open 80, 8089, 8443 and 8446.
-- To use existing certificates instead, for example from certbot, set
-  `"public_cert": {"mode": "files", "cert_file": "...", "key_file": "..."}`.
-  The `edgetak` user must be able to read both files, and they are reloaded
-  when they change.
+Open **`https://tak.example.com:8446/admin/`**. It has a trusted certificate,
+so there is no browser warning. Continue with [First steps](#first-steps-in-the-admin-console).
 
-### Ports
+How it works (the same design as installTAK): only 8446 has the public
+certificate. Enrollment hands each client the EdgeTAK CA, which it then uses
+to trust 8089 and 8443. Connection packages work on this server too.
+
+To use certificates you already have, for example from certbot, set
+`"public_cert": {"mode": "files", "cert_file": "...", "key_file": "..."}` in
+`/var/lib/edgetak/edgetak.json` and restart. The `edgetak` user must be able
+to read both files, and EdgeTAK reloads them when they change.
+
+## First steps in the admin console
+
+1. **Change the admin password**: on the **Users** tab, click **Password** on
+   `admin`. Then delete the file holding the first-run password:
+   `sudo rm /var/lib/edgetak/initial-admin-password.txt` (installer) or
+   `data/initial-admin-password.txt` (manual run).
+2. **Create groups** on the **Groups** tab, for example `Cyan` and `Command`.
+   Users without a group are in `__ANON__`, together with anonymous plaintext
+   clients.
+3. **Create users** on the **Users** tab and pick their groups. Use the
+   **Groups** button on a user to set directions:
+   - **in + out**: the usual case.
+   - **in**: receive only.
+   - **out**: send only.
+
+   Give each person or device its own user, so you can revoke one without
+   affecting the rest.
+4. Check that **Public host** on the **Dashboard** shows the address clients
+   will use.
+
+## Connect clients
+
+There are two ways to connect, depending on the server:
+
+- **Quick connect** (servers with Let's Encrypt): add a server in the client
+  with the server's address, turn on **Use authentication** and **Enroll for
+  client certificate**, then enter a username and password. This works in
+  ATAK, WinTAK, TAKX and iTAK.
+- **Connection package** (any server): on the **Connect** tab, download a
+  package and import it on the device. For ATAK, WinTAK and TAKX, choose
+  *SSL with certificate enrollment*; the client then asks for the password.
+  For iTAK, choose *iTAK*. That package includes a client certificate for
+  one user, so treat it like a password and make a new one per device.
+
+| Client | Quick connect | Package to import |
+|---|---|---|
+| ATAK (Android) | Settings → Network → servers → add | SSL package (import from the file manager or *Import → Local SD*) |
+| WinTAK | Settings → network / server connections → add, with certificate enrollment | SSL package (import data package) |
+| TAKX | add a TAK server with username and password | SSL package |
+| iTAK | add a server with address, username and password | iTAK package (Settings → Network → upload server package) |
+
+**Channels:** devices enrolled on this server get ATAK's **Channels** button
+automatically. ATAK devices enrolled before channels were added need **Settings →
+Network Preferences → Network Connection Preferences → Apply TAK Server
+profile updates** turned on, followed by a reconnect. Alternatively, import a
+fresh SSL package.
+
+**Plain TCP** (`8087`, local networks only): add the server as TCP with no
+authentication. These clients are anonymous and only see `__ANON__`.
+
+## Upgrade, back up, uninstall
+
+- **Upgrade:** copy the new installer and run it with the **same flags**.
+  Users, groups, certificates, packages and missions are kept. Reconnect
+  clients afterwards, and reload the admin console with Ctrl+F5.
+- **Back up** `/var/lib/edgetak` (or `data/`). `certs/ca-key.pem` is the key
+  every enrolled device trusts: if it is lost, every device must enroll again.
+- **Move a manual install into the service:** `--import-data <old data dir>`.
+- **Uninstall:** `sudo sh edgetak-<version>-rpi-installer.sh --uninstall`
+  keeps the data; add `--purge` to delete it and the `edgetak` user.
+- **Forgotten password:**
+  `sudo -u edgetak /usr/local/bin/edgetak -data /var/lib/edgetak -reset-password admin`
+  (manual run: `./edgetak -data ./data -reset-password admin`).
+
+## Ports
 
 | Port | Purpose |
 |---|---|
-| 8087 | CoT streaming, plain TCP (anonymous, `__ANON__` group) |
 | 8089 | CoT streaming, TLS with client certificate |
-| 8443 | Marti API + admin console (TLS, client cert or password) |
-| 8446 | Certificate enrollment (TLS, password) |
-| 8080 | Marti API, plaintext (for 8087 clients); admin console from localhost only |
-
-Set any address to `""` in `data/edgetak.json` to disable that listener.
+| 8443 | Marti API and admin console (client certificate or password) |
+| 8446 | Certificate enrollment; with Let's Encrypt also the trusted admin console |
+| 80 | Let's Encrypt challenges (only with `--letsencrypt`) |
+| 8087 | CoT streaming, plain TCP, anonymous (off with `--no-plaintext`) |
+| 8080 | Marti API, plaintext, for 8087 clients; admin console from localhost only (off with `--no-plaintext`) |
 
 ## Configuration
 
-`data/edgetak.json` is written with defaults on first run:
+The config is `/var/lib/edgetak/edgetak.json` (installer) or
+`data/edgetak.json` (manual run). It is written with defaults on first run;
+restart after editing. Set any listener address (`tcp_addr`, `tls_addr`,
+`https_addr`, `enroll_addr`, `http_addr`) to `""` to turn it off.
 
 | Key | Default | Notes |
 |---|---|---|
-| `public_host` | first LAN IPv4 | address written into connection packages |
-| `hostnames` | `[]` | extra DNS names / IPs for the server certificate |
-| `anonymous_group` | `__ANON__` | |
-| `allow_anonymous_http` | `true` | plaintext Marti API without auth |
+| `public_host` | first LAN IPv4 | address clients use; goes into packages and the server certificate |
+| `hostnames` | `[]` | extra DNS names or IPs for the server certificate |
+| `public_cert` | off | `mode`: `letsencrypt` or `files`; also `email`, `domains`, `cert_file`, `key_file`, `listeners` (default `["enroll"]`) |
+| `anonymous_group` | `__ANON__` | group for ungrouped users and plaintext clients |
+| `allow_anonymous_http` | `true` | plaintext Marti API without login |
 | `cert_validity_days` | `365` | client certificates |
 | `truststore_password` | `atakatak` | password of the `.p12` files handed to clients |
-| `send_latest_sa` | `true` | replay peers' positions to new clients |
+| `send_latest_sa` | `true` | send peers' latest positions to new clients |
 | `idle_timeout_seconds` | `180` | disconnect silent stream clients |
-| `max_upload_mb` | `500` | |
-| `log_level` | `info` | `debug` logs handshake failures and malformed messages |
+| `max_upload_mb` | `500` | data package size limit |
+| `log_level` | `info` | `debug` logs every request and traces failed TLS handshakes |
 
-## Layout
+## Troubleshooting
 
-```
-cmd/edgetak/        entry point and flags
-internal/cot/       CoT event model, XML <-> TAK protobuf codec, stream framing
-internal/router/    client registry, group/directed routing, plugin hooks
-internal/stream/    TCP/TLS stream sessions and protocol negotiation
-internal/web/       Marti API, enrollment, data packages, admin console (embedded)
-internal/mission/   Data Sync missions: roles, contents, change feed, notifications
-internal/pki/       CA, CSR signing, PKCS#12
-internal/store/     JSON-file store for users, certificates, packages
-internal/app/       wiring, listeners, end-to-end test
-```
-
-## Extending
-
-`router.Router.AddHook(func(src *router.Client, ev *cot.Event) bool)` runs
-before every routing decision. A hook can inspect events, change them (call
-`ev.Changed()` afterwards), or drop them by returning `false`.
-`Router.Inject(ev, groups)` sends events generated by the server. These are the
-seams for the planned plugin API.
-
-## Roadmap
-
-- Plugin API (out-of-process plugins over gRPC/WebSocket on top of the hooks)
-- Data Sync extras: mission feeds, map layers, external data, mission hierarchy
-- Federation with official TAK Server, OTS and FTS
-- Group selection from the client (`t-x-g-c`), CoT history and replay
-- Video stream registry, device profiles, and packaging (deb/rpm, Docker, Windows service)
+- **See what a client is doing:** set `"log_level": "debug"` and restart, then
+  run `journalctl -u edgetak -f`. Every HTTP request is logged with its path,
+  status and client, and failed TLS handshakes are traced step by step. Set it
+  back to `info` afterwards, especially on internet servers.
+- **Packages point at the wrong address:** check **Public host** on the
+  Dashboard. The server warns at startup when `public_host` is neither a local
+  address nor a resolvable name.
+- **Let's Encrypt is stuck on "pending":** the domain must resolve to this
+  server and port 80 must be reachable from the internet. The log explains
+  why issuance failed.
+- **Certificates rejected after a reboot (Raspberry Pi):** the Pi has no
+  battery-backed clock. Make sure NTP has synchronised the time.
+- **Admin console shows an AVG/Avast certificate on the server's own PC:** that
+  antivirus intercepts local HTTPS. Browse from another device, or exclude the
+  server's address. Phones are not affected.
 
 ## Development
 
 ```sh
 go test ./...
+go install github.com/brandongotak/EdgeTAK/cmd/edgetak@latest   # one-line install, needs Go 1.24+
 ```
 
-The end-to-end test uses an in-memory network instead of real sockets, because
-some desktop antivirus products (AVG/Avast Web Shield, for example) intercept
-local TLS connections and re-sign them, which breaks mutual TLS. The same
-products can make the admin console show AVG's certificate when you browse to
-it from the server machine. Phones and other machines are not affected.
+While the repository is private, the one-line install needs
+`GOPRIVATE=github.com/brandongotak`, and git must be logged in to GitHub.
+
+The end-to-end tests use an in-memory network instead of real sockets,
+because some desktop antivirus products intercept local TLS and break mutual
+TLS.
+
+```
+cmd/edgetak/        entry point and flags
+internal/cot/       CoT event model, XML <-> TAK protobuf codec, stream framing
+internal/router/    client registry, group routing (IN/OUT, live changes), hooks
+internal/stream/    TCP/TLS stream sessions and protocol negotiation
+internal/web/       Marti API, enrollment, OAuth, groups/channels, admin console (embedded)
+internal/mission/   Data Sync missions: roles, contents, change feed, notifications
+internal/publiccert/ Let's Encrypt / file-based public certificate for enrollment
+internal/pki/       CA, CSR signing, PKCS#12
+internal/store/     JSON-file store for users, groups, certificates, packages
+internal/tlstrace/  TLS handshake tracing for debugging clients
+internal/app/       wiring, listeners, end-to-end tests
+packaging/rpi/      self-extracting installer and systemd service
+```
+
+`router.Router.AddHook(func(src *router.Client, ev *cot.Event) bool)` runs
+before every routing decision. A hook can inspect events, change them (call
+`ev.Changed()` afterwards), or drop them by returning `false`.
+`Router.Inject(ev, groups)` sends events generated by the server. These are
+the starting points for the planned plugin API.
+
+### Roadmap
+
+- Plugin API (out-of-process plugins on top of the hooks)
+- Federation with the official TAK Server, OpenTAKServer and FreeTAKServer
+- Data Sync extras: mission feeds, map layers, external data, mission hierarchy
+- CoT history and replay, video stream registry, custom device profiles
+- Packaging: deb/rpm, Docker, Windows service, prebuilt release downloads
