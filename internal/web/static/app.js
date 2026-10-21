@@ -460,6 +460,8 @@ function focusClient(uid) {
   const m = markers.get(uid);
   if (!m) return;
   setMapVisible(true, false);
+  map.invalidateSize();
+  fittedOnce = true;
   map.setView(m.getLatLng(), Math.max(map.getZoom(), 15));
   m.openPopup();
 }
@@ -593,8 +595,12 @@ async function showPackage(hash, { quiet = false } = {}) {
 
 function fitLayer(layer) {
   setMapVisible(true, false);
+  // The panel may have just been unhidden (phones); measure it before fitting,
+  // and stop the first device update from moving the view away.
+  map.invalidateSize();
+  fittedOnce = true;
   const b = layer.getBounds();
-  if (b.isValid()) map.fitBounds(b.pad(0.2), { maxZoom: 16 });
+  if (b.isValid()) map.fitBounds(b.pad(0.2), { maxZoom: 17 });
 }
 
 const isZip = (b) => b[0] === 0x50 && b[1] === 0x4b;
@@ -729,7 +735,7 @@ function loadMilsymbol() {
   if (window.ms) return Promise.resolve();
   milsymbolLoading ||= new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/milsymbol@2.2.0/dist/milsymbol.js';
+    s.src = 'vendor/milsymbol.js';
     s.onload = resolve;
     s.onerror = () => { milsymbolLoading = null; reject(new Error('symbol library unavailable')); };
     document.head.appendChild(s);

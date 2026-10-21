@@ -56,7 +56,8 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   `.xml` files; overlays for devices, callsigns and the server contact.
   **Show on map** on the Data Packages tab draws a package's CoT markers,
   routes, polygons, rectangles and circles, and any KML, KMZ or GeoJSON in
-  it, as its own overlay.
+  it, as its own overlay. The console's libraries are built in, so it works
+  without internet access; only online base maps need it.
 - **Web admin console**: connected clients, users, groups,
   certificates, data packages, missions, and connection packages for each
   client.
