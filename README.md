@@ -82,6 +82,13 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   devices and certificates (with expiry), revoke the certificate of a lost
   device, and change their password. Share the link from the console's
   Connect tab.
+- **Emergency alerts:** when someone presses ATAK's emergency button (911
+  Alert, Ring The Bell, In Contact, Geo-fence Breached, custom), every open
+  console shows a red banner and sounds an alarm until an admin acknowledges
+  it, with desktop notifications if allowed. The device is marked on the map
+  and the Dashboard. The alert stays until the device cancels it or an admin
+  dismisses it, even if the device goes offline. The log is on the Settings
+  tab.
 - **Chat log** (optional, off by default): records GeoChat messages sent
   through the server (All Chat Rooms, team and group chats, one-to-one
   messages and the console's own), with search, filters by conversation,
@@ -435,14 +442,17 @@ authentication. These clients are anonymous and only see `__ANON__`.
 - **Forgotten password:** stop EdgeTAK, then
   `sudo -u edgetak /usr/local/bin/edgetak -data /var/lib/edgetak -reset-password admin`
   (manual run: `./edgetak -data ./data -reset-password admin`), then start it again.
-- **Two-factor login** (optional, per administrator): on the **Users** tab,
-  **Turn on two-factor login**, scan the QR code with an authenticator app
-  (Google or Microsoft Authenticator, Authy, 1Password, ...) and save the 10
-  single-use recovery codes. Console sign-in then asks for a code. Devices
-  keep signing in with the password, but that password alone no longer opens
-  the admin API. **Lost phone:** use a recovery code, ask another admin to
-  click **Reset 2FA**, or stop EdgeTAK and run
-  `sudo -u edgetak /usr/local/bin/edgetak -data /var/lib/edgetak -reset-2fa admin`.
+- **Two-factor login** (optional, for every user).
+  - **Turning it on:** on the account page (or, for administrators, the
+    **Users** tab), click **Turn on two-factor login**. Scan the QR code with
+    an authenticator app (Google or Microsoft Authenticator, Authy, 1Password,
+    ...) and save the 10 single-use recovery codes.
+  - **Effect:** signing in then asks for a code. TAK apps keep signing in with
+    the password, since they can't ask for a code; for administrators, that
+    password alone no longer opens the admin API.
+  - **Lost phone:** use a recovery code, ask an admin to click **Reset 2FA**
+    on the Users tab, or stop EdgeTAK and run
+    `sudo -u edgetak /usr/local/bin/edgetak -data /var/lib/edgetak -reset-2fa USER`.
 
 ## Ports
 

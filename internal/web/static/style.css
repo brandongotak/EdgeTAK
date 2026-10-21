@@ -246,6 +246,30 @@ td.wrap { white-space: normal; max-width: 320px; }
 .issue { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: var(--panel); }
 .issue.critical { border-color: var(--danger); }
 .issue.warning { border-color: var(--warn); }
+/* Emergency alerts: a banner above every tab, and a pulsing map marker. */
+.emergency-banner { position: sticky; top: 0; z-index: 900; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--radius);
+  background: #b3261e; color: #fff; box-shadow: 0 4px 18px #0006; animation: em-flash 1.4s ease-in-out infinite; }
+.emergency-banner.acked { animation: none; background: #8c1d18; }
+.emergency-item { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.emergency-item .em-icon { font-size: 22px; }
+.emergency-item .em-text { flex: 1; min-width: 220px; display: flex; flex-direction: column; }
+.emergency-item .em-text strong { font-size: 15px; letter-spacing: .02em; }
+.emergency-item .em-text span { font-size: 13px; opacity: .9; }
+.emergency-item .em-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.emergency-item button { background: #fff; color: #8c1d18; border-color: #fff; }
+.emergency-item button.primary { background: #ffd54f; color: #3b2a00; border-color: #ffd54f; font-weight: 700; }
+.emergency-banner .em-sound { font-size: 13px; }
+@keyframes em-flash { 50% { background: #d93025; } }
+@media (prefers-reduced-motion: reduce) { .emergency-banner, .emergency-icon .em-pulse { animation: none; } }
+tr.emergency-row td { background: color-mix(in srgb, #d93025 18%, transparent); }
+.emergency-icon { position: relative; }
+.emergency-icon .em-dot { position: absolute; inset: 8px; border-radius: 50%; background: #d93025; border: 2px solid #fff; }
+.emergency-icon .em-pulse { position: absolute; inset: 0; border-radius: 50%; background: #d9302566; animation: em-pulse 1.4s ease-out infinite; }
+@keyframes em-pulse { from { transform: scale(.5); opacity: 1; } to { transform: scale(1.8); opacity: 0; } }
+.leaflet-tooltip.em-tooltip { background: #b3261e; color: #fff; border-color: #b3261e; font-weight: 700; }
+.leaflet-tooltip.em-tooltip::before { border-right-color: #b3261e; }
+#emergency-card h3 { margin: 16px 0 6px; font-size: 14px; }
+#emergency-log td { white-space: normal; }
 .rec-stream + .rec-stream { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); }
 .rec-stream h3 { margin: 0; font-size: 15px; }
 .player-parts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }

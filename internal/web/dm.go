@@ -31,6 +31,7 @@ const (
 func (s *Server) Start(ctx context.Context) {
 	s.Router.AddHook(s.inboxHook)
 	s.Router.AddHook(s.chatHook)
+	s.Router.AddHook(s.emergencyHook)
 	s.Router.SetPresence(s.presenceEvent)
 	s.videoStart(ctx)
 	s.retentionStart(ctx)

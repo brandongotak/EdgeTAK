@@ -40,6 +40,7 @@
 
   <div id="workspace" class="workspace">
   <main>
+    <div id="emergency-banner" class="emergency-banner" role="alert" aria-live="assertive" hidden></div>
     <section id="tab-dashboard" class="tab">
       <div id="dash-issues"></div>
       <div class="stats" id="stats"></div>
@@ -66,6 +67,21 @@
     </section>
 
     <section id="tab-settings" class="tab" hidden>
+      <div class="card" id="emergency-card">
+        <div class="card-head"><h2>Emergency alerts</h2><span id="emergency-state"></span></div>
+        <p class="muted">When someone presses the emergency button in ATAK (911 Alert, Ring The Bell, In Contact, Geo-fence Breached or a custom alert), every open console shows a red banner and sounds an alarm until an admin acknowledges it. The alert stays until the device cancels it or an admin dismisses it.</p>
+        <div class="inline-form">
+          <label class="check"><input type="checkbox" id="alarm-sound"> Alarm sound in this browser</label>
+          <button type="button" class="small" id="alarm-test">Test the alarm</button>
+          <button type="button" class="small" id="alarm-notify">Desktop notifications</button>
+          <span class="muted" id="alarm-notify-state"></span>
+        </div>
+        <h3>Log</h3>
+        <div class="table-wrap"><table id="emergency-log">
+          <thead><tr><th>Started</th><th>Alert</th><th>Callsign</th><th>Position</th><th>Acknowledged</th><th>Ended</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
       <div class="card" id="retention-card">
         <div class="card-head"><h2>Data retention</h2><span class="muted" id="retention-last"></span></div>
         <p class="muted">How long to keep each kind of data, in days (0 = keep forever). Rules run every hour. The right column shows what a rule would remove right now.</p>

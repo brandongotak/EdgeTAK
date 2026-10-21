@@ -20,6 +20,16 @@ import (
 // accountClient signs in to the account page as user.
 func accountClient(t *testing.T, a *App, user, pw string) (func(method, path string, body any) (int, map[string]any), *http.Client) {
 	t.Helper()
+	call, hc := accountClientRaw(t, a)
+	if code, res := call("POST", "/account/api/login", map[string]string{"username": user, "password": pw}); code != 200 {
+		t.Fatalf("account sign-in as %s = %d %v", user, code, res)
+	}
+	return call, hc
+}
+
+// accountClientRaw is a client for the account page that has not signed in.
+func accountClientRaw(t *testing.T, a *App) (func(method, path string, body any) (int, map[string]any), *http.Client) {
+	t.Helper()
 	jar, _ := cookiejar.New(nil)
 	hc := &http.Client{Jar: jar, Transport: memTransport(&tls.Config{RootCAs: a.CA.Pool()})}
 	base := "https://" + a.Addrs["enroll"]
@@ -41,9 +51,6 @@ func accountClient(t *testing.T, a *App, user, pw string) (func(method, path str
 		var m map[string]any
 		json.NewDecoder(resp.Body).Decode(&m)
 		return resp.StatusCode, m
-	}
-	if code, res := call("POST", "/account/api/login", map[string]string{"username": user, "password": pw}); code != 200 {
-		t.Fatalf("account sign-in as %s = %d %v", user, code, res)
 	}
 	return call, hc
 }

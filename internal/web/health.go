@@ -118,6 +118,7 @@ type deviceHealthView struct {
 
 func (s *Server) deviceHealth() []deviceHealthView {
 	out := []deviceHealthView{}
+	alerts := s.activeEmergencies()
 	now := time.Now()
 	for _, c := range s.Router.Clients() {
 		uid, cs := c.Identity()
@@ -142,6 +143,11 @@ func (s *Server) deviceHealth() []deviceHealthView {
 			v.BatteryHist, v.DrainPerHr = thinBattery(hist, 48), math.Round(drain*10)/10
 		}
 		v.Issues = deviceIssues(v, sa != nil)
+		for _, e := range alerts {
+			if uid != "" && e.DeviceUID == uid {
+				v.Issues = append([]issue{{"critical", "EMERGENCY: " + e.Type + " since " + e.Started.Local().Format("15:04")}}, v.Issues...)
+			}
+		}
 		v.Worst = "ok" // notes ("info") are shown but are not problems
 		for _, is := range v.Issues {
 			if is.Level != "info" && levelRank[is.Level] > levelRank[v.Worst] {

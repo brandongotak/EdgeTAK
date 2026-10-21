@@ -4,6 +4,38 @@ What changed in each EdgeTAK release. The release workflow publishes each
 version's section as its GitHub release notes, and the console's update card
 shows them, so add a section here before tagging a release.
 
+From v0.3.0, versions follow [Semantic Versioning](https://semver.org/):
+new features bump the minor number, fixes the patch number, and while below
+1.0, changes that need attention when upgrading bump the minor number too,
+with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
+number.
+
+## v0.3.0 (2026-10-21)
+
+The first release to follow semantic versioning (see the top of this file).
+
+### Added
+- **Emergency alerts.** When someone presses ATAK's emergency button (911
+  Alert, Ring The Bell, In Contact, Geo-fence Breached or a custom alert):
+  - **Banner:** every open console shows a red banner on every tab, with the
+    callsign, user, time and position.
+  - **Alarm:** sounds until an admin clicks **Acknowledge**. Browsers only
+    play sound after the page has been clicked once; the banner says so.
+  - **Desktop notification,** when turned on under Settings → Emergency
+    alerts.
+  - **Map and Dashboard:** a pulsing red marker with **Show on map**, a
+    highlighted Dashboard row, and an issue at the top of the Health tab.
+  - **Until cancelled:** the alert stays until the device cancels it, even if
+    the device goes offline. An admin can **Dismiss** one that can't be
+    cancelled anymore. Alerts still reach devices as before.
+  - **Log:** under Settings → Emergency alerts (the last 100), and in the
+    system log.
+- **Two-factor login for every user.** Users turn it on from their account
+  page, with a QR code and 10 recovery codes, and can turn it off or make new
+  recovery codes there. Signing in then asks for a code. TAK apps keep using
+  only the password, since they can't ask for one. Admins can still **Reset
+  2FA** for anyone on the Users tab.
+
 ## v0.2.24 (2026-10-21)
 
 ### Added

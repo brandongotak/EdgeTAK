@@ -76,6 +76,7 @@ async function start() {
   $('#conn-user').textContent = me.username;
   $('#quick').hidden = !info.quick_connect;
   render();
+  loadTwoFactor().catch(() => {});
   clearInterval(pollTimer);
   pollTimer = setInterval(refresh, 10000);
 }
@@ -143,6 +144,110 @@ $('#password-form').addEventListener('submit', async (e) => {
     toast('Password changed. Other sign-ins were signed out.');
   } catch (ex) {
     $('#password-error').textContent = ex.message;
+  }
+});
+
+// ---- two-factor login ----
+
+async function loadTwoFactor() {
+  const st = await api('GET', '2fa');
+  $('#twofa-state').innerHTML = st.enabled ? '<span class="pill ok">on</span>' : '<span class="pill">off</span>';
+  $('#twofa-text').innerHTML = st.enabled
+    ? `Signing in here asks for a code from your authenticator app. Recovery codes left: <strong>${st.recovery_left}</strong>.` +
+      (st.recovery_left < 3 ? ' <span class="error">Make new recovery codes soon.</span>' : '') +
+      ' Your TAK apps keep signing in with only your password: they have no way to ask for a code.'
+    : 'Optional: after your password, also ask for a 6-digit code from an authenticator app on your phone when you sign in here. Your TAK apps are not affected.';
+  $('#twofa-setup').hidden = st.enabled;
+  $('#twofa-recovery').hidden = !st.enabled;
+  $('#twofa-disable').hidden = !st.enabled;
+}
+
+function showRecoveryCodes(codes) {
+  $('#twofa-step1').hidden = true;
+  $('#twofa-step2').hidden = false;
+  $('#twofa-codes').textContent = codes.join('\n');
+  if (!$('#twofa-dialog').open) $('#twofa-dialog').showModal();
+}
+
+$('#twofa-setup').addEventListener('click', async () => {
+  try {
+    const { secret, uri } = await api('POST', '2fa/setup');
+    $('#twofa-step1').hidden = false;
+    $('#twofa-step2').hidden = true;
+    $('#twofa-error').textContent = '';
+    $('#twofa-form').code.value = '';
+    $('#twofa-secret').textContent = secret.match(/.{1,4}/g).join(' ');
+    const box = $('#twofa-qr');
+    box.innerHTML = '';
+    if (window.QRCode) new QRCode(box, { text: uri, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+    $('#twofa-dialog').showModal();
+    $('#twofa-form').code.focus();
+  } catch (ex) {
+    toast(ex.message, true);
+  }
+});
+
+$('#twofa-form').addEventListener('submit', async (e) => {
+  if (e.submitter?.value !== 'enable') return; // cancel / done close the dialog
+  e.preventDefault();
+  try {
+    const res = await api('POST', '2fa/enable', { code: e.target.code.value });
+    showRecoveryCodes(res.recovery_codes);
+    loadTwoFactor();
+  } catch (ex) {
+    $('#twofa-error').textContent = ex.message;
+  }
+});
+
+$('#twofa-copy').addEventListener('click', async () => {
+  await navigator.clipboard.writeText($('#twofa-codes').textContent);
+  toast('Recovery codes copied');
+});
+
+$('#twofa-download').addEventListener('click', () => {
+  const name = info.server_name || 'EdgeTAK';
+  const text = `${name} recovery codes for ${me.username}\nEach code signs you in once.\n\n${$('#twofa-codes').textContent}\n`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  a.download = `${name}-recovery-codes.txt`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+});
+
+// reauth asks for the password and a current code before a sensitive change.
+function reauth(title, text) {
+  return new Promise((resolve) => {
+    const d = $('#reauth-dialog');
+    const f = $('#reauth-form');
+    f.reset();
+    $('#reauth-title').textContent = title;
+    $('#reauth-text').textContent = text;
+    d.onclose = () => resolve(d.returnValue === 'ok' ? { password: f.password.value, code: f.code.value } : null);
+    d.showModal();
+  });
+}
+
+$('#twofa-disable').addEventListener('click', async () => {
+  const creds = await reauth('Turn off two-factor login', 'Your password and a current code (or a recovery code) are needed.');
+  if (!creds) return;
+  try {
+    await api('POST', '2fa/disable', creds);
+    toast('Two-factor login turned off');
+    loadTwoFactor();
+  } catch (ex) {
+    toast(ex.message, true);
+  }
+});
+
+$('#twofa-recovery').addEventListener('click', async () => {
+  const creds = await reauth('New recovery codes', 'The old recovery codes stop working. Your password and a current code are needed.');
+  if (!creds) return;
+  try {
+    const res = await api('POST', '2fa/recovery', creds);
+    showRecoveryCodes(res.recovery_codes);
+    loadTwoFactor();
+  } catch (ex) {
+    toast(ex.message, true);
   }
 });
 

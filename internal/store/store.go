@@ -174,6 +174,8 @@ type db struct {
 	ChatLog ChatLogSettings `json:"chat_log"`
 
 	VideoRecording RecordingSettings `json:"video_recording"`
+
+	Emergencies []*Emergency `json:"emergencies"` // oldest first, the last maxEmergencies
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -1289,4 +1291,79 @@ func (s *Store) DeletePackage(hash string) error {
 	}
 	delete(s.db.Packages, hash)
 	return s.save()
+}
+
+// ---- emergency alerts ----
+
+// maxEmergencies is how many alerts the log keeps.
+const maxEmergencies = 500
+
+// Emergency is an alert raised with a TAK client's emergency button (911,
+// Ring the Bell, In Contact, Geo-fence Breached, custom). It is active until
+// the device cancels it or an admin dismisses it.
+type Emergency struct {
+	ID        string     `json:"id"`
+	EventUID  string     `json:"event_uid"` // the alert's CoT UID (<device uid>-9-1-1)
+	DeviceUID string     `json:"device_uid"`
+	Callsign  string     `json:"callsign"`
+	Username  string     `json:"username,omitempty"`
+	Type      string     `json:"type"`     // as ATAK names it, e.g. "911 Alert"
+	CotType   string     `json:"cot_type"` // e.g. b-a-o-tbl
+	Lat       float64    `json:"lat"`
+	Lon       float64    `json:"lon"`
+	Started   time.Time  `json:"started"`
+	Updated   time.Time  `json:"updated"`
+	Acked     *time.Time `json:"acked,omitempty"`
+	AckedBy   string     `json:"acked_by,omitempty"`
+	Ended     *time.Time `json:"ended,omitempty"`
+	EndedBy   string     `json:"ended_by,omitempty"` // "device" or the admin who dismissed it
+}
+
+func (e *Emergency) Active() bool { return e.Ended == nil }
+
+func cloneEmergency(e *Emergency) Emergency {
+	c := *e
+	if e.Acked != nil {
+		t := *e.Acked
+		c.Acked = &t
+	}
+	if e.Ended != nil {
+		t := *e.Ended
+		c.Ended = &t
+	}
+	return c
+}
+
+// Emergencies returns the alert log, newest first.
+func (s *Store) Emergencies() []Emergency {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Emergency, 0, len(s.db.Emergencies))
+	for i := len(s.db.Emergencies) - 1; i >= 0; i-- {
+		out = append(out, cloneEmergency(s.db.Emergencies[i]))
+	}
+	return out
+}
+
+func (s *Store) AddEmergency(e Emergency) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Emergencies = append(s.db.Emergencies, &e)
+	if n := len(s.db.Emergencies); n > maxEmergencies {
+		s.db.Emergencies = slices.Delete(s.db.Emergencies, 0, n-maxEmergencies)
+	}
+	return s.save()
+}
+
+// UpdateEmergency changes the alert with id.
+func (s *Store) UpdateEmergency(id string, fn func(e *Emergency)) (Emergency, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, e := range s.db.Emergencies {
+		if e.ID == id {
+			fn(e)
+			return cloneEmergency(e), s.save()
+		}
+	}
+	return Emergency{}, ErrNotFound
 }

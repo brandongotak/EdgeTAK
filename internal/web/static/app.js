@@ -112,6 +112,7 @@ async function start() {
   selectTab(location.hash.slice(1) || 'dashboard');
   // The map is open by default beside the tabs; on phones it opens on demand.
   setMapVisible(!isNarrow() && prefs.get('map.open', true), false);
+  watchEmergencies();
 }
 
 $('#logout').addEventListener('click', async () => {
@@ -134,7 +135,7 @@ const loaders = {
   send: loadSend,
   connect: loadConnect,
   chat: loadChat,
-  settings: () => loadRetention(),
+  settings: () => Promise.all([loadRetention(), loadEmergencyCard()]),
 };
 
 let currentTab = '';
@@ -234,7 +235,7 @@ async function loadDashboard() {
     const pos = hasPos(c) ? `<span class="mono">${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}</span>` : '—';
     const batt = c.battery != null ? `<span class="pill ${c.battery < 20 ? 'bad' : c.battery < 50 ? 'warn' : 'ok'}">${c.battery}%</span>` : '—';
     const transport = `<span class="pill ${c.transport === 'tls' ? 'ok' : 'warn'}">${esc(c.transport.toUpperCase())}</span>`;
-    return `<tr>
+    return `<tr${emergencyUIDs.has(c.uid) ? ' class="emergency-row" title="Emergency alert active"' : ''}>
       <td><strong${hasPos(c) ? ` class="callsign-link" data-focus="${esc(c.uid || String(c.id))}" title="Show on the map"` : ''}>${esc(c.callsign || '(no SA yet)')}</strong><div class="muted mono">${esc(c.uid)}</div></td>
       <td>${esc(c.username || 'anonymous')}</td>
       <td>${team}</td>
@@ -837,6 +838,7 @@ function initMap() {
   });
   buildLayers();
   guard(loadMapSources)();
+  renderEmergencyMarkers();
   if (view) fittedOnce = true;
   // Bring back the packages this viewer had on the map.
   for (const hash of prefs.get('map.packages', [])) showPackage(hash, { quiet: true }).catch(() => forgetPackage(hash));
@@ -2931,5 +2933,183 @@ $('#install-app').addEventListener('click', async () => {
     toast('In Safari, tap Share, then "Add to Home Screen"');
   }
 });
+
+// ---------- emergency alerts ----------
+//
+// Checked every few seconds on every tab: a red banner, an alarm until an
+// admin acknowledges the alert, a desktop notification, and a marker on the
+// map.
+
+let emergencies = [];
+let emergencyUIDs = new Set();
+const notifiedEmergencies = new Set();
+let emergencyLayer = null;
+let audioCtx = null;
+let alarmTimer = null;
+const baseTitle = document.title;
+
+function ensureAudio() {
+  try { audioCtx ||= new (window.AudioContext || window.webkitAudioContext)(); } catch { return; }
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+}
+// Browsers only allow sound after the page has been clicked once.
+document.addEventListener('pointerdown', () => { if (audioCtx?.state === 'suspended') audioCtx.resume().then(renderEmergencies).catch(() => {}); });
+
+function beep() {
+  if (!audioCtx || audioCtx.state !== 'running') return;
+  const t = audioCtx.currentTime;
+  for (const [freq, at] of [[988, 0], [740, 0.28]]) {
+    const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, t + at);
+    gain.gain.exponentialRampToValueAtTime(0.2, t + at + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.26);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t + at);
+    osc.stop(t + at + 0.27);
+  }
+}
+
+function setAlarm(on) {
+  if (on && prefs.get('alerts.sound', true)) {
+    ensureAudio();
+    if (!alarmTimer) { beep(); alarmTimer = setInterval(beep, 1400); }
+  } else {
+    clearInterval(alarmTimer);
+    alarmTimer = null;
+  }
+}
+
+const minutesAgo = (iso) => Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+
+async function pollEmergencies() {
+  const r = await api('GET', 'api/emergencies?active=1');
+  emergencies = r.active;
+  emergencyUIDs = new Set(emergencies.map((e) => e.device_uid));
+  for (const e of emergencies) {
+    if (e.acked || notifiedEmergencies.has(e.id)) continue;
+    notifiedEmergencies.add(e.id);
+    if (window.Notification?.permission === 'granted') {
+      try {
+        const n = new Notification(`EMERGENCY: ${e.type}`, { body: `${e.callsign}${e.username ? ` (${e.username})` : ''} at ${new Date(e.started).toLocaleTimeString()}`, tag: e.id, requireInteraction: true });
+        n.onclick = () => { window.focus(); n.close(); };
+      } catch { /* notifications unavailable */ }
+    }
+  }
+  renderEmergencies();
+}
+
+function renderEmergencies() {
+  const banner = $('#emergency-banner');
+  const unacked = emergencies.filter((e) => !e.acked);
+  banner.hidden = !emergencies.length;
+  document.title = unacked.length ? `🚨 EMERGENCY · ${baseTitle}` : baseTitle;
+  setAlarm(unacked.length > 0);
+  const muted = unacked.length && prefs.get('alerts.sound', true) && audioCtx?.state !== 'running';
+  banner.classList.toggle('acked', !unacked.length);
+  banner.innerHTML = emergencies.map((e) => {
+    const pos = e.lat || e.lon ? `${e.lat.toFixed(5)}, ${e.lon.toFixed(5)}` : 'no position';
+    return `<div class="emergency-item${e.acked ? ' acked' : ''}">
+      <span class="em-icon" aria-hidden="true">🚨</span>
+      <div class="em-text">
+        <strong>${esc(e.type.toUpperCase())} · ${esc(e.callsign)}</strong>
+        <span>${e.username ? esc(e.username) + ' · ' : ''}since ${esc(new Date(e.started).toLocaleTimeString())} (${minutesAgo(e.started)} min) · ${esc(pos)}${e.acked ? ` · acknowledged by ${esc(e.acked_by)}` : ''}</span>
+      </div>
+      <div class="em-actions">
+        ${e.lat || e.lon ? `<button type="button" class="small" data-em="map" data-id="${esc(e.id)}">Show on map</button>` : ''}
+        ${e.acked ? '' : `<button type="button" class="small primary" data-em="ack" data-id="${esc(e.id)}">Acknowledge</button>`}
+        <button type="button" class="small" data-em="dismiss" data-id="${esc(e.id)}" title="Close an alert the device can no longer cancel">Dismiss</button>
+      </div>
+    </div>`;
+  }).join('') + (muted ? '<div class="em-sound">🔇 Click anywhere on the page to hear the alarm.</div>' : '');
+  renderEmergencyMarkers();
+}
+
+function renderEmergencyMarkers() {
+  if (!map) return;
+  if (!emergencyLayer) emergencyLayer = L.layerGroup().addTo(map);
+  emergencyLayer.clearLayers();
+  for (const e of emergencies) {
+    if (!e.lat && !e.lon) continue;
+    const icon = L.divIcon({ className: 'emergency-icon', html: '<span class="em-pulse"></span><span class="em-dot"></span>', iconSize: [28, 28], iconAnchor: [14, 14] });
+    L.marker([e.lat, e.lon], { icon, zIndexOffset: 2000 })
+      .bindTooltip(`🚨 ${esc(e.callsign)} · ${esc(e.type)}`, { permanent: true, direction: 'right', className: 'em-tooltip' })
+      .addTo(emergencyLayer);
+  }
+}
+
+function showEmergencyOnMap(e) {
+  initMap();
+  if (!map) return;
+  setMapVisible(true, false);
+  map.invalidateSize();
+  fittedOnce = true;
+  renderEmergencyMarkers();
+  map.setView([e.lat, e.lon], Math.max(map.getZoom(), 15));
+}
+
+$('#emergency-banner').addEventListener('click', guard(async (ev) => {
+  const b = ev.target.closest('[data-em]');
+  if (!b) return;
+  const e = emergencies.find((x) => x.id === b.dataset.id);
+  if (!e) return;
+  switch (b.dataset.em) {
+    case 'map':
+      return showEmergencyOnMap(e);
+    case 'ack':
+      await api('POST', `api/emergencies/${encodeURIComponent(e.id)}/ack`);
+      break;
+    case 'dismiss':
+      if (!confirm(`Dismiss the ${e.type} from ${e.callsign}? Do this only when the device can't cancel it itself (for example it is off). The device's own alert is not changed.`)) return;
+      await api('POST', `api/emergencies/${encodeURIComponent(e.id)}/dismiss`);
+      toast('Alert dismissed');
+      break;
+  }
+  await pollEmergencies();
+  if (currentTab === 'settings') loadEmergencyCard();
+}));
+
+// The Settings tab: this browser's alarm options and the alert log.
+async function loadEmergencyCard() {
+  const r = await api('GET', 'api/emergencies');
+  $('#emergency-state').innerHTML = r.active.length ? `<span class="pill bad">${plural(r.active.length, 'active alert')}</span>` : '<span class="pill ok">no active alerts</span>';
+  $('#alarm-sound').checked = prefs.get('alerts.sound', true);
+  const N = window.Notification;
+  $('#alarm-notify').hidden = !N || N.permission !== 'default';
+  $('#alarm-notify-state').textContent = !N ? 'Desktop notifications are not available in this browser.'
+    : N.permission === 'granted' ? 'Desktop notifications are on.'
+    : N.permission === 'denied' ? 'Desktop notifications are blocked in this browser\'s site settings.' : '';
+  $('#emergency-log tbody').innerHTML = r.log.map((e) => `<tr>
+      <td>${esc(date(e.started))}</td>
+      <td>${e.ended ? '' : '<span class="pill bad">active</span> '}${esc(e.type)}</td>
+      <td><strong>${esc(e.callsign)}</strong>${e.username ? `<div class="muted">${esc(e.username)}</div>` : ''}</td>
+      <td class="mono">${e.lat || e.lon ? `${e.lat.toFixed(5)}, ${e.lon.toFixed(5)}` : '—'}</td>
+      <td>${e.acked ? `${esc(new Date(e.acked).toLocaleTimeString())} <span class="muted">by ${esc(e.acked_by)}</span>` : '—'}</td>
+      <td>${e.ended ? `${esc(new Date(e.ended).toLocaleTimeString())} <span class="muted">${e.ended_by === 'device' ? 'cancelled on the device' : 'dismissed by ' + esc(e.ended_by)}</span>` : '—'}</td>
+    </tr>`).join('') || emptyRow(6, 'No emergency alerts yet');
+}
+
+$('#alarm-sound').addEventListener('change', (e) => {
+  prefs.set('alerts.sound', e.target.checked);
+  renderEmergencies();
+});
+$('#alarm-test').addEventListener('click', () => {
+  ensureAudio();
+  setTimeout(beep, 50);
+  setTimeout(beep, 1450);
+});
+$('#alarm-notify').addEventListener('click', guard(async () => {
+  const p = await Notification.requestPermission();
+  if (p === 'granted') new Notification('EdgeTAK', { body: 'Emergency alerts will show here.' });
+  loadEmergencyCard();
+}));
+
+let emergencyTimer = null;
+function watchEmergencies() {
+  clearInterval(emergencyTimer);
+  pollEmergencies().catch(() => {});
+  emergencyTimer = setInterval(() => pollEmergencies().catch(() => {}), 3000);
+}
 
 start();

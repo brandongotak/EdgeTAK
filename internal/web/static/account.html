@@ -71,6 +71,47 @@
   </div>
 
   <div class="card">
+    <div class="card-head"><h2>Two-factor login</h2><span id="twofa-state"></span></div>
+    <p class="muted" id="twofa-text"></p>
+    <div class="inline-form">
+      <button type="button" class="small primary" id="twofa-setup" hidden>Turn on two-factor login</button>
+      <button type="button" class="small" id="twofa-recovery" hidden>New recovery codes</button>
+      <button type="button" class="small danger" id="twofa-disable" hidden>Turn off</button>
+    </div>
+  </div>
+  <dialog id="twofa-dialog" class="card dialog">
+    <form method="dialog" class="stack wide" id="twofa-form">
+      <h2>Turn on two-factor login</h2>
+      <div id="twofa-step1" class="stack wide">
+        <p class="muted">1. Scan this with an authenticator app (Google or Microsoft Authenticator, Authy, 1Password…), or type the key in.</p>
+        <div id="twofa-qr" class="qr"></div>
+        <code id="twofa-secret" class="uri"></code>
+        <label>2. Enter the 6-digit code it shows <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></label>
+        <p class="error" id="twofa-error" role="alert"></p>
+        <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="enable">Turn on</button></div>
+      </div>
+      <div id="twofa-step2" class="stack wide" hidden>
+        <p><strong>Two-factor login is on.</strong> Save these recovery codes somewhere safe: each one signs you in once if you lose your phone. They are not shown again.</p>
+        <pre class="notes" id="twofa-codes"></pre>
+        <div class="inline-form">
+          <button type="button" class="small" id="twofa-copy">Copy</button>
+          <button type="button" class="small" id="twofa-download">Download .txt</button>
+          <span class="spacer"></span><button class="primary" value="close">Done</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="reauth-dialog" class="card dialog">
+    <form method="dialog" class="stack wide" id="reauth-form">
+      <h2 id="reauth-title">Confirm</h2>
+      <p class="muted" id="reauth-text"></p>
+      <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+      <label>Code from your authenticator app (or a recovery code) <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required></label>
+      <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="ok">Continue</button></div>
+    </form>
+  </dialog>
+
+  <div class="card">
     <h2>Groups</h2>
     <p class="muted">Set by an administrator. You receive from the groups under <em>Receive</em> and send to those under <em>Send</em>.</p>
     <dl class="kv">
