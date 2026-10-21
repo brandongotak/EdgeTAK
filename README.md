@@ -343,9 +343,17 @@ authentication. These clients are anonymous and only see `__ANON__`.
 - **Uninstall:** `sudo sh /usr/local/lib/edgetak/edgetak-installer.sh --uninstall`
   keeps the data; add `--purge` to delete it and the `edgetak` user. If you
   installed from a copied file, run that file with `--uninstall` instead.
-- **Forgotten password:**
+- **Forgotten password:** stop EdgeTAK, then
   `sudo -u edgetak /usr/local/bin/edgetak -data /var/lib/edgetak -reset-password admin`
-  (manual run: `./edgetak -data ./data -reset-password admin`).
+  (manual run: `./edgetak -data ./data -reset-password admin`), then start it again.
+- **Two-factor login** (optional, per administrator): on the **Users** tab,
+  **Turn on two-factor login**, scan the QR code with an authenticator app
+  (Google or Microsoft Authenticator, Authy, 1Password, ...) and save the 10
+  single-use recovery codes. Console sign-in then asks for a code. Devices
+  keep signing in with the password, but that password alone no longer opens
+  the admin API. **Lost phone:** use a recovery code, ask another admin to
+  click **Reset 2FA**, or stop EdgeTAK and run
+  `sudo -u edgetak /usr/local/bin/edgetak -data /var/lib/edgetak -reset-2fa admin`.
 
 ## Ports
 

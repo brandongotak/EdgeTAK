@@ -103,6 +103,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.historyRoutes(mux)
 	s.videoRoutes(mux)
 	s.updateRoutes(mux)
+	s.twoFactorRoutes(mux)
 
 	files := http.StripPrefix("/admin/", http.FileServerFS(staticSub()))
 	mux.HandleFunc("GET /admin/", func(w http.ResponseWriter, r *http.Request) {
@@ -334,6 +335,14 @@ func (s *Server) admin(h handlerFunc) http.HandlerFunc {
 		if !id.Admin {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "administrator required"})
 			return
+		}
+		// A password alone (basic auth, OAuth token, device certificate) must
+		// not get around an account's two-factor login.
+		if !id.Session {
+			if u, ok := s.Store.User(id.Username); ok && u.TwoFactor() {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "this account uses two-factor login; sign in to the admin console"})
+				return
+			}
 		}
 		h(w, r, id)
 	}

@@ -34,6 +34,7 @@ func main() {
 	dataDir := flag.String("data", envOr("EDGETAK_DATA", "data"), "data directory (config, database, certificates, packages)")
 	cfgPath := flag.String("config", "", "config file (default <data>/edgetak.json)")
 	resetPassword := flag.String("reset-password", "", "set a new random password for `user`, print it and exit")
+	reset2FA := flag.String("reset-2fa", "", "turn off two-factor login for `user` (lost phone), then exit; stop EdgeTAK first")
 	initOnly := flag.Bool("init", false, "create the data directory, config, CA and admin account, then exit")
 	enableLE := flag.String("enable-letsencrypt", "", "use a Let's Encrypt certificate on the enrollment port, optionally registered to `email` (-enable-letsencrypt= for none); needs public_host to be a domain pointing here and port 80 reachable")
 	enableVideo := flag.Bool("enable-video", false, "connect EdgeTAK to a MediaMTX media server on this machine (the installer's --video sets it up)")
@@ -65,6 +66,17 @@ func main() {
 			fatal(fmt.Errorf("user %q: %w", *resetPassword, err))
 		}
 		fmt.Printf("new password for %s: %s\n", *resetPassword, pw)
+		return
+	}
+	if *reset2FA != "" {
+		st, err := store.Open(filepath.Join(*dataDir, "db.json"))
+		if err != nil {
+			fatal(err)
+		}
+		if err := st.DisableTOTP(*reset2FA); err != nil {
+			fatal(fmt.Errorf("user %q: %w", *reset2FA, err))
+		}
+		fmt.Printf("two-factor login turned off for %s; start EdgeTAK again\n", *reset2FA)
 		return
 	}
 

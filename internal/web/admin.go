@@ -72,7 +72,7 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 // ---- sessions ----
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	var req struct{ Username, Password string }
+	var req struct{ Username, Password, Code string }
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid request")
 		return
@@ -82,6 +82,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(500 * time.Millisecond)
 		s.Log.Warn("admin login failed", "user", req.Username, "remote", r.RemoteAddr)
 		jsonError(w, http.StatusUnauthorized, "invalid username or password, or not an administrator")
+		return
+	}
+	if u.TwoFactor() && !s.secondFactor(w, r, u.Username, req.Code) {
 		return
 	}
 	token := randomToken(32)
@@ -217,6 +220,7 @@ type userView struct {
 	Admin     bool      `json:"admin"`
 	Created   time.Time `json:"created"`
 	Online    int       `json:"online"`
+	TwoFactor bool      `json:"two_factor"`
 }
 
 func newUserView(u *store.User, online int) userView {
@@ -226,7 +230,7 @@ func newUserView(u *store.User, online int) userView {
 		}
 		return l
 	}
-	return userView{u.Username, nn(u.Groups), nn(u.GroupsIn), nn(u.GroupsOut), nn(u.Inactive), u.Admin, u.Created, online}
+	return userView{u.Username, nn(u.Groups), nn(u.GroupsIn), nn(u.GroupsOut), nn(u.Inactive), u.Admin, u.Created, online, u.TwoFactor()}
 }
 
 // applyUserGroups pushes a user's current memberships to their live connections.

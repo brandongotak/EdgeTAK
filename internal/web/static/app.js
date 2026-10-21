@@ -122,13 +122,24 @@ $('#login-form').addEventListener('submit', async (e) => {
   $('#login-error').textContent = '';
   const r = await fetch('api/login', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: f.get('username'), password: f.get('password') }),
+    body: JSON.stringify({ username: f.get('username'), password: f.get('password'), code: f.get('code') || '' }),
   });
   if (!r.ok) {
-    $('#login-error').textContent = (await r.json().catch(() => ({}))).error || 'Sign in failed';
+    const body = await r.json().catch(() => ({}));
+    if (body.need_code) { // two-factor: ask for the code, keep what was typed
+      const label = $('#login-code-label');
+      const first = label.hidden;
+      label.hidden = false;
+      label.querySelector('input').value = '';
+      label.querySelector('input').focus();
+      $('#login-error').textContent = first ? '' : body.error;
+      return;
+    }
+    $('#login-error').textContent = body.error || 'Sign in failed';
     return;
   }
   e.target.reset();
+  $('#login-code-label').hidden = true;
   start();
 });
 
@@ -1123,7 +1134,95 @@ async function promptNewGroup() {
   return name.trim();
 }
 
+// ---- two-factor login (own account) ----
+
+async function loadTwoFactor() {
+  const st = await api('GET', 'api/me/2fa');
+  $('#twofa-state').innerHTML = st.enabled ? '<span class="pill ok">on</span>' : '<span class="pill">off</span>';
+  $('#twofa-text').innerHTML = st.enabled
+    ? `Signing in to this console asks for a code from your authenticator app. Recovery codes left: <strong>${st.recovery_left}</strong>.` +
+      (st.recovery_left < 3 ? ' <span class="error">Make new recovery codes soon.</span>' : '') +
+      ' Devices (ATAK, WinTAK, iTAK, TAKX) keep signing in with the password.'
+    : 'Optional: after the password, also ask for a 6-digit code from an authenticator app on your phone. Devices (ATAK, WinTAK, iTAK, TAKX) are not affected.';
+  $('#twofa-setup').hidden = st.enabled;
+  $('#twofa-recovery').hidden = !st.enabled;
+  $('#twofa-disable').hidden = !st.enabled;
+}
+
+function showRecoveryCodes(codes) {
+  $('#twofa-step1').hidden = true;
+  $('#twofa-step2').hidden = false;
+  $('#twofa-codes').textContent = codes.join('\n');
+  if (!$('#twofa-dialog').open) $('#twofa-dialog').showModal();
+}
+
+$('#twofa-setup').addEventListener('click', guard(async () => {
+  const { secret, uri } = await api('POST', 'api/me/2fa/setup');
+  $('#twofa-step1').hidden = false;
+  $('#twofa-step2').hidden = true;
+  $('#twofa-form').code.value = '';
+  $('#twofa-secret').textContent = secret.match(/.{1,4}/g).join(' ');
+  const box = $('#twofa-qr');
+  box.innerHTML = '';
+  if (window.QRCode) new QRCode(box, { text: uri, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+  $('#twofa-dialog').showModal();
+  $('#twofa-form').code.focus();
+}));
+
+$('#twofa-form').addEventListener('submit', guard(async (e) => {
+  if (e.submitter?.value !== 'enable') return; // cancel / done close the dialog
+  e.preventDefault();
+  const res = await api('POST', 'api/me/2fa/enable', { code: e.target.code.value });
+  showRecoveryCodes(res.recovery_codes);
+  loadTwoFactor();
+}));
+
+$('#twofa-copy').addEventListener('click', guard(async () => {
+  await navigator.clipboard.writeText($('#twofa-codes').textContent);
+  toast('Recovery codes copied');
+}));
+
+$('#twofa-download').addEventListener('click', () => {
+  const name = status?.server_name || 'EdgeTAK';
+  const text = `${name} recovery codes for ${$('#me').textContent}\nEach code signs you in once.\n\n${$('#twofa-codes').textContent}\n`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  a.download = `${name}-recovery-codes.txt`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+});
+
+// reauth asks for the password and a current code before a sensitive change.
+function reauth(title, text) {
+  return new Promise((resolve) => {
+    const d = $('#reauth-dialog');
+    const f = $('#reauth-form');
+    f.reset();
+    $('#reauth-title').textContent = title;
+    $('#reauth-text').textContent = text;
+    d.onclose = () => resolve(d.returnValue === 'ok' ? { password: f.password.value, code: f.code.value } : null);
+    d.showModal();
+  });
+}
+
+$('#twofa-disable').addEventListener('click', guard(async () => {
+  const creds = await reauth('Turn off two-factor login', 'Your password and a current code (or a recovery code) are needed.');
+  if (!creds) return;
+  await api('POST', 'api/me/2fa/disable', creds);
+  toast('Two-factor login turned off');
+  loadTwoFactor();
+}));
+
+$('#twofa-recovery').addEventListener('click', guard(async () => {
+  const creds = await reauth('New recovery codes', 'The old recovery codes stop working. Your password and a current code are needed.');
+  if (!creds) return;
+  const res = await api('POST', 'api/me/2fa/recovery', creds);
+  showRecoveryCodes(res.recovery_codes);
+  loadTwoFactor();
+}));
+
 async function loadUsers() {
+  loadTwoFactor().catch(() => {});
   const [users, groups] = await Promise.all([api('GET', 'api/users'), api('GET', 'api/groups')]);
   allGroups = groups;
   usersByName = Object.fromEntries(users.map((u) => [u.username, u]));
@@ -1131,13 +1230,14 @@ async function loadUsers() {
   $('#users-table tbody').innerHTML = users.map((u) => `<tr>
     <td><strong>${esc(u.username)}</strong></td>
     <td>${userGroupPills(u)}</td>
-    <td>${u.admin ? '<span class="pill ok">admin</span>' : 'user'}</td>
+    <td>${u.admin ? '<span class="pill ok">admin</span>' : 'user'}${u.two_factor ? ' <span class="pill ok" title="Two-factor login is on">2FA</span>' : ''}</td>
     <td>${u.online ? `<span class="pill ok">${u.online} online</span>` : '<span class="muted">offline</span>'}</td>
     <td>${esc(date(u.created))}</td>
     <td class="actions">
       <button class="small" data-act="groups" data-user="${esc(u.username)}">Groups</button>
       <button class="small" data-act="password" data-user="${esc(u.username)}">Password</button>
       <button class="small" data-act="admin" data-user="${esc(u.username)}" data-admin="${u.admin}">${u.admin ? 'Revoke admin' : 'Make admin'}</button>
+      ${u.two_factor && u.username !== $('#me').textContent ? `<button class="small" data-act="reset2fa" data-user="${esc(u.username)}" title="For a lost phone">Reset 2FA</button>` : ''}
       <button class="small" data-act="p12" data-user="${esc(u.username)}">Issue .p12</button>
       <button class="small danger" data-act="delete" data-user="${esc(u.username)}">Delete</button>
     </td></tr>`).join('') || emptyRow(6, 'No users');
@@ -1236,6 +1336,11 @@ $('#users-table').addEventListener('click', guard(async (e) => {
       toast('Password changed');
       break;
     }
+    case 'reset2fa':
+      if (!confirm(`Turn off two-factor login for ${user}? They sign in with only their password until they set it up again.`)) return;
+      await api('DELETE', `${path}/2fa`);
+      toast(`Two-factor login reset for ${user}`);
+      break;
     case 'admin':
       await api('PATCH', path, { admin: b.dataset.admin !== 'true' });
       break;

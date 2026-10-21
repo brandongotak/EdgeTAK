@@ -34,7 +34,16 @@ type User struct {
 	Inactive []string  `json:"inactive,omitempty"`
 	Admin    bool      `json:"admin"`
 	Created  time.Time `json:"created"`
+
+	// Two-factor login for the admin console (authenticator app codes).
+	TOTPSecret   string   `json:"totp_secret,omitempty"`
+	TOTPPending  string   `json:"totp_pending,omitempty"` // being set up, not yet confirmed
+	TOTPLastStep int64    `json:"totp_last_step,omitempty"`
+	RecoveryHash []string `json:"recovery_hashes,omitempty"` // SHA-256 of unused recovery codes
 }
+
+// TwoFactor reports whether the user signs in with an authenticator code.
+func (u *User) TwoFactor() bool { return u.TOTPSecret != "" }
 
 // Memberships returns all of the user's IN and OUT groups, active or not. A
 // user without any group is in anon both ways, like anonymous clients.
@@ -338,6 +347,7 @@ func cloneUser(u *User) *User {
 	c.GroupsIn = slices.Clone(u.GroupsIn)
 	c.GroupsOut = slices.Clone(u.GroupsOut)
 	c.Inactive = slices.Clone(u.Inactive)
+	c.RecoveryHash = slices.Clone(u.RecoveryHash)
 	return &c
 }
 
@@ -511,6 +521,69 @@ func (s *Store) SetServerContact(c ServerContact) error {
 	defer s.mu.Unlock()
 	s.db.ServerContact = c
 	return s.save()
+}
+
+// ---- two-factor login ----
+
+// SetTOTPPending stores a secret being set up; it takes effect with EnableTOTP.
+func (s *Store) SetTOTPPending(name, secret string) error {
+	_, err := s.UpdateUser(name, func(u *User) error { u.TOTPPending = secret; return nil })
+	return err
+}
+
+// EnableTOTP turns on two-factor login with the pending secret if code
+// matches it, and stores the recovery code hashes.
+func (s *Store) EnableTOTP(name, code string, recoveryHashes []string, verify func(secret, code string, lastStep int64) (int64, bool)) error {
+	_, err := s.UpdateUser(name, func(u *User) error {
+		if u.TOTPPending == "" {
+			return errors.New("start the setup again")
+		}
+		step, ok := verify(u.TOTPPending, code, 0)
+		if !ok {
+			return errors.New("that code is not right; check the time on your phone and try the next code")
+		}
+		u.TOTPSecret, u.TOTPPending, u.TOTPLastStep = u.TOTPPending, "", step
+		u.RecoveryHash = slices.Clone(recoveryHashes)
+		return nil
+	})
+	return err
+}
+
+// DisableTOTP turns two-factor login off.
+func (s *Store) DisableTOTP(name string) error {
+	_, err := s.UpdateUser(name, func(u *User) error {
+		u.TOTPSecret, u.TOTPPending, u.TOTPLastStep, u.RecoveryHash = "", "", 0, nil
+		return nil
+	})
+	return err
+}
+
+// SetRecoveryCodes replaces the user's recovery code hashes.
+func (s *Store) SetRecoveryCodes(name string, hashes []string) error {
+	_, err := s.UpdateUser(name, func(u *User) error { u.RecoveryHash = slices.Clone(hashes); return nil })
+	return err
+}
+
+// CheckSecondFactor accepts an authenticator code (each only once) or an
+// unused recovery code (which is then used up). It reports which one matched.
+func (s *Store) CheckSecondFactor(name, code string, verify func(secret, code string, lastStep int64) (int64, bool), hash func(string) string) (ok, recovery bool) {
+	s.UpdateUser(name, func(u *User) error {
+		if u.TOTPSecret == "" {
+			return nil
+		}
+		if step, good := verify(u.TOTPSecret, code, u.TOTPLastStep); good {
+			u.TOTPLastStep, ok = step, true
+			return nil
+		}
+		h := hash(code)
+		if i := slices.Index(u.RecoveryHash, h); i >= 0 {
+			u.RecoveryHash = slices.Delete(u.RecoveryHash, i, i+1)
+			ok, recovery = true, true
+			return nil
+		}
+		return errors.New("no match") // nothing to save
+	})
+	return ok, recovery
 }
 
 // VideoFeeds returns copies of the registered feeds, sorted by alias.
