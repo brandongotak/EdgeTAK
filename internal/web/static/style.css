@@ -181,6 +181,17 @@ td.actions > * + * { margin-left: 6px; }
 .login .version { margin: 0; font-size: 12px; text-align: center; }
 .login .version a, .console-footer a { color: inherit; }
 .console-footer { font-size: 12px; text-align: center; padding: 8px 0 4px; }
+.account-page { max-width: 760px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.account-page .version { text-align: center; font-size: 12px; }
+.account-page .version a { color: inherit; }
+.account-page h3 { margin: 16px 0 4px; font-size: 14px; }
+.account-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.account-head .spacer { flex: 1; }
+.account-item { padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 3px; }
+.account-item:last-child { border-bottom: none; }
+.account-item-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.account-item.dim { opacity: .65; }
+.account-item .issue { margin: 6px 0 0; }
 .register-card { width: min(460px, 100%); }
 .register-card h2 { margin: 8px 0 4px; }
 .register-card p { margin: 0; }

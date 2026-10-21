@@ -1,9 +1,9 @@
 {
   "name": "EdgeTAK Console",
   "short_name": "EdgeTAK",
-  "description": "Admin console for the EdgeTAK TAK server",
+  "description": "EdgeTAK TAK server: admin console and user accounts",
   "start_url": "/admin/",
-  "scope": "/admin/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0e1214",
   "theme_color": "#161c1f",

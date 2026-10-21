@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>EdgeTAK Account</title>
+<link rel="stylesheet" href="/admin/style.css">
+<link rel="icon" href="/admin/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/admin/icons/apple-touch-icon.png">
+</head>
+<body>
+
+<div id="page" class="account-page" hidden>
+  <header class="account-head">
+    <div class="brand"><span class="logo">◆</span> <span class="server-name">EdgeTAK</span></div>
+    <span class="spacer"></span>
+    <a class="button small" id="admin-link" href="/admin/" hidden>Admin console</a>
+    <span class="muted" id="me"></span>
+    <button type="button" class="small ghost" id="signout">Sign out</button>
+  </header>
+
+  <div class="card">
+    <h2>Connect a device</h2>
+    <dl class="kv">
+      <dt>Server</dt><dd class="mono" id="conn-host"></dd>
+      <dt>Port</dt><dd class="mono" id="conn-port"></dd>
+      <dt>Protocol</dt><dd>SSL</dd>
+      <dt>Username</dt><dd class="mono" id="conn-user"></dd>
+    </dl>
+    <div id="quick" hidden>
+      <h3>ATAK quick connect</h3>
+      <p class="muted">In ATAK open <em>Settings → Network → Servers → Quick connect</em> and scan this code. It contains your password, so it is only shown after you enter it, and only on this screen.</p>
+      <form id="qr-form" class="inline-form">
+        <input type="password" name="password" autocomplete="current-password" placeholder="Your password" aria-label="Your password" required>
+        <button type="submit">Show code</button>
+      </form>
+      <div id="qr" class="qr"></div>
+    </div>
+    <h3>Connection packages</h3>
+    <p class="muted">Import the package in your app, then sign in with your username and password. iTAK's package includes a certificate for one device.</p>
+    <div class="inline-form">
+      <button type="button" data-pkg="ssl">ATAK / WinTAK / TAKX package</button>
+      <button type="button" data-pkg="itak">iTAK package</button>
+    </div>
+    <p class="error" id="pkg-error" role="alert"></p>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2>My devices</h2><span class="muted" id="devices-updated"></span></div>
+    <p class="muted">Devices connected with your account right now.</p>
+    <div id="devices"></div>
+  </div>
+
+  <div class="card">
+    <h2>My certificates</h2>
+    <p class="muted">Each device that enrolled gets its own certificate. If you lose a device, revoke its certificate so it can't connect. To renew one that is expiring, enroll the device again (sign in again in the app, or import a new connection package).</p>
+    <div id="certs"></div>
+  </div>
+
+  <div class="card">
+    <h2>Change password</h2>
+    <form id="password-form" class="stack">
+      <label>Current password <input type="password" name="current" autocomplete="current-password" required></label>
+      <label>New password <input type="password" name="new" autocomplete="new-password" minlength="8" required></label>
+      <label>Confirm new password <input type="password" name="confirm" autocomplete="new-password" minlength="8" required></label>
+      <p class="muted">Devices keep working with their certificates. Apps that sign in with your password, such as when they enroll again or download data packages, need the new one.</p>
+      <div class="inline-form"><button class="primary" type="submit">Change password</button></div>
+      <p class="error" id="password-error" role="alert"></p>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Groups</h2>
+    <p class="muted">Set by an administrator. You receive from the groups under <em>Receive</em> and send to those under <em>Send</em>.</p>
+    <dl class="kv">
+      <dt>Receive</dt><dd id="groups-in"></dd>
+      <dt>Send</dt><dd id="groups-out"></dd>
+    </dl>
+  </div>
+
+  <p class="muted version"><a href="https://github.com/brandongotak/EdgeTAK" target="_blank" rel="noopener">Source code</a> · AGPL-3.0</p>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/admin/vendor/qrcode.min.js"></script>
+<script src="/admin/account.js"></script>
+</body>
+</html>

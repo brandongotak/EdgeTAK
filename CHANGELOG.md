@@ -4,6 +4,39 @@ What changed in each EdgeTAK release. The release workflow publishes each
 version's section as its GitHub release notes, and the console's update card
 shows them, so add a section here before tagging a release.
 
+## v0.2.23 (2026-10-21)
+
+### Added
+- **One sign-in page for everyone** at `https://<host>:8446/`.
+  - **Where you land:** administrators go on to the admin console, everyone
+    else to their account page. One sign-in covers both, and signing out of
+    either ends both.
+  - **Old links keep working:** opening `/admin/` or `/account` while signed
+    out leads to the sign-in page and back. A user who opens an admin link
+    lands on their account page.
+  - **Admins** get a **My account** link in the console's top bar.
+- **Account page for users** at `https://<host>:8446/account`. Every user,
+  not only admins, can use it to:
+  - **Connect:** get their connection packages (ATAK, WinTAK, TAKX and iTAK)
+    and the ATAK quick-connect code. The code holds the password, so it's
+    only shown after they type the password.
+  - **See their devices:** what's connected with their account right now,
+    with battery and last report.
+  - **See their certificates:** each with its expiry and a warning when it's
+    expiring, plus **Revoke** for a lost device, which disconnects it.
+  - **Change their password,** which signs them out of every other session.
+  - **See their groups.**
+- **Security:**
+  - **No back door:** a user's sign-in never gives access to the admin
+    console or the TAK APIs. The account session only works on `/account`,
+    and only administrators get a console session.
+  - **Two-factor:** accounts with two-factor login need their code.
+  - **Failed sign-ins:** after repeated wrong passwords from one address,
+    sign-in is blocked for a few minutes, now for the console too.
+- **Finding the page:** the console's Connect tab shows the sign-in link to
+  share with users, and the sign-up page points new users to their account
+  page.
+
 ## v0.2.22 (2026-10-21)
 
 ### Added

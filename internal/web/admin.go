@@ -18,8 +18,8 @@ import (
 )
 
 func (s *Server) adminRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /admin/api/login", s.login)
-	mux.HandleFunc("POST /admin/api/logout", s.logout)
+	mux.HandleFunc("POST /admin/api/login", s.signIn)
+	mux.HandleFunc("POST /admin/api/logout", s.signOut)
 	mux.HandleFunc("GET /admin/api/me", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
 		writeJSON(w, http.StatusOK, map[string]any{"username": id.Username, "groups": id.Groups})
 	}))
@@ -69,52 +69,6 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 	}))
 }
 
-// ---- sessions ----
-
-func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	var req struct{ Username, Password, Code string }
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid request")
-		return
-	}
-	u, ok := s.Store.Authenticate(req.Username, req.Password)
-	if !ok || !u.Admin {
-		time.Sleep(500 * time.Millisecond)
-		s.Log.Warn("admin login failed", "user", req.Username, "remote", r.RemoteAddr)
-		jsonError(w, http.StatusUnauthorized, "invalid username or password, or not an administrator")
-		return
-	}
-	if u.TwoFactor() && !s.secondFactor(w, r, u.Username, req.Code) {
-		return
-	}
-	token := randomToken(32)
-	s.sessMu.Lock()
-	now := time.Now()
-	for k, v := range s.sessions {
-		if now.After(v.expires) {
-			delete(s.sessions, k)
-		}
-	}
-	s.sessions[token] = session{username: u.Username, expires: now.Add(sessionTTL)}
-	s.sessMu.Unlock()
-	http.SetCookie(w, &http.Cookie{
-		Name: sessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: r.TLS != nil,
-		SameSite: http.SameSiteStrictMode, MaxAge: int(sessionTTL.Seconds()),
-	})
-	s.Log.Info("admin login", "user", u.Username, "remote", r.RemoteAddr)
-	writeJSON(w, http.StatusOK, map[string]string{"username": u.Username})
-}
-
-func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie(sessionCookie); err == nil {
-		s.sessMu.Lock()
-		delete(s.sessions, c.Value)
-		s.sessMu.Unlock()
-	}
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1})
-	w.WriteHeader(http.StatusNoContent)
-}
-
 // ---- status & clients ----
 
 func (s *Server) status(w http.ResponseWriter, r *http.Request, _ *identity) {
@@ -128,7 +82,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request, _ *identity) {
 		"memory_mb": mem.Alloc >> 20, "goroutines": runtime.NumGoroutine(),
 		"listeners":  s.Addrs,
 		"ca_subject": s.CA.Cert.Subject.CommonName, "ca_expires": s.CA.Cert.NotAfter,
-		"public_cert": s.Public.Info(),
+		"public_cert": s.Public.Info(), "signin_url": strings.TrimSuffix(s.registerURL(""), "register"),
 	})
 }
 

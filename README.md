@@ -76,6 +76,12 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   messages. A device table lists each device's battery (with history and
   drain rate), last report, GPS fix and connection, worst problems first.
   System figures need Linux; elsewhere only EdgeTAK's own are shown.
+- **One sign-in page** at `https://<host>:8446/` for everyone: administrators
+  go on to the admin console, users to their **account page**, where they get
+  their connection packages and ATAK quick-connect code, see their connected
+  devices and certificates (with expiry), revoke the certificate of a lost
+  device, and change their password. Share the link from the console's
+  Connect tab.
 - **Chat log** (optional, off by default): records GeoChat messages sent
   through the server (All Chat Rooms, team and group chats, one-to-one
   messages and the console's own), with search, filters by conversation,

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#1f8f5c">
+<title>EdgeTAK sign in</title>
+<link rel="stylesheet" href="/admin/style.css">
+<link rel="manifest" href="/admin/manifest.json">
+<link rel="icon" href="/admin/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/admin/icons/apple-touch-icon.png">
+</head>
+<body>
+
+<section class="login">
+  <form id="signin-form" class="card login-card" hidden>
+    <div class="brand"><span class="logo">◆</span> <span id="server-name">EdgeTAK</span></div>
+    <p class="muted" id="signin-intro">Sign in with your TAK username and password.</p>
+    <label>Username <input name="username" autocomplete="username" required></label>
+    <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+    <label id="signin-code" hidden>Code from your authenticator app <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="123456 or a recovery code"></label>
+    <button class="primary" type="submit">Sign in</button>
+    <p class="error" id="signin-error" role="alert"></p>
+    <p class="muted version" id="signin-version"></p>
+    <p class="muted version"><span id="signup-link" hidden>No account? <a href="/register">Sign up</a> · </span><a href="https://github.com/brandongotak/EdgeTAK" target="_blank" rel="noopener">Source code</a> · AGPL-3.0</p>
+  </form>
+</section>
+
+<script src="/admin/login.js"></script>
+</body>
+</html>

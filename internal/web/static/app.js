@@ -93,12 +93,11 @@ const emptyRow = (cols, text) => `<tr class="empty"><td colspan="${cols}">${esc(
 
 // ---------- auth ----------
 
+// Signing in happens on the shared page at /, which brings admins back here.
 function showLogin() {
   clearInterval(pollTimer);
   clearInterval(mapTimer);
-  $('#shell').hidden = true;
-  $('#login').hidden = false;
-  $('#login-form [name=username]').focus();
+  location.replace('/?next=' + encodeURIComponent('/admin/' + location.hash));
 }
 
 async function start() {
@@ -108,7 +107,6 @@ async function start() {
   } catch {
     return;
   }
-  $('#login').hidden = true;
   $('#shell').hidden = false;
   await refreshStatus();
   selectTab(location.hash.slice(1) || 'dashboard');
@@ -116,36 +114,9 @@ async function start() {
   setMapVisible(!isNarrow() && prefs.get('map.open', true), false);
 }
 
-$('#login-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const f = new FormData(e.target);
-  $('#login-error').textContent = '';
-  const r = await fetch('api/login', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: f.get('username'), password: f.get('password'), code: f.get('code') || '' }),
-  });
-  if (!r.ok) {
-    const body = await r.json().catch(() => ({}));
-    if (body.need_code) { // two-factor: ask for the code, keep what was typed
-      const label = $('#login-code-label');
-      const first = label.hidden;
-      label.hidden = false;
-      label.querySelector('input').value = '';
-      label.querySelector('input').focus();
-      $('#login-error').textContent = first ? '' : body.error;
-      return;
-    }
-    $('#login-error').textContent = body.error || 'Sign in failed';
-    return;
-  }
-  e.target.reset();
-  $('#login-code-label').hidden = true;
-  start();
-});
-
 $('#logout').addEventListener('click', async () => {
   await fetch('api/logout', { method: 'POST', headers: { 'X-EdgeTAK': '1' } });
-  showLogin();
+  location.replace('/');
 });
 
 // ---------- tabs ----------
@@ -2720,6 +2691,9 @@ $('#send-package-form').addEventListener('submit', guard(async (e) => {
 
 async function loadConnect() {
   if (!$('#connect-host').value && status) $('#connect-host').value = status.public_host || location.hostname;
+  const url = status?.signin_url || location.origin + '/';
+  $('#account-url').textContent = url;
+  $('#account-url').href = url;
 }
 
 $('#connect-form').addEventListener('submit', guard(async (e) => {
@@ -2793,10 +2767,5 @@ $('#install-app').addEventListener('click', async () => {
     toast('In Safari, tap Share, then "Add to Home Screen"');
   }
 });
-
-// The version endpoint needs no login, so the sign-in page can show it too.
-fetch('/Marti/api/version').then((r) => (r.ok ? r.text() : '')).then((v) => {
-  $('#login-version').textContent = v;
-}).catch(() => {});
 
 start();

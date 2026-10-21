@@ -57,6 +57,7 @@ type Server struct {
 	video         videoState
 	selfUpdate    selfUpdateState
 	retention     retentionState
+	account       accountState
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -113,14 +114,12 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.retentionRoutes(mux)
 	s.certStatusRoutes(mux)
 	s.chatRoutes(mux)
+	s.accountRoutes(mux)
 
 	files := http.StripPrefix("/admin/", http.FileServerFS(staticSub()))
 	mux.HandleFunc("GET /admin/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		files.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/admin/", http.StatusFound)
 	})
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -135,6 +134,10 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 		}
 		if !tlsListener && isRegisterPath(r.URL.Path) && !isLoopback(r.RemoteAddr) {
 			http.Error(rec, "sign-up is only available over HTTPS", http.StatusForbidden)
+			return
+		}
+		if !tlsListener && isAccountPath(r.URL.Path) && !isLoopback(r.RemoteAddr) {
+			http.Error(rec, "your account page is only available over HTTPS", http.StatusForbidden)
 			return
 		}
 		if !s.rewriteMissionGUID(r) {
