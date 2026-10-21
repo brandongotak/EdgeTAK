@@ -10,6 +10,17 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.5.1 (2026-10-21)
+
+### Fixed
+- **Federation groups are harder to miss.** A TAK Server only passes traffic
+  between a federate and devices in the same group, so a federate without
+  one connects but shares nothing.
+  - **Make the TAK Server trust EdgeTAK** now asks before going ahead with no
+    groups, and says where to find your TAK devices' group.
+  - A connected federate that has sent for a minute and received nothing
+    shows a hint on its card explaining the group fix and the reconnect.
+
 ## v0.5.0 (2026-10-21)
 
 ### Added

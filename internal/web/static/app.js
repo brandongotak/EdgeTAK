@@ -3132,6 +3132,10 @@ async function loadFederation() {
     const into = f.inbound_groups.length ? `delivers to ${groupPills(f.inbound_groups)}` : 'delivers to every device';
     const recent = (st.recent || []).map((m) => `<tr><td>${esc(new Date(m.time).toLocaleTimeString())}</td><td>${m.direction === 'in' ? '⬇ in' : '⬆ out'}</td>
         <td class="mono">${esc(m.type)}</td><td>${esc(m.name || m.uid)}</td><td class="muted">${esc(m.route || '')}</td></tr>`).join('');
+    // Sending for a minute with nothing back is usually TAK Server routing nothing to a federate without its devices' group.
+    const quiet = f.enabled && st.state === 'connected' && st.out > 0 && !st.in && st.since && Date.now() - new Date(st.since) > 60000
+      ? 'Sending, but nothing has come back from this server. If it has devices online, a TAK Server needs this federate given the group its devices are in (e.g. __ANON__): edit it and use "Make the TAK Server trust EdgeTAK", or Manage Groups in its Federation Manager, then disable and enable it here to reconnect.'
+      : '';
     return `<div class="fed-item${f.enabled ? '' : ' dim'}">
       <div class="fed-head">
         <div><strong>${esc(f.name)}</strong> <span class="pill">${f.direction === 'outbound' ? 'outbound' : 'inbound'}</span>
@@ -3144,7 +3148,7 @@ async function loadFederation() {
         </div>
       </div>
       ${st.last_error ? `<div class="issue critical"><span class="status-icon critical" aria-hidden="true">✖</span> <span>${esc(st.last_error)}</span></div>` : ''}
-      ${st.warning ? `<div class="issue warning"><span class="status-icon warning" aria-hidden="true">▲</span> <span>${esc(st.warning)}</span></div>` : ''}
+      ${st.warning || quiet ? `<div class="issue warning"><span class="status-icon warning" aria-hidden="true">▲</span> <span>${esc(st.warning || quiet)}</span></div>` : ''}
       <div class="fed-meta muted">${share} · ${into}${st.remote_groups?.length ? ` · its groups ${groupPills(st.remote_groups)}` : ''}</div>
       ${f.enabled ? `<div class="fed-meta muted">${st.in ?? 0} in · ${st.out ?? 0} out${st.dropped ? ` · <span class="error">${st.dropped} dropped</span>` : ''} · ${plural(st.remote_contacts || 0, 'remote contact')}${st.last_health ? ` · last health check ${esc(ago(st.last_health))}` : ''}</div>` : ''}
       ${recent ? `<details data-recent="${esc(f.id)}"${openRecent.has(f.id) ? ' open' : ''}><summary>Recent messages</summary><div class="table-wrap"><table class="fed-recent"><tbody>${recent}</tbody></table></div></details>` : ''}
@@ -3294,14 +3298,15 @@ $('#fed-tak-token').addEventListener('click', async () => {
 
 $('#fed-tak-trust').addEventListener('click', async () => {
   const f = $('#fed-form');
+  const groups = f.tak_groups.value.split(',').map((g) => g.trim()).filter(Boolean);
+  if (!groups.length && !confirm('No TAK Server groups entered. The TAK Server only passes traffic between EdgeTAK and devices in the same group, so without one nothing is shared. Find your TAK devices\' group (e.g. __ANON__, or an LDAP group) under Connected Clients on the TAK Server.\n\nContinue without groups?')) return;
   $('#fed-tak-state').textContent = 'Signing in to the TAK Server…';
   try {
-    const groups = f.tak_groups.value.split(',').map((g) => g.trim()).filter(Boolean);
     const r = await api('POST', 'api/federation/tak/trust', { ...takLogin(), groups });
     f.tak_password.value = '';
     $('#fed-tak-state').textContent = `${r.uploaded ? 'EdgeTAK\'s CA was added to the TAK Server' : 'The TAK Server already trusted EdgeTAK\'s CA'}` +
       (r.groups?.length ? `, with groups ${r.groups.join(', ')}` : '') +
-      (r.federate_found ? `. The existing EdgeTAK federate there has groups: ${(r.federate_groups || []).join(', ') || 'none'}.` : '. The TAK Server adds EdgeTAK as a federate when it first connects.');
+      (r.federate_found ? `. The existing EdgeTAK federate there has groups: ${(r.federate_groups || []).join(', ') || 'none (nothing will be shared until it has one)'}. Disable and enable this federate to reconnect so the TAK Server applies them.` : '. The TAK Server adds EdgeTAK as a federate when it first connects.');
   } catch (ex) {
     $('#fed-tak-state').textContent = ex.message;
   }
