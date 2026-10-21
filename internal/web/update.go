@@ -52,6 +52,9 @@ func (s *Server) updateRequestFile() string {
 
 // updaterAvailable reports whether this server can update itself, and why not.
 func (s *Server) updaterAvailable() (bool, string) {
+	if os.Getenv("EDGETAK_CONTAINER") != "" {
+		return false, "EdgeTAK runs in a container: update it by pulling the new image (docker compose pull && docker compose up -d)."
+	}
 	if runtime.GOOS != "linux" {
 		return false, "Updating from the console works on servers installed with the Linux installer."
 	}

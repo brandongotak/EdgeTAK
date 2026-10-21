@@ -92,6 +92,8 @@ Pick the setup that fits:
 | Clients connect with | a connection package (zip) from the admin console | just address, username and password |
 | Needs | nothing extra | a domain name pointing at the server, and port 80 open |
 
+Prefer containers? See [Option C: Docker](#option-c-docker).
+
 ### One-line install (Raspberry Pi OS and other systemd Linux)
 
 On the device itself, run:
@@ -201,6 +203,43 @@ To use certificates you already have, for example from certbot, set
 `"public_cert": {"mode": "files", "cert_file": "...", "key_file": "..."}` in
 `/var/lib/edgetak/edgetak.json` and restart. The `edgetak` user must be able
 to read both files, and EdgeTAK reloads them when they change.
+
+### Option C: Docker
+
+Each release publishes an image for amd64, arm64 and 32-bit ARM (armv7):
+`ghcr.io/brandongotak/edgetak`. It is small (distroless, no shell), runs as
+a non-root user, and includes MediaMTX for video. Download
+[`docker-compose.yml`](docker-compose.yml), set `EDGETAK_PUBLIC_HOST`, and:
+
+```sh
+docker compose up -d
+docker compose logs edgetak     # the first admin password
+```
+
+The compose file's settings apply on every start:
+
+| Variable | Effect |
+|---|---|
+| `EDGETAK_PUBLIC_HOST` | the address devices use (an IP or a domain); **set this**, since the container cannot see the host's address |
+| `EDGETAK_LETSENCRYPT` | `1` (or an email address) for Let's Encrypt on 8446; needs a domain and port 80 |
+| `EDGETAK_NO_PLAINTEXT` | `1` turns off ports 8087 and 8080 |
+| `EDGETAK_VIDEO` | `1` runs the bundled MediaMTX; also map 8554, 1935 and 8890/udp |
+| `EDGETAK_SERVER_NAME`, `EDGETAK_LOG_LEVEL` | the server name; `debug` logging |
+
+Everything else lives in the `edgetak-data` volume (`/data`): users, the CA,
+packages, missions and `edgetak.json`. **Update** with
+`docker compose pull && docker compose up -d`; the console's update card
+does not apply in a container. MediaMTX updates from the Video tab do work,
+and are kept in the volume. **Forgotten password** (or a lost two-factor
+phone): `docker compose stop`, then
+`docker compose run --rm edgetak -reset-password admin` (or `-reset-2fa admin`),
+then `docker compose start`. A bind mount instead of the volume must be
+writable by user 65532.
+
+Through Docker's port mapping, the admin console's plain-HTTP port (8080) is
+not considered local, so use `https://<host>:8443/admin/` (or 8446 with Let's
+Encrypt). Raspberry Pis with a 32-bit ARMv6 CPU (Pi Zero, Pi 1) are not
+covered by the image; use the installer.
 
 ## First steps in the admin console
 
@@ -462,7 +501,7 @@ the starting points for the planned plugin API.
 - Federation with the official TAK Server, OpenTAKServer and FreeTAKServer
 - Data Sync extras: mission feeds, map layers, external data, mission hierarchy
 - CoT history and replay, video stream registry, custom device profiles
-- Packaging: deb/rpm, Docker, Windows service
+- Packaging: deb/rpm, Windows service
 
 ## License
 

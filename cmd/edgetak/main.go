@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"runtime/debug"
 	"strings"
 	"syscall"
@@ -39,6 +38,7 @@ func main() {
 	enableLE := flag.String("enable-letsencrypt", "", "use a Let's Encrypt certificate on the enrollment port, optionally registered to `email` (-enable-letsencrypt= for none); needs public_host to be a domain pointing here and port 80 reachable")
 	enableVideo := flag.Bool("enable-video", false, "connect EdgeTAK to a MediaMTX media server on this machine (the installer's --video sets it up)")
 	showVersion := flag.Bool("version", false, "print version and exit")
+	healthCheck := flag.Bool("healthcheck", false, "exit 0 if the running EdgeTAK answers on its enrollment port (container health check)")
 	flag.Parse()
 	// -enable-letsencrypt= (no email) still counts: Let's Encrypt no longer
 	// sends expiry emails, so the address is optional.
@@ -100,19 +100,19 @@ func main() {
 		cfg.Video = cfg.Video.Normalized()
 		cfg.Video.Enabled = true
 		if cfg.Video.MediaMTXBinary == "" {
-			exe := "mediamtx"
-			if runtime.GOOS == "windows" {
-				exe += ".exe"
-			}
-			if abs, err := filepath.Abs(filepath.Join(*dataDir, "mediamtx", exe)); err == nil {
-				cfg.Video.MediaMTXBinary = abs
-			}
+			cfg.Video.MediaMTXBinary = defaultMediaMTXBinary(*dataDir)
 		}
 		if err := config.Save(*cfgPath, cfg); err != nil {
 			fatal(err)
 		}
 		fmt.Printf("Video enabled: MediaMTX on RTSP %d, RTMP %d, SRT %d (restart EdgeTAK to apply)\n", cfg.Video.RTSPPort, cfg.Video.RTMPPort, cfg.Video.SRTPort)
 		return
+	}
+	if err := applyEnv(&cfg, *dataDir); err != nil {
+		fatal(err)
+	}
+	if *healthCheck {
+		os.Exit(healthcheck(cfg))
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: parseLevel(cfg.LogLevel)}))
 

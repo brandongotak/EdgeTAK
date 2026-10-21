@@ -65,6 +65,7 @@ type videoState struct {
 	bytesIn    uint64                // bytes received/sent by MediaMTX's current streams
 	bytesOut   uint64
 	polled     time.Time
+	warned     bool            // "unreachable" was logged
 	markers    map[string]bool // feed UIDs with a marker on devices
 }
 
@@ -889,13 +890,22 @@ func (s *Server) pollOnce(ctx context.Context, client *http.Client) {
 		s.video.live = live
 		s.video.bytesIn, s.video.bytesOut = bytesIn, bytesOut
 	}
+	// MediaMTX takes a few seconds to come up after EdgeTAK starts; only
+	// warn when it stays unreachable.
+	warn := errText != "" && !s.video.warned && time.Since(s.Started) > 20*time.Second
+	if warn {
+		s.video.warned = true
+	}
+	connected := errText == "" && (prevErr != "" || s.video.warned)
+	if connected {
+		s.video.warned = false
+	}
 	s.video.mu.Unlock()
-	if errText != prevErr {
-		if errText != "" {
-			s.Log.Warn("MediaMTX unreachable; is the edgetak-mediamtx service running?", "err", errText)
-		} else {
-			s.Log.Info("MediaMTX connected", "api", s.videoCfg().APIAddr)
-		}
+	if warn {
+		s.Log.Warn("MediaMTX unreachable: video is down (see the MediaMTX log on the Video tab)", "err", errText)
+	}
+	if connected {
+		s.Log.Info("MediaMTX connected", "api", s.videoCfg().APIAddr)
 	}
 }
 

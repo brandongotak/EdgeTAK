@@ -2,7 +2,7 @@
 #   git tag v0.2.0 && git push origin v0.2.0
 # Assets: the self-extracting Linux installer (under a fixed name for the
 # one-line install and a versioned name), install.sh, standalone binaries
-# and SHA256SUMS.
+# and SHA256SUMS. The container image goes to ghcr.io/brandongotak/edgetak.
 name: release
 
 on:
@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   release:
@@ -49,3 +50,31 @@ jobs:
           gh release create "$VERSION" --title "EdgeTAK $VERSION" --generate-notes \
             edgetak-installer.sh "edgetak-$VERSION-rpi-installer.sh" install.sh SHA256SUMS \
             $(cat binaries.txt)
+
+  image:
+    # Multi-arch container image; the Dockerfile cross-compiles, so no QEMU.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          build-args: VERSION=${{ github.ref_name }}
+          push: true
+          tags: |
+            ghcr.io/brandongotak/edgetak:${{ github.ref_name }}
+            ghcr.io/brandongotak/edgetak:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.version=${{ github.ref_name }}
