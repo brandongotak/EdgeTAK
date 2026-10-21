@@ -83,6 +83,9 @@ func New(cfg config.Config, dataDir, version string, log *slog.Logger) (*App, er
 		hosts = append([]string{a.Cfg.PublicHost}, hosts...)
 	}
 	validity := time.Duration(cfg.CertValidityDays) * 24 * time.Hour
+	if d := a.Store.CertValidityDays(); d > 0 { // set by an admin on the Certificates tab
+		validity = time.Duration(d) * 24 * time.Hour
+	}
 	if a.CA, err = pki.Load(filepath.Join(dataDir, "certs"), cfg.CertOrg, cfg.CertOrgUnit, hosts, validity); err != nil {
 		return nil, err
 	}

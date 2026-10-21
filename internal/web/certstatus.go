@@ -47,10 +47,14 @@ type clientCertView struct {
 }
 
 type certReport struct {
-	WarnDays int              `json:"warn_days"`
-	Server   []serverCertView `json:"server"`
-	Certs    []clientCertView `json:"certs"`
-	Summary  map[string]int   `json:"summary"` // valid, expiring, expired, revoked, replaced, attention
+	WarnDays int `json:"warn_days"`
+	// ValidityDays is how long new device certificates are valid; CapDays is
+	// set when the CA expires sooner, which limits them.
+	ValidityDays int              `json:"validity_days"`
+	CapDays      int              `json:"cap_days,omitempty"`
+	Server       []serverCertView `json:"server"`
+	Certs        []clientCertView `json:"certs"`
+	Summary      map[string]int   `json:"summary"` // valid, expiring, expired, revoked, replaced, attention
 }
 
 func daysLeft(now, t time.Time) int { return int(math.Floor(t.Sub(now).Hours() / 24)) }
@@ -68,7 +72,7 @@ func expiryState(now, t time.Time, warnDays int) string {
 func (s *Server) certReport() certReport {
 	now := time.Now()
 	warn := s.Store.CertWarnDays()
-	rep := certReport{WarnDays: warn, Server: []serverCertView{}, Certs: []clientCertView{}, Summary: map[string]int{}}
+	rep := certReport{WarnDays: warn, ValidityDays: s.validityDays(), Server: []serverCertView{}, Certs: []clientCertView{}, Summary: map[string]int{}}
 
 	ports := func(names ...string) string {
 		var out []string
@@ -84,6 +88,9 @@ func (s *Server) certReport() certReport {
 		rep.Server = append(rep.Server, v)
 	}
 	ca := s.CA.Cert
+	if left := daysLeft(now, ca.NotAfter); left < rep.ValidityDays {
+		rep.CapDays = max(left, 0)
+	}
 	add(serverCertView{Kind: "ca", Name: "Certificate authority", Subject: ca.Subject.CommonName, Ports: "signs every device and server certificate",
 		Renewal: "Not renewed automatically. Replacing the CA means every device has to enroll again."}, ca.NotAfter, max(warn, caWarnDays))
 	if leaf := s.CA.ServerCert.Leaf; leaf != nil {
@@ -226,15 +233,28 @@ func (s *Server) certStatusRoutes(mux *http.ServeMux) {
 	}))
 	mux.HandleFunc("PUT /admin/api/certs/settings", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
 		var req struct {
-			WarnDays int `json:"warn_days"`
+			WarnDays     int  `json:"warn_days"`
+			ValidityDays *int `json:"validity_days"` // optional: lifetime of new client certificates
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req); err != nil || req.WarnDays < 1 || req.WarnDays > 365 {
 			jsonError(w, http.StatusBadRequest, "warn_days must be 1 to 365")
 			return
 		}
+		if v := req.ValidityDays; v != nil && (*v < 1 || *v > 3650) {
+			jsonError(w, http.StatusBadRequest, "certificates can be valid for 1 to 3650 days")
+			return
+		}
 		if err := s.Store.SetCertWarnDays(req.WarnDays); err != nil {
 			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		if v := req.ValidityDays; v != nil && *v != s.validityDays() {
+			if err := s.Store.SetCertValidityDays(*v); err != nil {
+				jsonError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			s.CA.SetClientValidity(time.Duration(*v) * 24 * time.Hour)
+			s.Log.Info("device certificate validity changed", "admin", id.Username, "days", *v)
 		}
 		s.Log.Info("certificate warning period changed", "admin", id.Username, "days", req.WarnDays)
 		w.WriteHeader(http.StatusNoContent)
@@ -262,3 +282,6 @@ func (s *Server) certWatchStart(ctx context.Context) {
 		}
 	}()
 }
+
+// validityDays is how long newly issued device certificates are valid.
+func (s *Server) validityDays() int { return int(s.CA.ClientValidity().Hours() / 24) }

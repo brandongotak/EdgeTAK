@@ -36,6 +36,8 @@ button, .button {
   border: 1px solid var(--line); background: var(--panel-2); color: var(--text); text-decoration: none; display: inline-block;
 }
 button:hover, .button:hover { border-color: var(--muted); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button:disabled:hover { border-color: var(--line); }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
 button.ghost, .button.ghost { background: transparent; }
 button.danger { color: var(--danger); background: transparent; }
@@ -246,6 +248,11 @@ td.wrap { white-space: normal; max-width: 320px; }
 .issue { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: var(--panel); }
 .issue.critical { border-color: var(--danger); }
 .issue.warning { border-color: var(--warn); }
+.profile-dialog { width: min(720px, calc(100vw - 24px)); }
+.profile-prefs { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.pref-row { display: grid; grid-template-columns: 2fr 1.2fr 2fr auto; gap: 6px; align-items: center; }
+.profile-file { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+@media (max-width: 700px) { .pref-row { grid-template-columns: 1fr 1fr; } }
 /* Emergency alerts: a banner above every tab, and a pulsing map marker. */
 .emergency-banner { position: sticky; top: 0; z-index: 900; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--radius);
   background: #b3261e; color: #fff; box-shadow: 0 4px 18px #0006; animation: em-flash 1.4s ease-in-out infinite; }
@@ -301,6 +308,8 @@ button.pill.chat-room.direct { border-style: dashed; }
 .cert-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0 4px; }
 #cert-tiles .stat.alert { border-color: var(--warn); }
 #cert-warn-form label { flex-direction: row; align-items: center; gap: 6px; }
+.cert-settings { margin-bottom: 4px; gap: 10px 24px; }
+#cert-warn-form > label { flex: 0 0 auto; }
 .days-input { width: 72px; }
 td.renewal { min-width: 260px; white-space: normal; }
 tr.dim td { opacity: .6; }

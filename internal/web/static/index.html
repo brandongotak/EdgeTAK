@@ -212,6 +212,47 @@
           <tbody></tbody>
         </table></div>
       </div>
+      <div class="card" id="profiles-card">
+        <div class="card-head"><h2>Device profiles</h2><button type="button" class="primary small" id="profile-add">+ New profile</button></div>
+        <p class="muted">Settings and files sent to the TAK devices of a group's members: ATAK settings, <code>.pref</code> files, plugin APKs, map sources, overlays. Devices get them when they enroll, and changed ones each time they connect. <strong>Send now</strong> reaches devices that are connected already.</p>
+        <div class="table-wrap"><table id="profiles-table">
+          <thead><tr><th>Profile</th><th>Groups</th><th>Sent</th><th>Contents</th><th>Reaches</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <dialog id="profile-dialog" class="card dialog profile-dialog">
+        <form method="dialog" id="profile-form" class="stack wide">
+          <div class="card-head"><h2 id="profile-dialog-title">New profile</h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
+          <label>Name <input name="name" required maxlength="100" placeholder="e.g. Cyan team settings"></label>
+          <label class="check"><input type="checkbox" name="active"> Active</label>
+          <div class="inline-form">
+            <label class="check"><input type="checkbox" name="on_enrollment"> When a device enrolls</label>
+            <label class="check"><input type="checkbox" name="on_connect"> When a device connects (changes since its last sync)</label>
+          </div>
+          <div>
+            <div class="muted picker-label">Groups (none selected = every user)</div>
+            <div id="profile-groups" class="group-picker"></div>
+          </div>
+          <div>
+            <div class="muted picker-label">ATAK settings</div>
+            <div id="profile-prefs" class="profile-prefs"></div>
+            <button type="button" class="small" id="profile-pref-add">+ Add setting</button>
+            <p class="muted">Use ATAK preference keys, for example <code>locationTeam</code> = <code>Cyan</code> or <code>atakRoleType</code> = <code>Team Lead</code>. To find others, export settings from ATAK and look in the <code>.pref</code> file, or upload a whole <code>.pref</code> file below.</p>
+          </div>
+          <div id="profile-files-wrap">
+            <div class="muted picker-label">Files</div>
+            <div id="profile-files"></div>
+            <div class="inline-form">
+              <input type="file" id="profile-file">
+              <button type="button" class="small" id="profile-upload">Upload</button>
+              <span class="muted" id="profile-upload-state"></span>
+            </div>
+          </div>
+          <p class="muted" id="profile-files-later" hidden>Save the profile first, then add files.</p>
+          <p class="error" id="profile-error" role="alert"></p>
+          <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Close</button><button class="primary" value="save">Save</button></div>
+        </form>
+      </dialog>
     </section>
 
     <section id="tab-signups" class="tab" hidden>
@@ -283,13 +324,13 @@
         </table></div>
       </div>
       <div class="card">
-        <div class="card-head">
-          <h2>Device certificates</h2>
-          <form id="cert-warn-form" class="inline-form">
-            <label>Warn <input type="number" name="warn_days" min="1" max="365" required class="days-input"> days before expiry</label>
-            <button class="small" type="submit">Save</button>
-          </form>
-        </div>
+        <div class="card-head"><h2>Device certificates</h2></div>
+        <form id="cert-warn-form" class="inline-form cert-settings">
+          <label class="inline-label">New certificates are valid for <input type="number" name="validity_days" min="1" max="3650" required class="days-input"> days</label>
+          <label class="inline-label">Warn <input type="number" name="warn_days" min="1" max="365" required class="days-input"> days before they expire</label>
+          <button class="small" type="submit">Save</button>
+        </form>
+        <p class="muted" id="cert-validity-note"></p>
         <div class="stats" id="cert-tiles"></div>
         <div class="cert-filter">
           <div class="segmented" role="group" aria-label="Show" id="cert-filter">

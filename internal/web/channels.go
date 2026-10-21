@@ -1,14 +1,10 @@
 package web
 
 import (
-	"archive/zip"
-	"bytes"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"slices"
-	"time"
 
 	"github.com/brandongotak/EdgeTAK/internal/store"
 )
@@ -126,50 +122,6 @@ func (s *Server) applyActive(w http.ResponseWriter, id *identity, active map[str
 	s.applyUserGroups(id.Username)
 	s.Log.Info("active groups changed", "user", id.Username, "groups", active)
 	w.WriteHeader(http.StatusOK)
-}
-
-// deviceProfile returns the profile data package the official server sends
-// when its group cache is enabled: enable-channels.pref switches on ATAK's
-// Channels button and lists this server in it. ATAK imports it on receipt.
-func (s *Server) deviceProfile(name string) handlerFunc {
-	return func(w http.ResponseWriter, r *http.Request, id *identity) {
-		if id.Anonymous {
-			w.WriteHeader(http.StatusNoContent) // nothing to choose without an account
-			return
-		}
-		host := r.Host
-		if h, _, err := net.SplitHostPort(r.Host); err == nil {
-			host = h
-		}
-		pref := `<?xml version='1.0' standalone='yes'?><preferences>` +
-			`<preference version="1" name="com.atakmap.app.civ_preferences">` + channelPrefEntries(host) +
-			`</preference></preferences>`
-		manifest := `<MissionPackageManifest version="2"><Configuration>` +
-			`<Parameter name="uid" value="ProfileMissionPackage-` + uuid() + `"/>` +
-			`<Parameter name="name" value="` + name + `"/>` +
-			`<Parameter name="onReceiveImport" value="true"/>` +
-			`<Parameter name="onReceiveDelete" value="true"/>` +
-			`</Configuration><Contents>` +
-			`<Content ignore="false" zipEntry="file0/enable-channels.pref"/>` +
-			`</Contents></MissionPackageManifest>`
-		var buf bytes.Buffer
-		zw := zip.NewWriter(&buf)
-		for _, f := range []struct{ name, data string }{{"MANIFEST/manifest.xml", manifest}, {"file0/enable-channels.pref", pref}} {
-			fw, err := zw.CreateHeader(&zip.FileHeader{Name: f.name, Method: zip.Deflate, Modified: time.Now()})
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			io.WriteString(fw, f.data)
-		}
-		if err := zw.Close(); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/zip")
-		w.Header().Set("Content-Disposition", "attachment; filename=profile.zip")
-		w.Write(buf.Bytes())
-	}
 }
 
 // channelPrefEntries are the ATAK preferences that enable Channels for host

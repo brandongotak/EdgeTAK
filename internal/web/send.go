@@ -181,40 +181,11 @@ func (s *Server) sendPackage(w http.ResponseWriter, r *http.Request, id *identit
 		jsonError(w, http.StatusBadRequest, "no connected devices match the selected recipients")
 		return
 	}
-	// Sending a file shares it: recipients must be able to download it.
-	share := slices.Clone(p.Groups)
-	for _, c := range targets {
-		for _, g := range c.InGroups() {
-			if !slices.Contains(share, g) {
-				share = append(share, g)
-			}
-		}
-	}
-	if len(share) != len(p.Groups) {
-		if err := s.Store.UpdatePackage(p.Hash, func(p *store.Package) { p.Groups = share }); err != nil {
-			jsonError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-	}
-
 	from := firstNonEmpty(strings.TrimSpace(req.From), s.Cfg.ServerName)
-	events := map[string]*cot.Event{} // one per transport; the download URL differs
-	delivered, skipped := 0, 0
-	for _, c := range targets {
-		ev, ok := events[c.Transport]
-		if !ok {
-			url := s.contentURL(c.Transport, p.Hash)
-			if url != "" {
-				ev = s.fileShareEvent(from, url, p)
-			}
-			events[c.Transport] = ev
-		}
-		if ev == nil {
-			skipped++
-			continue
-		}
-		c.Send(ev)
-		delivered++
+	delivered, skipped, err := s.offerPackage(p, targets, from)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	s.history.add(sendRecord{Time: time.Now().UTC(), Admin: id.Username, Kind: "package", Summary: p.Name,
 		To: describeTarget(req.To), Delivered: delivered})
@@ -251,4 +222,41 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return string([]rune(s)[:n]) + "…"
+}
+
+// offerPackage offers a data package to devices (a file transfer request
+// they download over their own connection).
+func (s *Server) offerPackage(p *store.Package, targets []*router.Client, from string) (delivered, skipped int, err error) {
+	// Sending a file shares it: recipients must be able to download it.
+	share := slices.Clone(p.Groups)
+	for _, c := range targets {
+		for _, g := range c.InGroups() {
+			if !slices.Contains(share, g) {
+				share = append(share, g)
+			}
+		}
+	}
+	if len(share) != len(p.Groups) {
+		if err := s.Store.UpdatePackage(p.Hash, func(p *store.Package) { p.Groups = share }); err != nil {
+			return 0, 0, err
+		}
+		p.Groups = share
+	}
+	events := map[string]*cot.Event{} // one per transport; the download URL differs
+	for _, c := range targets {
+		ev, ok := events[c.Transport]
+		if !ok {
+			if url := s.contentURL(c.Transport, p.Hash); url != "" {
+				ev = s.fileShareEvent(from, url, p)
+			}
+			events[c.Transport] = ev
+		}
+		if ev == nil {
+			skipped++
+			continue
+		}
+		c.Send(ev)
+		delivered++
+	}
+	return delivered, skipped, nil
 }

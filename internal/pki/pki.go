@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	pkcs12 "software.sslmate.com/src/go-pkcs12"
@@ -33,7 +34,7 @@ type CA struct {
 	key        crypto.Signer
 	ServerCert tls.Certificate
 	org, ou    string
-	validity   time.Duration
+	validity   atomic.Int64 // client certificate lifetime (time.Duration)
 }
 
 // Load opens (or creates) the CA in dir and ensures the server certificate
@@ -42,7 +43,8 @@ func Load(dir, org, ou string, hosts []string, validity time.Duration) (*CA, err
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	ca := &CA{org: org, ou: ou, validity: validity}
+	ca := &CA{org: org, ou: ou}
+	ca.SetClientValidity(validity)
 	caCert, caKey := filepath.Join(dir, "ca.pem"), filepath.Join(dir, "ca-key.pem")
 	if _, err := os.Stat(caCert); errors.Is(err, os.ErrNotExist) {
 		if err := ca.create(caCert, caKey); err != nil {
@@ -152,6 +154,13 @@ func (ca *CA) Pool() *x509.CertPool {
 	return p
 }
 
+// ClientValidity is how long newly issued client certificates are valid.
+func (ca *CA) ClientValidity() time.Duration { return time.Duration(ca.validity.Load()) }
+
+// SetClientValidity changes the lifetime of client certificates issued from
+// now on; existing certificates keep theirs.
+func (ca *CA) SetClientValidity(d time.Duration) { ca.validity.Store(int64(d)) }
+
 // SignCSR issues a client certificate for cn using the CSR's public key. The
 // subject is set by the server, not taken from the CSR.
 func (ca *CA) SignCSR(csr *x509.CertificateRequest, cn string) (*x509.Certificate, error) {
@@ -177,11 +186,16 @@ func (ca *CA) issueClient(pub any, cn string) (*x509.Certificate, error) {
 		return nil, err
 	}
 	now := time.Now()
+	// A certificate cannot outlive the CA that signed it.
+	notAfter := now.Add(ca.ClientValidity())
+	if notAfter.After(ca.Cert.NotAfter) {
+		notAfter = ca.Cert.NotAfter
+	}
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
 		Subject:      pkix.Name{CommonName: cn, Organization: []string{ca.org}, OrganizationalUnit: []string{ca.ou}},
 		NotBefore:    now.Add(-time.Hour),
-		NotAfter:     now.Add(ca.validity),
+		NotAfter:     notAfter,
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}

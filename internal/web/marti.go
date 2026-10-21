@@ -82,7 +82,7 @@ func (s *Server) tlsConfig(w http.ResponseWriter, r *http.Request, _ *identity) 
 		`<ns2:certificateConfig xmlns="http://bbn.com/marti/xml/config" xmlns:ns2="com.bbn.marti.config">`+
 		`<nameEntries><nameEntry name="O" value="%s"/><nameEntry name="OU" value="%s"/></nameEntries>`+
 		`<validityDays>%d</validityDays></ns2:certificateConfig>`,
-		xmlEscape(s.Cfg.CertOrg), xmlEscape(s.Cfg.CertOrgUnit), s.Cfg.CertValidityDays)
+		xmlEscape(s.Cfg.CertOrg), xmlEscape(s.Cfg.CertOrgUnit), int(s.CA.ClientValidity().Hours()/24))
 }
 
 // issueFromCSR signs the CSR in the request body for the caller and records

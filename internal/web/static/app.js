@@ -126,7 +126,7 @@ const loaders = {
   dashboard: loadDashboard,
   health: loadHealth,
   users: loadUsers,
-  groups: loadGroups,
+  groups: () => Promise.all([loadGroups(), loadProfiles()]),
   signups: loadSignups,
   certs: loadCerts,
   packages: loadPackages,
@@ -1977,7 +1977,12 @@ async function loadCerts() {
   certBadge(certStatus);
   $('#cert-issues').innerHTML = issueList(certStatus.issues);
   const form = $('#cert-warn-form');
-  if (document.activeElement !== form.warn_days) form.warn_days.value = rep.warn_days;
+  if (!form.contains(document.activeElement)) {
+    form.warn_days.value = rep.warn_days;
+    form.validity_days.value = rep.validity_days;
+  }
+  $('#cert-validity-note').textContent = 'The validity applies to certificates issued from now on (enrollment, iTAK packages, Issue .p12); existing ones keep their dates, and devices get a new one when they enroll again.'
+    + (rep.cap_days != null && rep.cap_days < rep.validity_days ? ` The certificate authority expires in ${plural(rep.cap_days, 'day')}, so new certificates end then.` : '');
 
   // Cells with several parts get one wrapper so phone layouts (one flex row per cell) keep them together.
   $('#server-certs-table tbody').innerHTML = rep.server.map((c) => `<tr>
@@ -2029,8 +2034,9 @@ $('#cert-hide-replaced').addEventListener('change', (e) => { prefs.set('certs.hi
 
 $('#cert-warn-form').addEventListener('submit', guard(async (e) => {
   e.preventDefault();
-  await api('PUT', 'api/certs/settings', { warn_days: Number(e.target.warn_days.value) });
-  toast('Warning period saved');
+  await api('PUT', 'api/certs/settings', { warn_days: Number(e.target.warn_days.value), validity_days: Number(e.target.validity_days.value) });
+  e.target.querySelector('button').focus(); // leave the fields so the saved values show
+  toast('Certificate settings saved');
   loadCerts();
 }));
 
@@ -2933,6 +2939,152 @@ $('#install-app').addEventListener('click', async () => {
     toast('In Safari, tap Share, then "Add to Home Screen"');
   }
 });
+
+// ---------- device profiles ----------
+
+let profiles = [];
+let editingProfile = null; // id, or null for a new one
+
+const PREF_TYPES = [['string', 'text'], ['boolean', 'true / false'], ['integer', 'whole number'], ['long', 'long number'], ['float', 'decimal']];
+
+async function loadProfiles() {
+  const [list, groups] = await Promise.all([api('GET', 'api/profiles'), api('GET', 'api/groups')]);
+  profiles = list;
+  allGroups = groups;
+  $('#profiles-table tbody').innerHTML = profiles.map((p) => {
+    const when = [p.on_enrollment && 'on enrollment', p.on_connect && 'on connect'].filter(Boolean);
+    const contents = [p.prefs.length && plural(p.prefs.length, 'setting'), p.files.length && plural(p.files.length, 'file')].filter(Boolean).join(', ') || '<span class="muted">empty</span>';
+    return `<tr class="${p.active ? '' : 'dim'}">
+      <td><strong>${esc(p.name)}</strong>${p.active ? '' : ' <span class="pill">off</span>'}<div class="muted">updated ${esc(date(p.updated))}</div></td>
+      <td>${p.groups.length ? groupPills(p.groups) : '<span class="muted">every user</span>'}</td>
+      <td>${when.map((w) => `<span class="pill">${w}</span>`).join(' ') || '<span class="muted">only with Send now</span>'}</td>
+      <td>${contents}${p.files.length ? `<div class="muted">${esc(p.files.map((f) => f.name).join(', '))}</div>` : ''}</td>
+      <td>${plural(p.users, 'user')}<div class="muted">${p.connected} connected now</div></td>
+      <td class="actions">
+        <button class="small" data-prof="edit" data-id="${esc(p.id)}">Edit</button>
+        <button class="small primary" data-prof="send" data-id="${esc(p.id)}"${p.active && p.connected ? '' : ' disabled'} title="${!p.active ? 'Turn the profile on first' : p.connected ? 'Send to the connected devices of its users now' : 'None of its users have a device connected'}">Send now</button>
+        <a class="button small" href="api/profiles/${encodeURIComponent(p.id)}/package" title="The package devices receive">Download</a>
+        <button class="small danger" data-prof="delete" data-id="${esc(p.id)}">Delete</button>
+      </td></tr>`;
+  }).join('') || emptyRow(6, 'No device profiles yet');
+}
+
+function prefRow(pr = { key: '', type: 'string', value: '' }) {
+  return `<div class="pref-row">
+    <input name="pref-key" placeholder="setting, e.g. locationTeam" value="${esc(pr.key)}" aria-label="Setting">
+    <select name="pref-type" aria-label="Type">${PREF_TYPES.map(([v, t]) => `<option value="${v}"${v === pr.type ? ' selected' : ''}>${t}</option>`).join('')}</select>
+    <input name="pref-value" placeholder="value" value="${esc(pr.value)}" aria-label="Value">
+    <button type="button" class="small ghost" data-pref-remove title="Remove">✕</button>
+  </div>`;
+}
+
+function renderProfileFiles(p) {
+  $('#profile-files').innerHTML = p?.files.length ? p.files.map((f) => `<div class="profile-file">
+      <span><strong>${esc(f.name)}</strong> <span class="muted">${fmtSize(f.size)}</span></span>
+      <span><a class="button small" href="api/profiles/${encodeURIComponent(p.id)}/files/${encodeURIComponent(f.name)}">Download</a>
+      <button type="button" class="small danger" data-file-remove="${esc(f.name)}">Remove</button></span>
+    </div>`).join('') : '<p class="muted">No files yet.</p>';
+}
+
+function openProfileDialog(p) {
+  editingProfile = p?.id || null;
+  const f = $('#profile-form');
+  f.reset();
+  $('#profile-error').textContent = '';
+  $('#profile-upload-state').textContent = '';
+  $('#profile-dialog-title').textContent = p ? `Edit ${p.name}` : 'New profile';
+  f.name.value = p?.name || '';
+  f.active.checked = p ? p.active : true;
+  f.on_enrollment.checked = p ? p.on_enrollment : true;
+  f.on_connect.checked = p ? p.on_connect : true;
+  renderChips('#profile-groups', p?.groups || []);
+  $('#profile-prefs').innerHTML = (p?.prefs || []).map(prefRow).join('');
+  $('#profile-files-wrap').hidden = !p;
+  $('#profile-files-later').hidden = !!p;
+  renderProfileFiles(p);
+  $('#profile-dialog').showModal();
+}
+
+function profileBody() {
+  const f = $('#profile-form');
+  const prefs = [...document.querySelectorAll('#profile-prefs .pref-row')].map((r) => ({
+    key: r.querySelector('[name=pref-key]').value, type: r.querySelector('[name=pref-type]').value, value: r.querySelector('[name=pref-value]').value,
+  })).filter((p) => p.key.trim());
+  return { name: f.name.value, active: f.active.checked, on_enrollment: f.on_enrollment.checked, on_connect: f.on_connect.checked, groups: checkedIn('#profile-groups'), prefs };
+}
+
+$('#profile-add').addEventListener('click', () => openProfileDialog(null));
+$('#profile-pref-add').addEventListener('click', () => {
+  $('#profile-prefs').insertAdjacentHTML('beforeend', prefRow());
+  $('#profile-prefs .pref-row:last-child [name=pref-key]').focus();
+});
+$('#profile-prefs').addEventListener('click', (e) => { if (e.target.closest('[data-pref-remove]')) e.target.closest('.pref-row').remove(); });
+
+$('#profile-form').addEventListener('submit', async (e) => {
+  if (e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  $('#profile-error').textContent = '';
+  try {
+    const p = await api(editingProfile ? 'PUT' : 'POST', editingProfile ? `api/profiles/${encodeURIComponent(editingProfile)}` : 'api/profiles', profileBody());
+    toast('Profile saved');
+    await loadProfiles();
+    if (!editingProfile) { // a new profile can take files now
+      openProfileDialog(profiles.find((x) => x.id === p.id) || p);
+      return;
+    }
+    $('#profile-dialog').close();
+  } catch (ex) {
+    $('#profile-error').textContent = ex.message;
+  }
+});
+
+$('#profile-upload').addEventListener('click', guard(async () => {
+  const input = $('#profile-file');
+  if (!editingProfile || !input.files.length) throw new Error('Choose a file first');
+  const file = input.files[0];
+  const fd = new FormData();
+  fd.append('file', file);
+  $('#profile-upload-state').textContent = `Uploading ${file.name} (${fmtSize(file.size)})…`;
+  try {
+    const p = await api('POST', `api/profiles/${encodeURIComponent(editingProfile)}/files`, fd);
+    input.value = '';
+    $('#profile-upload-state').textContent = `${file.name} added`;
+    renderProfileFiles(p);
+    loadProfiles();
+  } catch (ex) {
+    $('#profile-upload-state').textContent = '';
+    throw ex;
+  }
+}));
+
+$('#profile-files').addEventListener('click', guard(async (e) => {
+  const name = e.target.closest('[data-file-remove]')?.dataset.fileRemove;
+  if (!name || !confirm(`Remove ${name} from the profile? Devices that already have it keep it.`)) return;
+  const p = await api('DELETE', `api/profiles/${encodeURIComponent(editingProfile)}/files/${encodeURIComponent(name)}`);
+  renderProfileFiles(p);
+  loadProfiles();
+}));
+
+$('#profiles-table').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('[data-prof]');
+  if (!b) return;
+  const p = profiles.find((x) => x.id === b.dataset.id);
+  switch (b.dataset.prof) {
+    case 'edit':
+      return openProfileDialog(p);
+    case 'send': {
+      if (!confirm(`Send ${p.name} to ${plural(p.connected, 'connected device')} now? ATAK imports it as soon as it arrives.`)) return;
+      const r = await api('POST', `api/profiles/${encodeURIComponent(p.id)}/send`);
+      toast(`Sent to ${plural(r.delivered, 'device')}`);
+      return;
+    }
+    case 'delete':
+      if (!confirm(`Delete the profile ${p.name}? Devices keep the settings and files they already received.`)) return;
+      await api('DELETE', `api/profiles/${encodeURIComponent(p.id)}`);
+      toast('Profile deleted');
+      return loadProfiles();
+  }
+}));
 
 // ---------- emergency alerts ----------
 //

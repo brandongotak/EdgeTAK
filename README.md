@@ -82,6 +82,14 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   devices and certificates (with expiry), revoke the certificate of a lost
   device, and change their password. Share the link from the console's
   Connect tab.
+- **Device profiles** (Groups tab): settings and files sent to the TAK
+  devices of a group's members, or of every user, as on the official server.
+  - **Contents:** ATAK settings (entered as key, type and value), `.pref`
+    files, plugin APKs, map source XML, overlays, up to 512 MB per file.
+  - **When:** devices get them when they enroll, and each time they connect
+    if a profile changed since their last sync. **Send now** reaches devices
+    that are already connected.
+  - **Download** shows the exact package devices receive.
 - **Emergency alerts:** when someone presses ATAK's emergency button (911
   Alert, Ring The Bell, In Contact, Geo-fence Breached, custom), every open
   console shows a red banner and sounds an alarm until an admin acknowledges
@@ -486,7 +494,7 @@ restart after editing. Set any listener address (`tcp_addr`, `tls_addr`,
 | `public_cert` | off | `mode`: `letsencrypt` or `files`; also `email`, `domains`, `cert_file`, `key_file`, `listeners` (default `["enroll"]`) |
 | `anonymous_group` | `__ANON__` | group for ungrouped users and plaintext clients |
 | `allow_anonymous_http` | `true` | plaintext Marti API without login |
-| `cert_validity_days` | `365` | client certificates |
+| `cert_validity_days` | `365` | client certificates; an admin can change it on the Certificates tab, which then takes precedence |
 | `truststore_password` | `atakatak` | password of the `.p12` files handed to clients |
 | `send_latest_sa` | `true` | send peers' latest positions to new clients |
 | `idle_timeout_seconds` | `180` | disconnect silent stream clients |

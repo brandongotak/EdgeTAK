@@ -170,12 +170,17 @@ type db struct {
 	Retention RetentionSettings `json:"retention"`
 
 	CertWarnDays int `json:"cert_warn_days"` // flag certificates this long before they expire (0 = default)
+	// CertValidityDays overrides the config's cert_validity_days for client
+	// certificates issued from now on (0 = use the config).
+	CertValidityDays int `json:"cert_validity_days,omitempty"`
 
 	ChatLog ChatLogSettings `json:"chat_log"`
 
 	VideoRecording RecordingSettings `json:"video_recording"`
 
 	Emergencies []*Emergency `json:"emergencies"` // oldest first, the last maxEmergencies
+
+	DeviceProfiles map[string]*DeviceProfile `json:"device_profiles"` // by id
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -324,7 +329,7 @@ type Store struct {
 // Open loads the store at path, creating an empty one if needed.
 func Open(path string) (*Store, error) {
 	s := &Store{path: path, db: db{Users: map[string]*User{}, Certs: map[string]*Cert{}, Packages: map[string]*Package{}, Groups: map[string]*Group{},
-		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, NextSeq: 1}}
+		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, DeviceProfiles: map[string]*DeviceProfile{}, NextSeq: 1}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, s.save()
@@ -355,6 +360,9 @@ func Open(path string) (*Store, error) {
 	}
 	if s.db.VideoFeeds == nil {
 		s.db.VideoFeeds = map[string]*VideoFeed{}
+	}
+	if s.db.DeviceProfiles == nil {
+		s.db.DeviceProfiles = map[string]*DeviceProfile{}
 	}
 	// Groups used to exist only as names on users; give them records.
 	for _, u := range s.db.Users {
@@ -620,6 +628,20 @@ func (s *Store) CertWarnDays() int {
 		return DefaultCertWarnDays
 	}
 	return s.db.CertWarnDays
+}
+
+// CertValidityDays is the admin's client certificate lifetime (0 = not set).
+func (s *Store) CertValidityDays() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.CertValidityDays
+}
+
+func (s *Store) SetCertValidityDays(n int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.CertValidityDays = n
+	return s.save()
 }
 
 func (s *Store) SetCertWarnDays(n int) error {
@@ -1036,12 +1058,18 @@ func (s *Store) UpdateGroup(name, newName, description string) ([]string, error)
 				p.Groups[i] = newName
 			}
 		}
+		for _, p := range s.db.DeviceProfiles {
+			if i := slices.Index(p.Groups, name); i >= 0 {
+				p.Groups[i] = newName
+			}
+		}
 	}
 	return affected, s.save()
 }
 
 // DeleteGroup removes a group and every membership in it. It returns the
-// users whose memberships changed.
+// users whose memberships changed. Device profiles keep the name: an empty
+// group list means everyone, so dropping it would widen who gets them.
 func (s *Store) DeleteGroup(name string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1366,4 +1394,106 @@ func (s *Store) UpdateEmergency(id string, fn func(e *Emergency)) (Emergency, er
 		}
 	}
 	return Emergency{}, ErrNotFound
+}
+
+// ---- device profiles ----
+
+// DeviceProfile is a set of settings and files sent to the TAK clients of
+// users in its groups (everyone when Groups is empty): when a device enrolls,
+// when it connects, or on demand. Files live in <data>/profiles/<id>/.
+type DeviceProfile struct {
+	ID           string        `json:"id"`
+	Name         string        `json:"name"`
+	Groups       []string      `json:"groups"`
+	Active       bool          `json:"active"`
+	OnEnrollment bool          `json:"on_enrollment"`
+	OnConnect    bool          `json:"on_connect"`
+	Prefs        []ProfilePref `json:"prefs"`
+	Files        []ProfileFile `json:"files"`
+	Created      time.Time     `json:"created"`
+	CreatedBy    string        `json:"created_by"`
+	Updated      time.Time     `json:"updated"` // devices that synced before this get it again
+}
+
+// ProfilePref is one ATAK preference; Type is string, boolean, integer,
+// long or float.
+type ProfilePref struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+	Type  string `json:"type"`
+}
+
+// ProfileFile is a file in a profile: a .pref file, an ATAK plugin APK, a
+// map source XML, an overlay, or anything else ATAK imports.
+type ProfileFile struct {
+	Name   string    `json:"name"`
+	Size   int64     `json:"size"`
+	SHA256 string    `json:"sha256"`
+	Added  time.Time `json:"added"`
+}
+
+func cloneProfile(p *DeviceProfile) DeviceProfile {
+	c := *p
+	c.Groups = slices.Clone(p.Groups)
+	c.Prefs = slices.Clone(p.Prefs)
+	c.Files = slices.Clone(p.Files)
+	return c
+}
+
+// DeviceProfiles returns the profiles sorted by name.
+func (s *Store) DeviceProfiles() []DeviceProfile {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]DeviceProfile, 0, len(s.db.DeviceProfiles))
+	for _, p := range s.db.DeviceProfiles {
+		out = append(out, cloneProfile(p))
+	}
+	slices.SortFunc(out, func(a, b DeviceProfile) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
+	return out
+}
+
+func (s *Store) DeviceProfile(id string) (DeviceProfile, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p, ok := s.db.DeviceProfiles[id]
+	if !ok {
+		return DeviceProfile{}, false
+	}
+	return cloneProfile(p), true
+}
+
+// PutDeviceProfile adds or replaces a profile.
+func (s *Store) PutDeviceProfile(p DeviceProfile) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := cloneProfile(&p)
+	s.db.DeviceProfiles[p.ID] = &c
+	return s.save()
+}
+
+// UpdateDeviceProfile changes a profile and marks it updated.
+func (s *Store) UpdateDeviceProfile(id string, fn func(p *DeviceProfile) error) (DeviceProfile, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.db.DeviceProfiles[id]
+	if !ok {
+		return DeviceProfile{}, ErrNotFound
+	}
+	c := cloneProfile(p)
+	if err := fn(&c); err != nil {
+		return DeviceProfile{}, err
+	}
+	c.ID, c.Updated = id, time.Now().UTC()
+	s.db.DeviceProfiles[id] = &c
+	return cloneProfile(&c), s.save()
+}
+
+func (s *Store) DeleteDeviceProfile(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.db.DeviceProfiles[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.db.DeviceProfiles, id)
+	return s.save()
 }

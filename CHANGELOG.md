@@ -10,6 +10,36 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.4.0 (2026-10-21)
+
+### Added
+- **Device profiles** (Groups tab): settings and files for the TAK devices of
+  chosen groups' members (or of every user), as on the official server.
+  - **Settings:** ATAK settings entered as key, type and value, sent as a
+    `.pref` file.
+  - **Files:** `.pref` files, plugin APKs, map source XML, overlays and
+    anything else ATAK imports, up to 512 MB each.
+  - **When:** when a device enrolls, and when it connects (only profiles
+    changed since its last sync). **Send now** offers a profile to its users'
+    connected devices.
+  - **Controls:** each profile can be turned off, and the list shows how many
+    users and connected devices it reaches. **Download** gives the exact
+    package devices receive.
+  - **Groups:** renaming a group keeps its profiles pointed at it.
+- **Choose how long device certificates are valid,** on the Certificates
+  tab: "New certificates are valid for N days" (1 to 3650; 365 by default).
+  - **Where it applies:** certificates issued from then on, through
+    enrollment, iTAK packages and **Issue .p12**. Existing certificates keep
+    their dates.
+  - **Enrollment:** the validity the server reports to enrolling TAK clients
+    follows the setting.
+  - **CA limit:** a certificate never outlives the certificate authority that
+    signed it; the page says so if the CA expires sooner.
+  - **Config file:** the setting takes precedence over `cert_validity_days`.
+
+### Fixed
+- Disabled buttons in the console looked the same as enabled ones.
+
 ## v0.3.0 (2026-10-21)
 
 The first release to follow semantic versioning (see the top of this file).

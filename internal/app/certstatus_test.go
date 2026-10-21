@@ -1,6 +1,9 @@
 package app
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -111,4 +114,64 @@ func stringify(v any) string {
 		b.WriteString(i.(map[string]any)["text"].(string) + "\n")
 	}
 	return b.String()
+}
+
+// Admins choose how long new device certificates are valid.
+func TestCertificateValidity(t *testing.T) {
+	a := startApp(t)
+	if _, err := a.Store.CreateUser("gina", "password-gina", nil, false); err != nil {
+		t.Fatal(err)
+	}
+	call, _ := adminJSON(t, a)
+	expiry := func() time.Time {
+		t.Helper()
+		c := enroll(t, a, "gina", "password-gina")
+		leaf, err := x509.ParseCertificate(c.Certificate[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		return leaf.NotAfter
+	}
+	near := func(got time.Time, days int) bool {
+		want := time.Now().Add(time.Duration(days) * 24 * time.Hour)
+		return got.Sub(want).Abs() < 2*time.Hour
+	}
+	if got := expiry(); !near(got, 365) {
+		t.Errorf("default expiry = %v, want a year", got)
+	}
+	if _, rep := call("GET", "/admin/api/certs/status", nil); rep["report"].(map[string]any)["validity_days"] != 365.0 {
+		t.Errorf("status = %v", rep["report"])
+	}
+	for _, bad := range []int{0, 4000} {
+		if code, _ := call("PUT", "/admin/api/certs/settings", map[string]int{"warn_days": 30, "validity_days": bad}); code != 400 {
+			t.Errorf("validity %d accepted", bad)
+		}
+	}
+	if code, _ := call("PUT", "/admin/api/certs/settings", map[string]int{"warn_days": 30, "validity_days": 90}); code != 204 {
+		t.Fatalf("save = %d", code)
+	}
+	if got := expiry(); !near(got, 90) {
+		t.Errorf("expiry after the change = %v, want 90 days", got)
+	}
+	if a.Store.CertValidityDays() != 90 {
+		t.Error("not saved")
+	}
+	// Enrolling clients are told the new validity.
+	hc := &http.Client{Transport: memTransport(&tls.Config{RootCAs: a.CA.Pool()})}
+	req, _ := http.NewRequest("GET", "https://"+a.Addrs["enroll"]+"/Marti/api/tls/config", nil)
+	req.SetBasicAuth("gina", "password-gina")
+	resp, err := hc.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(body), "<validityDays>90</validityDays>") {
+		t.Errorf("tls/config = %s", body)
+	}
+	// Saving only the warning period keeps the validity.
+	call("PUT", "/admin/api/certs/settings", map[string]int{"warn_days": 45})
+	if _, rep := call("GET", "/admin/api/certs/status", nil); rep["report"].(map[string]any)["validity_days"] != 90.0 {
+		t.Errorf("validity after a warn-only save = %v", rep["report"].(map[string]any)["validity_days"])
+	}
 }
