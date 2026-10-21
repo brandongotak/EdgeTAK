@@ -10,6 +10,25 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.9.0 (2026-10-21)
+
+### Added
+- **Backup and restore** (Settings tab). One file holds everything needed to
+  bring the server back, including the CA, so devices reconnect to a restored
+  server without enrolling again.
+  - **Download a backup** any time; position history and video recordings
+    are optional.
+  - **Automatic backups:** daily, kept on the server, the newest 7 by
+    default.
+  - **Restore** an uploaded or kept backup: EdgeTAK checks it, restarts, and
+    puts it in place before opening its data. What it replaced is kept in
+    `.pre-restore`.
+  - **Command line:** `-backup FILE` and `-restore FILE`.
+- **Change icon** on the Plugins tab: upload your own icon (PNG, JPEG or
+  WebP, scaled to ATAK's launcher size) for plugins whose icon EdgeTAK can't
+  read (vector and adaptive icons) or that you want to look different. A
+  newer build of the plugin without a readable icon keeps it.
+
 ## v0.8.0 (2026-10-21)
 
 ### Added

@@ -137,7 +137,7 @@ const loaders = {
   connect: loadConnect,
   chat: loadChat,
   federation: loadFederation,
-  settings: () => Promise.all([loadRetention(), loadEmergencyCard()]),
+  settings: () => Promise.all([loadRetention(), loadEmergencyCard(), loadBackups()]),
 };
 
 let currentTab = '';
@@ -569,6 +569,96 @@ function renderRetentionEffects(pending) {
       : n ? `<span class="status-icon warning" aria-hidden="true">▲</span> ${esc(plural(n, noun))} would be removed now` : '<span class="muted">nothing to remove now</span>';
   }
 }
+
+// ---------- backup and restore ----------
+
+function renderBackups(r) {
+  const f = $('#backup-form');
+  f.auto.checked = r.settings.auto;
+  f.keep.value = r.settings.keep;
+  f.history.checked = r.settings.history;
+  $('#backup-state').innerHTML = r.pending ? '<span class="pill warn">restore waiting for a restart</span>'
+    : r.previous ? `<span class="muted">last restore ${esc(date(r.previous))}</span>` : '';
+  $('#backup-list tbody').innerHTML = r.backups.map((b) => `<tr>
+    <td class="mono">${esc(b.name)}</td><td>${bytes(b.size)}</td><td>${esc(date(b.created))}</td>
+    <td class="actions"><a class="button small" href="api/backups/${encodeURIComponent(b.name)}">Download</a>
+      <button class="small danger" data-restore-backup="${esc(b.name)}">Restore</button>
+      <button class="small" data-del-backup="${esc(b.name)}">Delete</button></td></tr>`).join('')
+    || emptyRow(4, r.settings.auto ? 'The first automatic backup is made within an hour' : 'No backups saved on this server');
+}
+
+async function loadBackups() {
+  renderBackups(await api('GET', 'api/backup'));
+}
+
+$('#backup-download').addEventListener('click', () => {
+  const q = new URLSearchParams({ history: $('#backup-history').checked ? '1' : '0', recordings: $('#backup-recordings').checked ? '1' : '0' });
+  location.href = `api/backup/download?${q}`;
+});
+
+$('#backup-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  renderBackups(await api('PUT', 'api/backup/settings', { auto: f.auto.checked, keep: Number(f.keep.value) || 7, history: f.history.checked }));
+  toast('Backup settings saved');
+}));
+
+$('#backup-now').addEventListener('click', guard(async () => {
+  $('#backup-now').disabled = true;
+  try {
+    renderBackups(await api('POST', 'api/backups'));
+    toast('Backup saved on the server');
+  } finally {
+    $('#backup-now').disabled = false;
+  }
+}));
+
+// After a restore EdgeTAK restarts: wait for it, then reload the console
+// (the restored server may have different admin accounts).
+async function afterRestore(r) {
+  const made = `the backup of ${r.manifest.server_name} from ${date(r.manifest.created)}`;
+  if (!r.restarting) {
+    $('#restore-state').textContent = `Restoring ${made} when EdgeTAK next starts. Restart EdgeTAK now.`;
+    return;
+  }
+  $('#restore-state').textContent = `Restoring ${made}: EdgeTAK is restarting…`;
+  await new Promise((res) => setTimeout(res, 4000));
+  for (let i = 0; i < 90; i++) {
+    try {
+      const res = await fetch('/', { cache: 'no-store' });
+      if (res.ok) { location.reload(); return; }
+    } catch { /* still restarting */ }
+    await new Promise((res) => setTimeout(res, 2000));
+  }
+  $('#restore-state').textContent = 'EdgeTAK has not come back yet. If it runs without a service manager, start it again.';
+}
+
+const confirmRestore = (what) => confirm(`Restore ${what}?
+
+Everything on this server is replaced with the backup and EdgeTAK restarts. Connected devices reconnect by themselves.`);
+
+$('#restore-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const file = e.target.file.files[0];
+  if (!file || !confirmRestore(file.name)) return;
+  $('#restore-state').textContent = 'Uploading and checking the backup…';
+  const res = await fetch('api/backup/restore', { method: 'POST', headers: { 'X-EdgeTAK': '1', 'Content-Type': 'application/gzip' }, body: file });
+  const r = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    $('#restore-state').textContent = '';
+    throw new Error(r.error || `HTTP ${res.status}`);
+  }
+  await afterRestore(r);
+}));
+
+$('#backup-list').addEventListener('click', guard(async (e) => {
+  const { restoreBackup, delBackup } = e.target.dataset;
+  if (delBackup && confirm(`Delete ${delBackup}?`)) renderBackups(await api('DELETE', `api/backups/${encodeURIComponent(delBackup)}`));
+  if (restoreBackup && confirmRestore(restoreBackup)) {
+    $('#restore-state').textContent = 'Checking the backup…';
+    await afterRestore(await api('POST', `api/backups/${encodeURIComponent(restoreBackup)}/restore`));
+  }
+}));
 
 async function loadRetention() {
   const r = await api('GET', 'api/retention');
@@ -2294,7 +2384,8 @@ function renderApps(r) {
     <td>${a.min_sdk ? esc(ANDROID[a.min_sdk] ? ANDROID[a.min_sdk] + '+' : 'API ' + a.min_sdk) : ''}</td>
     <td>${bytes(a.size)}</td>
     <td>${esc(date(a.uploaded))}<div class="muted">${esc(a.uploader)}</div></td>
-    <td class="actions"><a class="button small" href="api/apps/${esc(a.sha256)}/apk">Download</a>
+    <td class="actions"><button class="small" data-icon-app="${esc(a.sha256)}" title="Use your own icon (PNG, JPEG or WebP)">Change icon</button>
+      <a class="button small" href="api/apps/${esc(a.sha256)}/apk">Download</a>
       <button class="small danger" data-del-app="${esc(a.sha256)}" data-name="${esc(a.name)} ${esc(a.version)}">Delete</button></td></tr>`;
   }).join('') || emptyRow(8, 'No plugins or apps yet');
 }
@@ -2327,7 +2418,29 @@ $('#apk-configure').addEventListener('change', guard(async (e) => {
   toast(e.target.checked ? 'Devices get the update server when they next connect' : 'Devices are no longer pointed at the update server');
 }));
 
+// Change icon: pick an image and send it as the request body.
+let iconTarget = '';
+const iconPicker = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/png,image/jpeg,image/webp' });
+iconPicker.addEventListener('change', guard(async () => {
+  const file = iconPicker.files[0];
+  iconPicker.value = '';
+  if (!file || !iconTarget) return;
+  const r = await fetch(`api/apps/${encodeURIComponent(iconTarget)}/icon`, { method: 'PUT', headers: { 'X-EdgeTAK': '1', 'Content-Type': file.type }, body: file });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+  renderApps(body);
+  // The icon URL is unchanged: reload the row's image.
+  const img = $(`#apk-table img[src="api/apps/${iconTarget}/icon"]`);
+  if (img) img.src = `api/apps/${iconTarget}/icon?t=${Date.now()}`;
+  toast('Icon changed. Devices see it the next time ATAK refreshes its plugin list.');
+}));
+
 $('#apk-table').addEventListener('click', guard(async (e) => {
+  if (e.target.dataset.iconApp) {
+    iconTarget = e.target.dataset.iconApp;
+    iconPicker.click();
+    return;
+  }
   const id = e.target.dataset.delApp;
   if (!id || !confirm(`Delete ${e.target.dataset.name}? Devices can no longer install or update it from here.`)) return;
   renderApps(await api('DELETE', `api/apps/${encodeURIComponent(id)}`));

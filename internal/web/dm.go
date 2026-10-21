@@ -35,6 +35,7 @@ func (s *Server) Start(ctx context.Context) {
 	s.Router.SetPresence(s.presenceEvent)
 	s.videoStart(ctx)
 	s.retentionStart(ctx)
+	s.backupStart(ctx)
 	s.certWatchStart(ctx)
 	go func() {
 		t := time.NewTicker(presenceRefresh)

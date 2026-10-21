@@ -52,6 +52,11 @@ type Server struct {
 	NodeID         string
 	Version        string
 	Started        time.Time
+	// DataDir and ConfigPath are what a backup saves; Restart stops EdgeTAK
+	// so its service manager starts it again (after a restore).
+	DataDir    string
+	ConfigPath string
+	Restart    func()
 	// Addrs maps listener names (tcp, tls, https, enroll, http) to their
 	// bound addresses. It is set before serving starts and not modified.
 	Addrs map[string]string
@@ -122,6 +127,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.emergencyRoutes(mux)
 	s.profileRoutes(mux)
 	s.appRoutes(mux)
+	s.backupRoutes(mux)
 	s.federationRoutes(mux)
 	s.accountRoutes(mux)
 

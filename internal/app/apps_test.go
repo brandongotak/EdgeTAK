@@ -6,6 +6,9 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -98,6 +101,34 @@ func TestUpdateServer(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 200 || !strings.Contains(string(inf), "com.example.helloworld") {
 		t.Errorf("basic auth product.inf = %d %s", resp.StatusCode, inf)
+	}
+
+	// An admin's own icon replaces the APK's, in the index too.
+	icon := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	icon.Set(1, 1, color.RGBA{255, 0, 0, 255})
+	var iconPNG bytes.Buffer
+	png.Encode(&iconPNG, icon)
+	req, _ = http.NewRequest("PUT", base+"/admin/api/apps/"+hash+"/icon", bytes.NewReader(iconPNG.Bytes()))
+	req.Header.Set("X-EdgeTAK", "1")
+	resp, err = hc.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("change icon = %d", resp.StatusCode)
+	}
+	_, _, raw = device.do("GET", "/update/product.infz", nil)
+	zr, _ = zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	for _, f := range zr.File {
+		if f.Name == "icons/"+hash+".png" {
+			rc, _ := f.Open()
+			got, err := png.Decode(rc)
+			rc.Close()
+			if err != nil || got.Bounds().Dx() != 64 || color.RGBAModel.Convert(got.At(1, 1)) != (color.RGBA{255, 0, 0, 255}) {
+				t.Errorf("index icon is not the new one: %v", err)
+			}
+		}
 	}
 
 	// The device profile turns the update server on.

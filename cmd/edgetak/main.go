@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/brandongotak/EdgeTAK/internal/app"
+	"github.com/brandongotak/EdgeTAK/internal/backup"
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/store"
 )
@@ -39,6 +40,8 @@ func main() {
 	enableVideo := flag.Bool("enable-video", false, "connect EdgeTAK to a MediaMTX media server on this machine (the installer sets it up)")
 	disableVideo := flag.Bool("disable-video", false, "turn video off (the installer's --no-video)")
 	showVersion := flag.Bool("version", false, "print version and exit")
+	backupTo := flag.String("backup", "", "write a backup of the data and configuration to `file` (.tar.gz), then exit")
+	restoreFrom := flag.String("restore", "", "restore a backup `file` made by -backup or the console, then exit; stop EdgeTAK first")
 	healthCheck := flag.Bool("healthcheck", false, "exit 0 if the running EdgeTAK answers on its enrollment port (container health check)")
 	flag.Parse()
 	// -enable-letsencrypt= (no email) still counts: Let's Encrypt no longer
@@ -55,6 +58,38 @@ func main() {
 	}
 	if *cfgPath == "" {
 		*cfgPath = filepath.Join(*dataDir, "edgetak.json")
+	}
+
+	// Backups: made from the files (EdgeTAK may be running), restored with
+	// EdgeTAK stopped, or staged from the console and applied here.
+	if *backupTo != "" {
+		if err := writeBackup(*dataDir, *cfgPath, *backupTo); err != nil {
+			fatal(err)
+		}
+		fmt.Println("backup written to", *backupTo)
+		return
+	}
+	if *restoreFrom != "" {
+		f, err := os.Open(*restoreFrom)
+		if err != nil {
+			fatal(err)
+		}
+		m, err := backup.Stage(f, *dataDir)
+		f.Close()
+		if err != nil {
+			fatal(err)
+		}
+		if _, err := backup.ApplyPending(*dataDir, *cfgPath); err != nil {
+			fatal(err)
+		}
+		fmt.Println("restored the backup of", m.ServerName, "from", m.Created.Local().Format("2006-01-02 15:04")+";",
+			"the previous data is in", filepath.Join(*dataDir, ".pre-restore"))
+		return
+	}
+	if applied, err := backup.ApplyPending(*dataDir, *cfgPath); err != nil {
+		fatal(err)
+	} else if applied {
+		fmt.Fprintln(os.Stderr, "edgetak: restored a backup; the previous data is in", filepath.Join(*dataDir, ".pre-restore"))
 	}
 
 	if *resetPassword != "" {
@@ -137,6 +172,8 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	ctx, restart := context.WithCancel(ctx)
+	a.ConfigPath, a.Restart = *cfgPath, restart
 	wait, err := a.Start(ctx)
 	if err != nil {
 		fatal(err)
@@ -167,4 +204,26 @@ func envOr(key, def string) string {
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "edgetak:", err)
 	os.Exit(1)
+}
+
+// writeBackup backs up from the files, so it works with EdgeTAK running
+// (db.json is replaced atomically) or stopped.
+func writeBackup(dataDir, cfgPath, out string) error {
+	nodeID, _ := os.ReadFile(filepath.Join(dataDir, "node-id"))
+	cfg, _ := config.Load(cfgPath)
+	f, err := os.Create(out)
+	if err != nil {
+		return err
+	}
+	err = backup.Write(f, backup.Source{DataDir: dataDir, ConfigPath: cfgPath, Version: version, ServerName: cfg.ServerName,
+		NodeID: strings.TrimSpace(string(nodeID)),
+		DB:     func() ([]byte, error) { return os.ReadFile(filepath.Join(dataDir, "db.json")) }},
+		backup.Options{History: true})
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.Remove(out)
+	}
+	return err
 }

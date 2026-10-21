@@ -57,6 +57,10 @@ type App struct {
 	Dial func(address string) (net.Conn, error)
 	// Federation runs TAK Server federation (set by Start).
 	Federation *federation.Manager
+	// ConfigPath is the configuration file (for backups); Restart stops
+	// EdgeTAK for its service manager to start again (after a restore).
+	ConfigPath string
+	Restart    func()
 
 	nodeID string
 }
@@ -211,6 +215,7 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	ws := &web.Server{
 		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, History: a.History, Chat: a.Chat, Log: a.Log,
 		PackageDir: filepath.Join(a.DataDir, "packages"), NodeID: a.nodeID, Version: a.Version, Started: time.Now(),
+		DataDir: a.DataDir, ConfigPath: a.ConfigPath, Restart: a.Restart,
 	}
 
 	// Bind every listener before serving any, so a port conflict fails

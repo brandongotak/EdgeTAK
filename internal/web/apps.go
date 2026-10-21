@@ -24,7 +24,10 @@ import (
 // username and password, which ATAK asks for), and device profiles point
 // ATAK at it.
 
-const maxAPK = 512 << 20
+const (
+	maxAPK  = 512 << 20
+	maxIcon = 2 << 20
+)
 
 func (s *Server) appsDir() string { return filepath.Join(filepath.Dir(s.PackageDir), "apps") }
 
@@ -80,6 +83,7 @@ func (s *Server) appRoutes(mux *http.ServeMux) {
 		w.Header().Set("Cache-Control", "private, max-age=86400")
 		w.Write(s.appIcon(a))
 	}))
+	mux.HandleFunc("PUT /admin/api/apps/{id}/icon", s.admin(s.changeAppIcon))
 	mux.HandleFunc("GET /admin/api/apps/{id}/apk", s.admin(func(w http.ResponseWriter, r *http.Request, _ *identity) {
 		a, ok := s.app(r.PathValue("id"))
 		if !ok {
@@ -198,6 +202,36 @@ func (s *Server) serveAPK(w http.ResponseWriter, r *http.Request, a store.App, n
 	http.ServeContent(w, r, "", a.Uploaded, f)
 }
 
+// changeAppIcon replaces an APK's icon with an uploaded image (PNG, JPEG or
+// WebP), stored as PNG.
+func (s *Server) changeAppIcon(w http.ResponseWriter, r *http.Request, id *identity) {
+	a, ok := s.app(r.PathValue("id"))
+	if !ok {
+		jsonError(w, http.StatusNotFound, "not found")
+		return
+	}
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxIcon))
+	if err != nil {
+		jsonError(w, http.StatusRequestEntityTooLarge, "icons can be up to 2 MB")
+		return
+	}
+	png, err := apps.IconPNG(data)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := os.WriteFile(s.iconFile(a), png, 0o640); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := s.Store.SetAppIcon(a.SHA256, true); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.Log.Info("ATAK app icon changed", "admin", id.Username, "package", a.Package)
+	writeJSON(w, http.StatusOK, s.appsView(r))
+}
+
 // uploadAPKs adds the APKs in a multipart upload (field "apk", one or more).
 func (s *Server) uploadAPKs(w http.ResponseWriter, r *http.Request, id *identity) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4*maxAPK)
@@ -269,6 +303,17 @@ func (s *Server) addAPK(src io.Reader, name string, id *identity) (*store.App, e
 	if a.HasIcon {
 		if err := os.WriteFile(s.iconFile(a), info.Icon, 0o640); err != nil {
 			a.HasIcon = false
+		}
+	}
+	// A build without a readable icon keeps the icon of the build it replaces
+	// (one an admin may have set).
+	if !a.HasIcon {
+		for _, old := range s.Store.Apps() {
+			if old.Package == a.Package && old.PluginAPI == a.PluginAPI && old.HasIcon && old.SHA256 != a.SHA256 {
+				if b, err := os.ReadFile(s.iconFile(old)); err == nil && os.WriteFile(s.iconFile(a), b, 0o640) == nil {
+					a.HasIcon = true
+				}
+			}
 		}
 	}
 	replaced, err := s.Store.PutApp(a)

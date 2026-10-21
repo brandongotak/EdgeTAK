@@ -433,7 +433,9 @@ ATAK only loads plugins built for its exact version, and asks for its own
 version's list first. Upload a build per ATAK version your devices run; a
 device on ATAK 5.4.0 sees the 5.4.0 builds (and apps). A newer build of a
 plugin for the same ATAK version replaces the old one. Icons drawn as
-vectors (adaptive icons) show as a plain placeholder.
+vectors (adaptive icons) show as a plain placeholder: use **Change icon** to
+upload your own (PNG, JPEG or WebP). A newer build without a readable icon
+keeps the icon of the build it replaces.
 
 ### Federation
 
@@ -542,8 +544,23 @@ authentication. These clients are anonymous and only see `__ANON__`.
   `/etc/edgetak/install.conf`, so flags can be left out; flags you give
   override them. Users, groups, certificates, packages and missions are kept.
   Reload the admin console with Ctrl+F5 afterwards.
-- **Back up** `/var/lib/edgetak` (or `data/`). `certs/ca-key.pem` is the key
-  every enrolled device trusts: if it is lost, every device must enroll again.
+- **Back up and restore** (Settings tab). A backup is one `.tar.gz` file with
+  everything needed to bring the server back: users, groups, the CA and
+  certificates, settings, device profiles, federation, data packages,
+  missions, plugins and the chat log, plus the configuration; position
+  history and video recordings are optional. `certs/ca-key.pem` is the key
+  every enrolled device trusts, so a restored server is the same server to
+  them: devices reconnect without enrolling again. The backup holds that key
+  and password hashes: keep it as safe as the server, and somewhere else.
+  - **Download a backup** any time, or turn on **automatic backups** (daily,
+    kept on the server in `backups/`, the newest 7 by default).
+  - **Restore** an uploaded backup or a kept one: EdgeTAK checks it, restarts
+    and puts it in place before opening its data. What it replaced is kept in
+    `.pre-restore` in the data folder until the next restore. Sign in with the
+    restored server's admin password (`-reset-password` if it is lost).
+  - **From the command line:** `edgetak -data /var/lib/edgetak -backup FILE`
+    (EdgeTAK may be running), and `-restore FILE` with EdgeTAK stopped, as
+    the `edgetak` user (`sudo -u edgetak`).
 - **Move a manual install into the service:** `--import-data <old data dir>`.
 - **Uninstall:** `sudo sh /usr/local/lib/edgetak/edgetak-installer.sh --uninstall`
   keeps the data; add `--purge` to delete it and the `edgetak` user. If you

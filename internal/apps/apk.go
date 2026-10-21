@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"strings"
 
@@ -84,6 +85,53 @@ func icon(pkg *apk.Apk) []byte {
 		}
 	}
 	return nil
+}
+
+// IconPNG turns an uploaded icon (PNG, JPEG or WebP) into a PNG, scaled down
+// to at most 192 pixels square, ATAK's largest launcher icon size.
+func IconPNG(data []byte) ([]byte, error) {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, errors.New("the icon must be a PNG, JPEG or WebP image")
+	}
+	if b := img.Bounds(); b.Dx() > iconMax || b.Dy() > iconMax {
+		img = shrink(img, iconMax)
+	}
+	out := encodePNG(img)
+	if out == nil {
+		return nil, errors.New("the icon could not be converted")
+	}
+	return out, nil
+}
+
+const iconMax = 192
+
+// shrink scales img to fit in size x size, averaging the pixels each output
+// pixel covers.
+func shrink(img image.Image, size int) image.Image {
+	b := img.Bounds()
+	scale := float64(size) / float64(b.Dx())
+	if s := float64(size) / float64(b.Dy()); s < scale {
+		scale = s
+	}
+	w, h := int(float64(b.Dx())*scale), int(float64(b.Dy())*scale)
+	w, h = max(w, 1), max(h, 1)
+	out := image.NewNRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		y0, y1 := b.Min.Y+y*b.Dy()/h, b.Min.Y+(y+1)*b.Dy()/h
+		for x := 0; x < w; x++ {
+			x0, x1 := b.Min.X+x*b.Dx()/w, b.Min.X+(x+1)*b.Dx()/w
+			var r, g, bl, a, n uint64
+			for sy := y0; sy < max(y1, y0+1); sy++ {
+				for sx := x0; sx < max(x1, x0+1); sx++ {
+					c := color.NRGBAModel.Convert(img.At(sx, sy)).(color.NRGBA)
+					r, g, bl, a, n = r+uint64(c.R), g+uint64(c.G), bl+uint64(c.B), a+uint64(c.A), n+1
+				}
+			}
+			out.SetNRGBA(x, y, color.NRGBA{uint8(r / n), uint8(g / n), uint8(bl / n), uint8(a / n)})
+		}
+	}
+	return out
 }
 
 func encodePNG(img image.Image) []byte {

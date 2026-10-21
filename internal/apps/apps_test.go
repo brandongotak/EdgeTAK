@@ -3,6 +3,9 @@ package apps
 import (
 	"archive/zip"
 	"bytes"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +23,23 @@ func TestReadAPK(t *testing.T) {
 	}
 	if _, err := ReadAPK("apps_test.go"); err == nil {
 		t.Error("a Go file read as an APK")
+	}
+}
+
+func TestIconPNG(t *testing.T) {
+	big := image.NewRGBA(image.Rect(0, 0, 512, 400))
+	var src bytes.Buffer
+	jpeg.Encode(&src, big, nil)
+	out, err := IconPNG(src.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := png.Decode(bytes.NewReader(out))
+	if err != nil || img.Bounds().Dx() != 192 || img.Bounds().Dy() != 150 {
+		t.Errorf("scaled icon = %v %v", img.Bounds(), err)
+	}
+	if _, err := IconPNG([]byte("not an image")); err == nil {
+		t.Error("text accepted as an icon")
 	}
 }
 

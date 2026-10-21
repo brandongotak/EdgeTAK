@@ -186,6 +186,8 @@ type db struct {
 
 	Apps        map[string]*App      `json:"apps"` // ATAK plugins and apps for the update server, by SHA-256
 	AppSettings UpdateServerSettings `json:"app_settings"`
+
+	Backups BackupSettings `json:"backups"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -380,6 +382,13 @@ func Open(path string) (*Store, error) {
 }
 
 // save writes the database atomically. Callers hold s.mu.
+// Snapshot returns the database as it is saved, for backups.
+func (s *Store) Snapshot() ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return json.MarshalIndent(&s.db, "", " ")
+}
+
 func (s *Store) save() error {
 	data, err := json.MarshalIndent(&s.db, "", " ")
 	if err != nil {
@@ -1565,6 +1574,18 @@ func (s *Store) PutApp(a App) (replaced []App, err error) {
 	return replaced, s.save()
 }
 
+// SetAppIcon records whether an APK has an icon file.
+func (s *Store) SetAppIcon(id string, has bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.db.Apps[id]
+	if !ok {
+		return ErrNotFound
+	}
+	a.HasIcon = has
+	return s.save()
+}
+
 func (s *Store) DeleteApp(id string) (App, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1586,6 +1607,33 @@ func (s *Store) SetUpdateServer(v UpdateServerSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.AppSettings = v
+	return s.save()
+}
+
+// ---- backups ----
+
+// BackupSettings: automatic daily backups into the data directory, keeping
+// the newest Keep.
+type BackupSettings struct {
+	Auto    bool `json:"auto"`
+	Keep    int  `json:"keep"`    // 0 = 7
+	History bool `json:"history"` // include position history
+}
+
+func (s *Store) BackupSettings() BackupSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	b := s.db.Backups
+	if b.Keep <= 0 {
+		b.Keep = 7
+	}
+	return b
+}
+
+func (s *Store) SetBackupSettings(b BackupSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Backups = b
 	return s.save()
 }
 
