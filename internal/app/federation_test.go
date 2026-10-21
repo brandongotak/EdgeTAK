@@ -1,8 +1,15 @@
 package app
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"crypto/tls"
+	"encoding/hex"
 	"encoding/pem"
+	"io"
+	"mime/multipart"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
 	"testing"
@@ -106,6 +113,61 @@ func TestFederationBetweenEdgeTAKs(t *testing.T) {
 	waitFor(t, "C told why", func() bool {
 		return strings.Contains(c.Federation.Status().Federates["b"].LastError, "PermissionDenied")
 	})
+
+	// Data packages: alice's upload is copied to B, and when she sends it to
+	// bob he is offered B's copy; the same works from bob to alice.
+	sendPackage := func(from *App, cert tls.Certificate, sender *streamClient, senderCallsign, to string) (string, []byte) {
+		t.Helper()
+		content := []byte("PK federated package from " + senderCallsign + " " + time.Now().String())
+		sum := sha256.Sum256(content)
+		hash := hex.EncodeToString(sum[:])
+		var body bytes.Buffer
+		mw := multipart.NewWriter(&body)
+		fw, _ := mw.CreateFormFile("assetfile", "ops.zip")
+		fw.Write(content)
+		mw.Close()
+		client := &http.Client{Transport: memTransport(&tls.Config{RootCAs: from.CA.Pool(), Certificates: []tls.Certificate{cert}})}
+		resp, err := client.Post("https://"+from.Addrs["https"]+"/Marti/sync/missionupload?hash="+hash+"&filename=ops.zip&creatorUid=ANDROID-"+strings.ToLower(senderCallsign), mw.FormDataContentType(), &body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Fatalf("upload at %s: %d", senderCallsign, resp.StatusCode)
+		}
+		ev := cot.NewEvent("b-f-t-r", "fileshare-"+hash[:8], "h-e", 5*time.Minute)
+		ev.Detail.XML = `<fileshare filename="ops.zip" senderUrl="https://` + from.Addrs["https"] + `/Marti/sync/content?hash=` + hash + `" sizeInBytes="` + strconv.Itoa(len(content)) +
+			`" sha256="` + hash + `" senderUid="ANDROID-` + strings.ToLower(senderCallsign) + `" senderCallsign="` + senderCallsign + `" name="ops"/><marti><dest callsign="` + to + `"/></marti>`
+		sender.send(ev)
+		return hash, content
+	}
+	receivePackage := func(at *App, cert tls.Certificate, c *streamClient, hash string, content []byte, who string) {
+		t.Helper()
+		offer := c.expect(func(e *cot.Event) bool { return e.Type == "b-f-t-r" && strings.Contains(e.Detail.XML, hash) }, "the package offer at "+who)
+		_, port, _ := net.SplitHostPort(at.Addrs["https"])
+		if !strings.Contains(offer.Detail.XML, ":"+port+"/Marti/sync/content?hash="+hash) {
+			t.Errorf("%s's offer does not point at their own server: %s", who, offer.Detail.XML)
+		}
+		client := &http.Client{Transport: memTransport(&tls.Config{RootCAs: at.CA.Pool(), Certificates: []tls.Certificate{cert}})}
+		resp, err := client.Get("https://" + at.Addrs["https"] + "/Marti/sync/content?hash=" + hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != 200 || !bytes.Equal(got, content) {
+			t.Errorf("%s's download: %d %q", who, resp.StatusCode, got)
+		}
+	}
+	hash, content := sendPackage(a, aliceCert, alice, "ALICE", "BOB")
+	waitFor(t, "alice's package copied to B", func() bool { _, ok := b.Store.Package(hash); return ok })
+	if p, _ := b.Store.Package(hash); p.Name != "ops.zip" || !strings.Contains(p.Submitter, "alice") {
+		t.Errorf("B's copy = %+v", p)
+	}
+	receivePackage(b, bobCert, bob, hash, content, "bob")
+	carol.expectNone(func(e *cot.Event) bool { return e.Type == "b-f-t-r" }, "the package offer at carol")
+	hash, content = sendPackage(b, bobCert, bob, "BOB", "ALICE")
+	receivePackage(a, aliceCert, alice, hash, content, "alice")
 
 	// When alice leaves, B's devices are told to remove her.
 	alice.conn.Close()

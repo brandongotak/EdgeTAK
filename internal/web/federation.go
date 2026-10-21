@@ -7,10 +7,12 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/brandongotak/EdgeTAK/internal/federation"
+	"github.com/brandongotak/EdgeTAK/internal/router"
 	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
@@ -299,15 +301,58 @@ func (s *Server) takToken(w http.ResponseWriter, r *http.Request, id *identity) 
 
 // takTrust makes a TAK Server trust EdgeTAK's CA, with groups.
 func (s *Server) takTrust(w http.ResponseWriter, r *http.Request, id *identity) {
-	t, req, ok := s.takAdmin(w, r)
-	if !ok {
+	var req takLogin
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil || req.Address == "" || req.Username == "" {
+		jsonError(w, http.StatusBadRequest, "the TAK Server's address and an admin username and password are needed")
 		return
 	}
-	res, err := t.TrustEdgeTAK(s.CA.Cert.Raw, s.CA.ServerCert.Certificate[0], cleanGroups(req.Groups))
+	if req.Port == 0 {
+		req.Port = 8446
+	}
+	t := &federation.TAKAdmin{Address: strings.TrimSpace(req.Address), Port: req.Port, CAPEM: req.CAPEM, Username: req.Username,
+		Password: req.Password, Dial: s.FederationDial}
+	caDER, certDER, groups := s.CA.Cert.Raw, s.CA.ServerCert.Certificate[0], cleanGroups(req.Groups)
+	err := t.SignIn()
+	var res *federation.TrustResult
+	if err == nil {
+		res, err = t.TrustEdgeTAK(caDER, certDER, groups)
+	}
+	if errors.Is(err, federation.ErrNoTAKAPI) {
+		// No TAK Server admin API: OpenTAKServer's federation plugin, perhaps.
+		if ores, oerr := t.TrustOnOpenTAKServer(s.Cfg.ServerName, caDER, certDER, groups); !errors.Is(oerr, federation.ErrNotOTS) {
+			res, err = ores, oerr
+		}
+	}
 	if err != nil {
 		jsonError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	s.Log.Info("TAK Server set up to trust EdgeTAK", "admin", id.Username, "server", req.Address, "uploaded", res.Uploaded, "groups", res.Groups)
 	writeJSON(w, http.StatusOK, res)
+}
+
+// OfferFederatedPackage offers a package a federate announced to the local
+// devices it was sent to (everyone in groups when it names nobody).
+func (s *Server) OfferFederatedPackage(hash, from string, uids, callsigns, groups []string) int {
+	p, ok := s.Store.Package(hash)
+	if !ok {
+		return 0
+	}
+	directed := len(uids)+len(callsigns) > 0
+	var targets []*router.Client
+	for _, c := range s.Router.Clients() {
+		if !slices.ContainsFunc(c.InGroups(), func(g string) bool { return slices.Contains(groups, g) }) {
+			continue
+		}
+		uid, cs := c.Identity()
+		if directed && !slices.Contains(uids, uid) && !slices.Contains(callsigns, cs) {
+			continue
+		}
+		targets = append(targets, c)
+	}
+	delivered, _, err := s.offerPackage(p, targets, from)
+	if err != nil {
+		s.Log.Warn("federation: could not offer a data package", "package", p.Name, "err", err)
+	}
+	return delivered
 }

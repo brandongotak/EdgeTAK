@@ -1543,6 +1543,8 @@ type Federate struct {
 	OutboundGroups  []string `json:"outbound_groups"`
 	InboundGroups   []string `json:"inbound_groups"`
 	MapRemoteGroups bool     `json:"map_remote_groups,omitempty"`
+	// NoPackages keeps data packages from crossing (on by default).
+	NoPackages bool `json:"no_packages,omitempty"`
 
 	Created time.Time `json:"created"`
 }

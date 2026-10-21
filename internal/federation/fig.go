@@ -135,8 +135,8 @@ type Empty struct{}
 func (*Empty) marshal(b []byte) []byte  { return b }
 func (*Empty) unmarshal(b []byte) error { return nil }
 
-// Raw carries a message EdgeTAK does not read (ROL, binary blobs), so the
-// streams that carry them can be kept open and drained.
+// Raw carries a message EdgeTAK does not read (binary blobs), so the
+// stream that carries them can be kept open and drained.
 type Raw struct{ Data []byte }
 
 func (m *Raw) marshal(b []byte) []byte  { return append(b, m.Data...) }
@@ -411,7 +411,11 @@ func (m *FederatedEvent) unmarshal(b []byte) error {
 
 // HasProvenance reports whether the event already passed through serverID.
 func (m *FederatedEvent) HasProvenance(serverID string) bool {
-	for _, p := range m.Provenance {
+	return hasProvenance(m.Provenance, serverID)
+}
+
+func hasProvenance(list []Provenance, serverID string) bool {
+	for _, p := range list {
 		if p.ServerID == serverID {
 			return true
 		}
@@ -576,8 +580,8 @@ func (m *FederateGroups) unmarshal(b []byte) error {
 	})
 }
 
-// BinaryBlob is only used to return this server's certificate
-// (Getx509Identity); its data field holds the DER bytes.
+// BinaryBlob carries a file (ROL payloads) or this server's certificate
+// (Getx509Identity, as DER) in its data field.
 type BinaryBlob struct{ Data []byte }
 
 func (m *BinaryBlob) marshal(b []byte) []byte { return appendBytes(b, 2, m.Data) }
@@ -600,6 +604,58 @@ func (m *TokenResponse) unmarshal(b []byte) error {
 	return eachField(b, func(f field) error {
 		if f.Num == 1 {
 			m.Token = f.str()
+		}
+		return nil
+	})
+}
+
+// ROL is a Resource Operation Language command. TAK Server federates files
+// and missions with these: a program such as "create resource\n{json};",
+// with any file in a BinaryBlob payload.
+type ROL struct {
+	Program        string
+	Payload        [][]byte // the BinaryBlobs' data
+	FederateGroups []string
+	Provenance     []Provenance
+}
+
+func (m *ROL) marshal(b []byte) []byte {
+	b = appendString(b, 1, m.Program)
+	for _, p := range m.Payload {
+		b = appendMessage(b, 2, &BinaryBlob{Data: p})
+	}
+	for _, g := range m.FederateGroups {
+		b = protowire.AppendTag(b, 3, protowire.BytesType)
+		b = protowire.AppendString(b, g)
+	}
+	for i := range m.Provenance {
+		b = appendMessage(b, 4, &m.Provenance[i])
+	}
+	return b
+}
+
+func (m *ROL) unmarshal(b []byte) error {
+	return eachField(b, func(f field) error {
+		if f.Type != protowire.BytesType {
+			return nil
+		}
+		switch f.Num {
+		case 1:
+			m.Program = f.str()
+		case 2:
+			var blob BinaryBlob
+			if err := blob.unmarshal(f.Bytes); err != nil {
+				return err
+			}
+			m.Payload = append(m.Payload, blob.Data)
+		case 3:
+			m.FederateGroups = append(m.FederateGroups, f.str())
+		case 4:
+			var p Provenance
+			if err := p.unmarshal(f.Bytes); err != nil {
+				return err
+			}
+			m.Provenance = append(m.Provenance, p)
 		}
 		return nil
 	})

@@ -46,8 +46,9 @@ type handler interface {
 	serverEventStream(stream grpc.ServerStream) error
 	serverGroupsStream(sub *Subscription, stream grpc.ServerStream) error
 	clientGroupsStream(stream grpc.ServerStream) error
-	drainStream(stream grpc.ServerStream, reply message) error // ROL and binary streams: read and discard
-	idleStream(stream grpc.ServerStream) error                 // ClientROLStream: open, sends nothing
+	clientROLStream(stream grpc.ServerStream) error
+	serverROLStream(stream grpc.ServerStream) error
+	drainStream(stream grpc.ServerStream, reply message) error // binary streams: read and discard
 }
 
 func unary[Req any, PReq interface {
@@ -121,10 +122,10 @@ var serviceDesc = grpc.ServiceDesc{
 			if _, err := serverSubscription(stream); err != nil {
 				return err
 			}
-			return srv.(handler).idleStream(stream)
+			return srv.(handler).clientROLStream(stream)
 		}},
 		{StreamName: "ServerROLStream", ClientStreams: true, Handler: func(srv any, stream grpc.ServerStream) error {
-			return srv.(handler).drainStream(stream, &Subscription{})
+			return srv.(handler).serverROLStream(stream)
 		}},
 		{StreamName: "BinaryMessageStream", ClientStreams: true, Handler: func(srv any, stream grpc.ServerStream) error {
 			return srv.(handler).drainStream(stream, &Empty{})

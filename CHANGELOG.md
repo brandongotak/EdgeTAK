@@ -10,6 +10,31 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.6.0 (2026-10-21)
+
+### Added
+- **Data packages over federation**, with TAK Servers and other EdgeTAKs,
+  the way TAK Servers federate them:
+  - **Uploads are copied:** a file uploaded on one server is copied to the
+    other, for the groups shared with the federate, and appears on its Data
+    Packages tab. Device profiles stay local; files over 64 MB too.
+  - **Sending to the other side's users works:** a package sent from ATAK to
+    a contact on the other server reaches them, and they download it from
+    the server they are connected to.
+  - **On by default,** with a **Data packages** box per federate to turn it
+    off. Files sent and received are listed in the federate's recent
+    messages.
+  - If a TAK Server announces a package whose file never arrives, the
+    federate shows a warning saying what to check on the TAK Server (shared
+    groups, and mission federation, which TAK Server allows by default).
+- **OpenTAKServer in the admin-login helper.** OpenTAKServer has no TAK
+  Server admin API, so **Make the TAK Server trust EdgeTAK** failed there
+  with HTTP 404. It now recognizes OpenTAKServer and uses its federation
+  plugin (OTS-Federation-Plugin) instead: EdgeTAK is added as an approved
+  federate, matched by its certificate, delivering to the groups listed
+  (`__ANON__` if none). If the plugin's federation listener is off, it says
+  so, since EdgeTAK can't connect until it is on.
+
 ## v0.5.1 (2026-10-21)
 
 ### Fixed

@@ -3128,7 +3128,7 @@ async function loadFederation() {
     const st = f.status || { state: f.enabled ? 'starting' : 'off', recent: [], remote_groups: [] };
     const where = f.direction === 'outbound' ? `${esc(f.address)}:${f.port} · ${f.auth_mode === 'token' ? 'token' : 'certificate'}`
       : f.fingerprint ? `fingerprint ${esc(f.fingerprint.slice(0, 16))}…` : `common name ${esc(f.client_cn)}`;
-    const share = f.send_mode === 'groups' ? `shares ${groupPills(f.outbound_groups)}` : 'shares everything';
+    const share = (f.send_mode === 'groups' ? `shares ${groupPills(f.outbound_groups)}` : 'shares everything') + (f.no_packages ? ', no data packages' : '');
     const into = f.inbound_groups.length ? `delivers to ${groupPills(f.inbound_groups)}` : 'delivers to every device';
     const recent = (st.recent || []).map((m) => `<tr><td>${esc(new Date(m.time).toLocaleTimeString())}</td><td>${m.direction === 'in' ? '⬇ in' : '⬆ out'}</td>
         <td class="mono">${esc(m.type)}</td><td>${esc(m.name || m.uid)}</td><td class="muted">${esc(m.route || '')}</td></tr>`).join('');
@@ -3211,6 +3211,7 @@ function openFedDialog(fd, pending) {
   f.in_ca_pem.value = fd?.direction === 'inbound' ? fd.ca_pem || '' : '';
   f.send_mode.value = fd?.send_mode || 'all';
   f.map_remote_groups.checked = !!fd?.map_remote_groups;
+  f.share_packages.checked = !fd?.no_packages;
   renderChips('#fed-out-groups', fd?.outbound_groups || []);
   renderChips('#fed-in-groups', fd?.inbound_groups || []);
   f.dataset.pending = pending?.fingerprint || '';
@@ -3230,7 +3231,7 @@ function fedBody() {
     token: f.token.value, token_expiration: Number(f.dataset.tokenExpiration || editingFederate?.token_expiration || 0), use_tls: f.use_tls.checked,
     ca_pem: outbound ? f.ca_pem.value : f.in_ca_pem.value, fingerprint: f.fingerprint.value, client_cn: f.client_cn.value,
     send_mode: f.send_mode.value, outbound_groups: checkedIn('#fed-out-groups'), inbound_groups: checkedIn('#fed-in-groups'),
-    map_remote_groups: f.map_remote_groups.checked,
+    map_remote_groups: f.map_remote_groups.checked, no_packages: !f.share_packages.checked,
   };
 }
 
@@ -3304,6 +3305,11 @@ $('#fed-tak-trust').addEventListener('click', async () => {
   try {
     const r = await api('POST', 'api/federation/tak/trust', { ...takLogin(), groups });
     f.tak_password.value = '';
+    if (r.server === 'OpenTAKServer') {
+      $('#fed-tak-state').textContent = `OpenTAKServer's federation plugin ${r.uploaded ? 'now accepts' : 'already had'} EdgeTAK, delivering to ${r.groups.join(', ')}.` +
+        (r.listener_off ? ` Its federation listener is off: turn it on in the plugin's settings (port ${r.listener_port || 9001}) and open that port, so EdgeTAK can connect.` : '');
+      return;
+    }
     $('#fed-tak-state').textContent = `${r.uploaded ? 'EdgeTAK\'s CA was added to the TAK Server' : 'The TAK Server already trusted EdgeTAK\'s CA'}` +
       (r.groups?.length ? `, with groups ${r.groups.join(', ')}` : '') +
       (r.federate_found ? `. The existing EdgeTAK federate there has groups: ${(r.federate_groups || []).join(', ') || 'none (nothing will be shared until it has one)'}. Disable and enable this federate to reconnect so the TAK Server applies them.` : '. The TAK Server adds EdgeTAK as a federate when it first connects.');

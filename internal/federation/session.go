@@ -41,6 +41,7 @@ type session struct {
 	fed store.Federate
 
 	queue chan *FederatedEvent
+	rols  chan *ROL     // files and their announcements
 	done  chan struct{} // closed by stop
 	once  sync.Once
 
@@ -57,6 +58,8 @@ type session struct {
 	groups     []string             // the groups the other side shares
 	remote     map[string]time.Time // UIDs and callsigns of the other side's users
 	gen        int                  // inbound: the active ClientEventStream
+	filesSent  map[string]bool      // data packages the other side has, by hash
+	waiting    map[string]waitingAnnounce
 }
 
 // Recent is a message shown on the Federation tab (not position reports).
@@ -88,8 +91,9 @@ type SessionStatus struct {
 }
 
 func newSession(m *Manager, f store.Federate) *session {
-	return &session{m: m, fed: f, queue: make(chan *FederatedEvent, queueSize), done: make(chan struct{}),
-		state: "disconnected", remote: map[string]time.Time{}}
+	return &session{m: m, fed: f, queue: make(chan *FederatedEvent, queueSize), rols: make(chan *ROL, rolQueueSize),
+		done: make(chan struct{}), state: "disconnected", remote: map[string]time.Time{},
+		filesSent: map[string]bool{}, waiting: map[string]waitingAnnounce{}}
 }
 
 func (s *session) stop() { s.once.Do(func() { close(s.done) }) }
@@ -125,6 +129,20 @@ func (s *session) enqueue(fe *FederatedEvent) {
 			s.mu.Unlock()
 		default:
 		}
+	}
+}
+
+// enqueueROL queues a file or announcement; when the queue is full it is
+// dropped rather than holding more files in memory.
+func (s *session) enqueueROL(r *ROL) bool {
+	select {
+	case s.rols <- r:
+		return true
+	default:
+		s.mu.Lock()
+		s.dropped++
+		s.mu.Unlock()
+		return false
 	}
 }
 
@@ -544,16 +562,9 @@ func (s *session) connect() error {
 					s.identity = &id
 					s.mu.Unlock()
 				}
-				// Missions and files (ROL) are not federated yet; TAK Server's
-				// clients keep this stream open, so EdgeTAK does too.
-				if rol, err := openServerStream(ctx, cc, "ClientROLStream", sub); err == nil {
-					go func() {
-						for {
-							if rol.RecvMsg(&Raw{}) != nil {
-								return
-							}
-						}
-					}()
+				// ROL streams carry data packages both ways.
+				if err := s.openROL(ctx, cc, sub, failed); err != nil {
+					return err
 				}
 			}
 			s.setWarning("")
@@ -566,6 +577,43 @@ func (s *session) connect() error {
 		s.setWarning("waiting for the other server to accept the connection (" + healthName(h.Status) + ")")
 		wait = firstHealthWait
 	}
+}
+
+// openROL opens the ROL stream from the other server (ClientROLStream) and
+// the one to it (ServerROLStream).
+func (s *session) openROL(ctx context.Context, cc *grpc.ClientConn, sub *Subscription, failed func(error)) error {
+	from, err := openServerStream(ctx, cc, "ClientROLStream", sub)
+	if err != nil {
+		return err
+	}
+	go func() {
+		for {
+			var rol ROL
+			if err := from.RecvMsg(&rol); err != nil {
+				s.m.cfg.Log.Debug("federation: ROL stream from the other server ended", "federate", s.fed.Name, "err", err)
+				return
+			}
+			s.m.handleROL(s, &rol)
+		}
+	}()
+	to, err := openClientStream(ctx, cc, "ServerROLStream")
+	if err != nil {
+		return err
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case r := <-s.rols:
+				if err := to.SendMsg(r); err != nil {
+					failed(err)
+					return
+				}
+			}
+		}
+	}()
+	return nil
 }
 
 func healthName(st int64) string {

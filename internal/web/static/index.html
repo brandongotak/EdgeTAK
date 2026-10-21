@@ -70,7 +70,7 @@
     <section id="tab-federation" class="tab" hidden>
       <div class="card">
         <div class="card-head"><h2>This server</h2><a class="button ghost small" href="api/ca.pem">Download EdgeTAK CA (PEM)</a></div>
-        <p class="muted">Federation shares positions, markers, chat and direct messages with TAK Servers and other EdgeTAKs (TAK Server Federation v2). Data packages and Data Sync missions stay on each server for now.</p>
+        <p class="muted">Federation shares positions, markers, chat, direct messages and data packages with TAK Servers and other EdgeTAKs (TAK Server Federation v2). Data Sync missions stay on each server for now.</p>
         <dl class="kv" id="fed-identity"></dl>
         <form id="fed-listener-form" class="inline-form fed-listener">
           <label class="check"><input type="checkbox" name="enabled"> Let other servers connect on port</label>
@@ -157,6 +157,7 @@
             <div class="muted picker-label">Deliver what it sends to these groups (none selected = every device)</div>
             <div id="fed-in-groups" class="group-picker"></div>
             <label class="check"><input type="checkbox" name="map_remote_groups"> Also deliver to EdgeTAK groups named like the other server's groups</label>
+            <label class="check"><input type="checkbox" name="share_packages"> Data packages: files uploaded on either server are copied to the other, and files sent to its users reach them</label>
           </fieldset>
           <p class="error" id="fed-error" role="alert"></p>
           <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>

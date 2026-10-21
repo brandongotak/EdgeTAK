@@ -218,7 +218,7 @@ func (t *TAKAdmin) SignIn() error {
 	case resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 403:
 		return errors.New("the TAK Server rejected the username or password")
 	case resp.StatusCode == 404:
-		return fmt.Errorf("port %d has no TAK Server login (/oauth/token); use the port with its web login page, 8446 by default", t.Port)
+		return &statusError{code: 404, msg: fmt.Sprintf("port %d has no TAK Server login (/oauth/token); use the port with its web login page, 8446 by default", t.Port)}
 	case resp.StatusCode != 200:
 		return fmt.Errorf("the TAK Server returned HTTP %d while signing in", resp.StatusCode)
 	}
@@ -234,6 +234,18 @@ func (t *TAKAdmin) SignIn() error {
 }
 
 var errNotAdmin = errors.New("the TAK Server accepted the login but refused the request: the account needs the TAK Server admin role (ROLE_ADMIN)")
+
+// ErrNoTAKAPI matches errors from a server that answers but has no TAK
+// Server admin API (OpenTAKServer, for one).
+var ErrNoTAKAPI = errors.New("no TAK Server admin API")
+
+type statusError struct {
+	code int
+	msg  string
+}
+
+func (e *statusError) Error() string        { return e.msg }
+func (e *statusError) Is(target error) bool { return target == ErrNoTAKAPI && e.code == 404 }
 
 func (t *TAKAdmin) call(method, path string, body io.Reader, contentType string, out any) error {
 	req, _ := http.NewRequest(method, t.base()+path, body)
@@ -252,7 +264,8 @@ func (t *TAKAdmin) call(method, path string, body io.Reader, contentType string,
 	}
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("the TAK Server returned HTTP %d for %s: %s", resp.StatusCode, path, strings.TrimSpace(string(data[:min(len(data), 300)])))
+		return &statusError{code: resp.StatusCode,
+			msg: fmt.Sprintf("the TAK Server returned HTTP %d for %s: %s", resp.StatusCode, path, strings.TrimSpace(string(data[:min(len(data), 300)])))}
 	}
 	if out == nil || len(data) == 0 {
 		return nil
@@ -301,10 +314,13 @@ func normalizeFP(s string) string {
 
 // TrustResult reports what TrustEdgeTAK did.
 type TrustResult struct {
+	Server         string   `json:"server,omitempty"` // "OpenTAKServer" when its federation plugin was set up
 	Uploaded       bool     `json:"uploaded"`
 	Groups         []string `json:"groups"`
 	FederateFound  bool     `json:"federate_found"`
 	FederateGroups []string `json:"federate_groups,omitempty"`
+	ListenerOff    bool     `json:"listener_off,omitempty"` // OpenTAKServer: its federation listener is not running
+	ListenerPort   int      `json:"listener_port,omitempty"`
 }
 
 // TrustEdgeTAK makes the TAK Server trust EdgeTAK's CA for certificate

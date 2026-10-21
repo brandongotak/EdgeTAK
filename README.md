@@ -83,9 +83,10 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   device, and change their password. Share the link from the console's
   Connect tab.
 - **Federation** with TAK Servers and other EdgeTAKs (TAK Server Federation
-  v2): positions, markers, chat and direct messages cross between servers, in
-  either direction, with certificate or token sign-in, approval of servers
-  that connect, and per-federate group sharing. See [Federation](#federation).
+  v2): positions, markers, chat, direct messages and data packages cross
+  between servers, in either direction, with certificate or token sign-in,
+  approval of servers that connect, and per-federate group sharing. See
+  [Federation](#federation).
 - **Device profiles** (Groups tab): settings and files sent to the TAK
   devices of a group's members, or of every user, as on the official server.
   - **Contents:** ATAK settings (entered as key, type and value), `.pref`
@@ -409,7 +410,13 @@ the other server, EdgeTAK looks like another TAK Server.
 
 - **What crosses:** positions, markers, shapes, chat and direct messages.
   Contacts are kept in sync, so direct messages to the other side's users
-  arrive. Data packages and Data Sync missions stay on each server for now.
+  arrive. Data Sync missions stay on each server for now.
+- **Data packages:** a file uploaded on one server is copied to the other
+  (as TAK Servers do, for the groups shared with the federate), and a
+  package sent to a user on the other server reaches them: their server
+  offers its own copy, so they download it from the server they are
+  connected to. Files over 64 MB stay local. Turn it off per federate with
+  the **Data packages** box.
 - **What each side gets:** per federate, share everything EdgeTAK's devices
   send, or only what is sent to chosen groups. Choose which groups receive
   what the other server sends (none selected = every device).
@@ -449,6 +456,14 @@ your users' LDAP groups. List it under **TAK Server groups for EdgeTAK**, or
 set it in the TAK Server's Federation Manager. The TAK Server applies a
 federate's groups when it connects, so disable and enable the federate in
 EdgeTAK afterwards.
+
+**OpenTAKServer** federates through its federation plugin
+(OTS-Federation-Plugin). **Make the TAK Server trust EdgeTAK** works there too, with an OpenTAKServer
+administrator login (without two-factor login): it adds EdgeTAK on the
+plugin's page. For EdgeTAK to connect, turn on the plugin's federation
+listener (port 9001). For OpenTAKServer to connect to EdgeTAK, use the
+address its certificate names, or set the plugin's **TLS server name**:
+unlike TAK Server, the plugin checks it.
 
 ## Connect clients
 

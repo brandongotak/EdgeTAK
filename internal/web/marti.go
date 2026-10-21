@@ -321,6 +321,9 @@ func (s *Server) savePackage(src io.Reader, name, mimeType, creatorUID string, k
 	})
 	if err == nil {
 		s.Log.Info("stored data package", "name", p.Name, "hash", hash, "size", n, "user", id.Username)
+		if s.Federation != nil {
+			go s.Federation.PackageStored(p)
+		}
 	}
 	return p, err
 }

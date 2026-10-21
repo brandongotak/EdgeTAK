@@ -25,8 +25,9 @@ const (
 	Inbound  = "inbound"
 
 	queueSize      = 5000
+	rolQueueSize   = 64
 	recentMessages = 25
-	maxMessage     = 64 << 20
+	maxMessage     = 256 << 20 // TAK Server's default limit; files sent from here are smaller
 	contactSweep   = 5 * time.Second
 	pendingFor     = time.Hour
 )
@@ -40,7 +41,12 @@ type Config struct {
 	NodeID     string
 	Version    string
 	AnonGroup  string
-	Log        *slog.Logger
+	PackageDir string // where data packages are stored, by SHA-256
+	// OfferPackage offers a stored package to local devices in groups: to
+	// the given users, or to all of them when none are given. It returns
+	// how many devices it was offered to.
+	OfferPackage func(hash, from string, uids, callsigns, groups []string) int
+	Log          *slog.Logger
 	// Listen and Dial default to TCP; tests replace them.
 	Listen func(addr string) (net.Listener, error)
 	Dial   func(addr string) (net.Conn, error)
@@ -104,6 +110,7 @@ func (m *Manager) Start(stop <-chan struct{}) {
 				return
 			case <-t.C:
 				m.sweepContacts()
+				m.sweepAnnouncements()
 			}
 		}
 	}()
@@ -254,6 +261,7 @@ func (m *Manager) hook(src *router.Client, ev *cot.Event) bool {
 	}
 	var fe *FederatedEvent
 	dests := ev.Dests()
+	pkg, fs := m.sharedPackage(ev)
 	for _, s := range sessions {
 		shared, ok := sharedGroups(s.fed, groups)
 		if !ok {
@@ -261,6 +269,12 @@ func (m *Manager) hook(src *router.Client, ev *cot.Event) bool {
 		}
 		// Direct messages only go to a federate one of their recipients is on.
 		if len(dests) > 0 && !s.knowsAny(dests) {
+			continue
+		}
+		if pkg != nil { // a data package stored here: send the file, then announce it
+			if !s.fed.NoPackages {
+				m.announcePackage(s, pkg, fs, dests, shared)
+			}
 			continue
 		}
 		if fe == nil {

@@ -311,6 +311,7 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	}
 	fedCfg := federation.Config{Router: a.Router, Store: a.Store, Cert: func() *tls.Certificate { return &a.CA.ServerCert },
 		ServerName: a.Cfg.ServerName, NodeID: a.nodeID, Version: a.Version, AnonGroup: a.Cfg.AnonymousGroup,
+		PackageDir: ws.PackageDir, OfferPackage: ws.OfferFederatedPackage,
 		Log:    a.Log.With("component", "federation"),
 		Listen: func(addr string) (net.Listener, error) { return a.Listen("tcp", addr) }, Dial: a.Dial}
 	a.Federation = federation.New(fedCfg)

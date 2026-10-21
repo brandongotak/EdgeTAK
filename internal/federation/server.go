@@ -248,8 +248,47 @@ func (h *inbound) clientGroupsStream(stream grpc.ServerStream) error {
 	}
 }
 
-// drainStream accepts ROL and binary streams, which EdgeTAK does not use
-// yet, so the other side does not treat the federate as broken.
+// clientROLStream sends files and their announcements to the federate.
+func (h *inbound) clientROLStream(stream grpc.ServerStream) error {
+	s, err := h.session(stream.Context())
+	if err != nil {
+		return err
+	}
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-s.done:
+			return status.Error(codes.Unavailable, "the federate was changed or removed on EdgeTAK")
+		case r := <-s.rols:
+			if err := stream.SendMsg(r); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+// serverROLStream receives the federate's files and announcements.
+func (h *inbound) serverROLStream(stream grpc.ServerStream) error {
+	s, err := h.session(stream.Context())
+	if err != nil {
+		return err
+	}
+	for {
+		var rol ROL
+		err := stream.RecvMsg(&rol)
+		if err == io.EOF {
+			return stream.SendMsg(h.m.subscription())
+		}
+		if err != nil {
+			return err
+		}
+		h.m.handleROL(s, &rol)
+	}
+}
+
+// drainStream accepts binary streams, which EdgeTAK does not use, so the
+// other side does not treat the federate as broken.
 func (h *inbound) drainStream(stream grpc.ServerStream, reply message) error {
 	if _, err := h.session(stream.Context()); err != nil {
 		return err
@@ -262,14 +301,6 @@ func (h *inbound) drainStream(stream grpc.ServerStream, reply message) error {
 			return err
 		}
 	}
-}
-
-func (h *inbound) idleStream(stream grpc.ServerStream) error {
-	if _, err := h.session(stream.Context()); err != nil {
-		return err
-	}
-	<-stream.Context().Done()
-	return nil
 }
 
 // PeerCertificate returns the certificate of a pending server, PEM encoded,
