@@ -59,6 +59,7 @@ func startAppWith(t *testing.T, edit func(*config.Config)) *App {
 		t.Fatal(err)
 	}
 	a.Listen = mem.Listen
+	a.Dial = mem.Dial
 	ctx, cancel := context.WithCancel(context.Background())
 	wait, err := a.Start(ctx)
 	if err != nil {

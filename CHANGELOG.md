@@ -10,6 +10,40 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.5.0 (2026-10-21)
+
+### Added
+- **Federation** with TAK Servers and other EdgeTAKs, using TAK Server
+  Federation v2 (gRPC). To the other server, EdgeTAK looks like another TAK
+  Server. On the new **Federation** tab:
+  - **What crosses:** positions, markers, chat and direct messages. Contacts
+    are kept in sync, so direct messages reach the other side's users, and
+    devices are told when someone there leaves.
+  - **Connect to a TAK Server or EdgeTAK** with a certificate (port 9001) or
+    a TAK Server 5.6 federation token (port 9002).
+    - **Its CA:** **Get it from the server** fetches the other server's CA,
+      for you to check the fingerprint.
+    - **TAK Server admin login:** EdgeTAK can make the TAK Server trust its
+      CA, with groups, or get a federation token. The login isn't saved.
+  - **Let servers connect to EdgeTAK** on port 9001. Servers you haven't
+    approved are turned away and listed with their certificate fingerprint,
+    for you to approve.
+  - **Per federate:** share everything, or only what's sent to chosen groups,
+    and choose which groups receive what the other server sends.
+  - **Status:** live connection state, message counts, last error and recent
+    messages for each federate. EdgeTAK reconnects by itself.
+- **Tested against TAK Server** (with LDAP users), with certificate and
+  token sign-in. Positions, chat and contacts crossed in both directions. With
+  LDAP, give EdgeTAK's federate one of your users' groups: `__ANON__` usually
+  isn't one (see the README).
+- Installer option **`--federation`** opens port 9001 in the firewall
+  (remembered for updates). `docker-compose.yml` has the port ready to
+  uncomment.
+
+### Not yet federated
+- Data packages and Data Sync missions, which TAK Server sends on a separate
+  stream. EdgeTAK keeps that stream open but ignores it.
+
 ## v0.4.0 (2026-10-21)
 
 ### Added

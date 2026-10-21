@@ -82,6 +82,10 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   devices and certificates (with expiry), revoke the certificate of a lost
   device, and change their password. Share the link from the console's
   Connect tab.
+- **Federation** with TAK Servers and other EdgeTAKs (TAK Server Federation
+  v2): positions, markers, chat and direct messages cross between servers, in
+  either direction, with certificate or token sign-in, approval of servers
+  that connect, and per-federate group sharing. See [Federation](#federation).
 - **Device profiles** (Groups tab): settings and files sent to the TAK
   devices of a group's members, or of every user, as on the official server.
   - **Contents:** ATAK settings (entered as key, type and value), `.pref`
@@ -397,6 +401,55 @@ External cameras or media servers can be added with their own URL (`rtsp://`,
 cannot play them. Bandwidth is the main limit: every viewer receives a full
 copy of the stream, about 2 to 4 Mbit/s for 1080p.
 
+### Federation
+
+EdgeTAK federates with TAK Servers and other EdgeTAKs using TAK Server
+Federation v2 (gRPC, the same protocol TAK Servers use with each other). To
+the other server, EdgeTAK looks like another TAK Server.
+
+- **What crosses:** positions, markers, shapes, chat and direct messages.
+  Contacts are kept in sync, so direct messages to the other side's users
+  arrive. Data packages and Data Sync missions stay on each server for now.
+- **What each side gets:** per federate, share everything EdgeTAK's devices
+  send, or only what is sent to chosen groups. Choose which groups receive
+  what the other server sends (none selected = every device).
+
+**Connecting to a TAK Server** (Federation tab, **Connect to a server**):
+1. **Address and sign-in:** enter its address and choose how EdgeTAK signs
+   in.
+   - **Certificate (port 9001):** the standard way, and works with any TAK
+     Server. The TAK Server must trust EdgeTAK's CA: open **Set up with a TAK
+     Server admin login**, enter an admin's username and password, and click
+     **Make the TAK Server trust EdgeTAK**. EdgeTAK uploads its CA as a
+     federate CA, with the TAK Server groups you list. Or upload
+     **Download EdgeTAK CA** in the TAK Server's Federation Manager yourself.
+   - **Federation token (port 9002, TAK Server 5.6+):** paste a token, or
+     click **Get a token** with an admin login. The TAK Server's token
+     federation must be turned on in its CoreConfig.xml.
+2. **Its CA:** click **Get it from the server**, check the fingerprint with
+   the TAK Server's admin, and trust it. Or paste its `ca.pem`.
+3. **Save:** EdgeTAK connects and reconnects by itself, and the list shows
+   the connection's state, message counts, errors and recent messages.
+
+**Letting servers connect to EdgeTAK:**
+1. Turn on **Let other servers connect on port 9001**.
+2. Open the port: reinstall or update with `--federation`, or with Docker,
+   uncomment the `9001` line in `docker-compose.yml`.
+3. A server that connects is turned away and listed under **Waiting for
+   approval**. Compare its fingerprint with its admin, then **Approve** it.
+
+The other server needs EdgeTAK's CA or certificate fingerprint, both shown
+under **This server**. Two EdgeTAKs federate the same way: one connects out,
+the other approves it.
+
+**Groups on the TAK Server side.** A TAK Server only passes traffic between a
+federate and its users through groups they share, in both directions. With
+LDAP, `__ANON__` is usually not one of them: give EdgeTAK's federate one of
+your users' LDAP groups. List it under **TAK Server groups for EdgeTAK**, or
+set it in the TAK Server's Federation Manager. The TAK Server applies a
+federate's groups when it connects, so disable and enable the federate in
+EdgeTAK afterwards.
+
 ## Connect clients
 
 There are two ways to connect, depending on the server:
@@ -470,6 +523,7 @@ authentication. These clients are anonymous and only see `__ANON__`.
 | 8443 | Marti API and admin console (client certificate or password) |
 | 8446 | Certificate enrollment; with Let's Encrypt also the trusted admin console |
 | 80 | Let's Encrypt challenges (only with `--letsencrypt`) |
+| 9001 | Federation: other servers connecting here (only when turned on, firewall with `--federation`) |
 | 8087 | CoT streaming, plain TCP, anonymous (off with `--no-plaintext`) |
 | 8080 | Marti API, plaintext, for 8087 clients; admin console from localhost only (off with `--no-plaintext`) |
 | 8554 | Video: RTSP (not with `--no-video`) |
@@ -540,6 +594,7 @@ TLS.
 cmd/edgetak/        entry point and flags
 internal/cot/       CoT event model, XML <-> TAK protobuf codec, stream framing
 internal/router/    client registry, group routing (IN/OUT, live changes), hooks
+internal/federation/ TAK Server Federation v2 (gRPC): federates, listener, CoT and contacts
 internal/stream/    TCP/TLS stream sessions and protocol negotiation
 internal/web/       Marti API, enrollment, OAuth, groups/channels, admin console (embedded)
 internal/mission/   Data Sync missions: roles, contents, change feed, notifications
@@ -589,6 +644,7 @@ licenses, all compatible with the AGPL:
 |---|---|---|
 | [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto), x/net, x/text | password hashing, ACME, TLS | BSD-3-Clause |
 | [google.golang.org/protobuf](https://pkg.go.dev/google.golang.org/protobuf) | TAK protobuf | BSD-3-Clause |
+| [grpc-go](https://pkg.go.dev/google.golang.org/grpc), genproto | federation | Apache-2.0 |
 | [go-pkcs12](https://pkg.go.dev/software.sslmate.com/src/go-pkcs12) | client certificates | BSD-3-Clause |
 | [Leaflet](https://leafletjs.com/) 1.9.4 | console map | BSD-2-Clause |
 | [milsymbol](https://github.com/spatialillusions/milsymbol) 2.2.0 | MIL-STD-2525 symbols | MIT |

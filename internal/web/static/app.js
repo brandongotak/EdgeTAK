@@ -135,6 +135,7 @@ const loaders = {
   send: loadSend,
   connect: loadConnect,
   chat: loadChat,
+  federation: loadFederation,
   settings: () => Promise.all([loadRetention(), loadEmergencyCard()]),
 };
 
@@ -171,6 +172,8 @@ function selectTab(name) {
     pollTimer = setInterval(guard(loadSendLive), 5000); // Inbox updates
   } else if (name === 'chat') {
     pollTimer = setInterval(() => loadChat().catch(() => {}), 5000); // new messages
+  } else if (name === 'federation') {
+    pollTimer = setInterval(() => { if (!$('#fed-dialog').open) loadFederation().catch(() => {}); }, 3000); // live connection state
   }
 }
 $('#tabs').addEventListener('click', (e) => {
@@ -3083,6 +3086,247 @@ $('#profiles-table').addEventListener('click', guard(async (e) => {
       await api('DELETE', `api/profiles/${encodeURIComponent(p.id)}`);
       toast('Profile deleted');
       return loadProfiles();
+  }
+}));
+
+// ---------- federation ----------
+
+let fed = null;
+let editingFederate = null; // the federate being edited, or null
+const openRecent = new Set(); // federates whose recent messages are expanded
+
+const FED_STATE = { connected: 'ok', connecting: 'warn', disconnected: 'bad' };
+
+async function loadFederation() {
+  fed = await api('GET', 'api/federation');
+  if (!allGroups.length) allGroups = await api('GET', 'api/groups');
+  const id = fed.identity;
+  $('#fed-identity').innerHTML = [
+    ['Name', id.server_name], ['Server ID', id.node_id],
+    ['Certificate', id.cert_subject], ['Certificate fingerprint', id.cert_fingerprint],
+    ['CA', id.ca_subject], ['CA fingerprint', id.ca_fingerprint],
+  ].map(([k, v]) => `<dt>${esc(k)}</dt><dd class="${k.includes('fingerprint') || k === 'Server ID' ? 'mono fp' : ''}">${esc(v || '—')}</dd>`).join('');
+  const lf = $('#fed-listener-form');
+  if (!lf.contains(document.activeElement)) {
+    lf.enabled.checked = fed.listener.enabled;
+    lf.port.value = fed.listener.port;
+  }
+  $('#fed-listener-state').innerHTML = !fed.listener.enabled ? '<span class="pill">off</span>'
+    : fed.listener.running ? `<span class="pill ok">listening on ${fed.listener.port}</span>` : `<span class="pill bad" title="${esc(fed.listener.error || '')}">not running: ${esc(fed.listener.error || 'starting')}</span>`;
+
+  $('#fed-pending-card').hidden = !fed.pending.length;
+  $('#fed-pending tbody').innerHTML = fed.pending.map((p) => `<tr>
+      <td><strong>${esc(p.common_name || 'unknown')}</strong><div class="muted">${esc(p.issuer)}</div></td>
+      <td class="mono fp">${esc(p.fingerprint.match(/.{2}/g).join(':'))}</td>
+      <td class="mono">${esc(p.remote)}</td>
+      <td>${esc(ago(p.last_seen))}</td>
+      <td class="actions"><button class="small primary" data-fed="approve" data-fp="${esc(p.fingerprint)}">Approve</button>
+        <button class="small" data-fed="dismiss" data-fp="${esc(p.fingerprint)}">Dismiss</button></td>
+    </tr>`).join('');
+
+  $('#fed-list').innerHTML = fed.federates.map((f) => {
+    const st = f.status || { state: f.enabled ? 'starting' : 'off', recent: [], remote_groups: [] };
+    const where = f.direction === 'outbound' ? `${esc(f.address)}:${f.port} · ${f.auth_mode === 'token' ? 'token' : 'certificate'}`
+      : f.fingerprint ? `fingerprint ${esc(f.fingerprint.slice(0, 16))}…` : `common name ${esc(f.client_cn)}`;
+    const share = f.send_mode === 'groups' ? `shares ${groupPills(f.outbound_groups)}` : 'shares everything';
+    const into = f.inbound_groups.length ? `delivers to ${groupPills(f.inbound_groups)}` : 'delivers to every device';
+    const recent = (st.recent || []).map((m) => `<tr><td>${esc(new Date(m.time).toLocaleTimeString())}</td><td>${m.direction === 'in' ? '⬇ in' : '⬆ out'}</td>
+        <td class="mono">${esc(m.type)}</td><td>${esc(m.name || m.uid)}</td><td class="muted">${esc(m.route || '')}</td></tr>`).join('');
+    return `<div class="fed-item${f.enabled ? '' : ' dim'}">
+      <div class="fed-head">
+        <div><strong>${esc(f.name)}</strong> <span class="pill">${f.direction === 'outbound' ? 'outbound' : 'inbound'}</span>
+          ${f.enabled ? `<span class="pill ${FED_STATE[st.state] || ''}">${esc(st.state)}</span>${st.since ? ` <span class="muted">since ${esc(new Date(st.since).toLocaleTimeString())}</span>` : ''}` : '<span class="pill">disabled</span>'}
+          <div class="muted">${where}${st.remote_name ? ` · ${esc(st.remote_name)}` : ''}</div></div>
+        <div class="actions">
+          <button class="small" data-fed="edit" data-id="${esc(f.id)}">Edit</button>
+          <button class="small" data-fed="toggle" data-id="${esc(f.id)}">${f.enabled ? 'Disable' : 'Enable'}</button>
+          <button class="small danger" data-fed="delete" data-id="${esc(f.id)}">Delete</button>
+        </div>
+      </div>
+      ${st.last_error ? `<div class="issue critical"><span class="status-icon critical" aria-hidden="true">✖</span> <span>${esc(st.last_error)}</span></div>` : ''}
+      ${st.warning ? `<div class="issue warning"><span class="status-icon warning" aria-hidden="true">▲</span> <span>${esc(st.warning)}</span></div>` : ''}
+      <div class="fed-meta muted">${share} · ${into}${st.remote_groups?.length ? ` · its groups ${groupPills(st.remote_groups)}` : ''}</div>
+      ${f.enabled ? `<div class="fed-meta muted">${st.in ?? 0} in · ${st.out ?? 0} out${st.dropped ? ` · <span class="error">${st.dropped} dropped</span>` : ''} · ${plural(st.remote_contacts || 0, 'remote contact')}${st.last_health ? ` · last health check ${esc(ago(st.last_health))}` : ''}</div>` : ''}
+      ${recent ? `<details data-recent="${esc(f.id)}"${openRecent.has(f.id) ? ' open' : ''}><summary>Recent messages</summary><div class="table-wrap"><table class="fed-recent"><tbody>${recent}</tbody></table></div></details>` : ''}
+    </div>`;
+  }).join('') || '<p class="muted">No federates yet. Connect to a TAK Server or another EdgeTAK, or let them connect here.</p>';
+}
+
+$('#fed-list').addEventListener('toggle', (e) => {
+  const id = e.target.dataset?.recent;
+  if (id) e.target.open ? openRecent.add(id) : openRecent.delete(id);
+}, true);
+
+$('#fed-listener-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  fed = await api('PUT', 'api/federation/listener', { enabled: f.enabled.checked, port: Number(f.port.value) || 9001 });
+  f.querySelector('button').focus();
+  toast(f.enabled.checked ? `Other servers can connect on port ${f.port.value}` : 'Inbound federation is off');
+  loadFederation();
+}));
+
+function syncFedForm() {
+  const f = $('#fed-form');
+  const outbound = f.direction.value === 'outbound';
+  $('#fed-outbound').hidden = !outbound;
+  $('#fed-inbound').hidden = outbound;
+  const token = f.auth_mode.value === 'token';
+  $('#fed-token-wrap').hidden = !token;
+  $('#fed-tak-token-row').hidden = !token;
+  $('#fed-tak-trust-row').hidden = token;
+  $('#fed-tak-hint').textContent = token ? 'Get a federation token from the TAK Server.' : 'Upload EdgeTAK\'s CA to the TAK Server as a federate CA, with the groups EdgeTAK may use.';
+  f.port.placeholder = token ? '9002' : '9001';
+  $('#fed-out-groups').hidden = f.send_mode.value !== 'groups';
+}
+
+function openFedDialog(fd, pending) {
+  editingFederate = fd || null;
+  const f = $('#fed-form');
+  f.reset();
+  $('#fed-error').textContent = '';
+  $('#fed-fetched').hidden = true;
+  $('#fed-fetch-state').textContent = '';
+  $('#fed-tak-state').textContent = '';
+  $('#fed-dialog-title').textContent = pending ? `Approve ${pending.common_name || 'server'}` : fd ? `Edit ${fd.name}` : 'Connect to a server';
+  f.name.value = fd?.name || pending?.common_name || '';
+  f.direction.value = fd?.direction || (pending ? 'inbound' : 'outbound');
+  for (const r of f.querySelectorAll('[name=direction]')) r.disabled = !!pending;
+  f.enabled.checked = fd ? fd.enabled : true;
+  f.address.value = fd?.address || '';
+  f.auth_mode.value = fd?.auth_mode || 'certificate';
+  f.port.value = fd?.port || '';
+  f.ca_pem.value = fd?.direction === 'outbound' ? fd.ca_pem || '' : '';
+  f.tls_server_name.value = fd?.tls_server_name || '';
+  f.token.value = '';
+  f.token.placeholder = fd?.has_token ? 'unchanged (paste a new token to replace it)' : 'paste a token, or get one below';
+  f.use_tls.checked = fd ? fd.use_tls !== false : true;
+  f.fingerprint.value = fd?.fingerprint || pending?.fingerprint || '';
+  f.fingerprint.readOnly = !!pending;
+  f.client_cn.value = fd?.client_cn || '';
+  f.in_ca_pem.value = fd?.direction === 'inbound' ? fd.ca_pem || '' : '';
+  f.send_mode.value = fd?.send_mode || 'all';
+  f.map_remote_groups.checked = !!fd?.map_remote_groups;
+  renderChips('#fed-out-groups', fd?.outbound_groups || []);
+  renderChips('#fed-in-groups', fd?.inbound_groups || []);
+  f.dataset.pending = pending?.fingerprint || '';
+  syncFedForm();
+  $('#fed-dialog').showModal();
+}
+
+$('#fed-form').addEventListener('change', (e) => { if (['direction', 'auth_mode', 'send_mode'].includes(e.target.name)) syncFedForm(); });
+$('#fed-add').addEventListener('click', () => openFedDialog(null));
+
+function fedBody() {
+  const f = $('#fed-form');
+  const outbound = f.direction.value === 'outbound';
+  return {
+    name: f.name.value, direction: f.direction.value, enabled: f.enabled.checked,
+    address: f.address.value, port: Number(f.port.value) || 0, auth_mode: f.auth_mode.value, tls_server_name: f.tls_server_name.value,
+    token: f.token.value, token_expiration: Number(f.dataset.tokenExpiration || editingFederate?.token_expiration || 0), use_tls: f.use_tls.checked,
+    ca_pem: outbound ? f.ca_pem.value : f.in_ca_pem.value, fingerprint: f.fingerprint.value, client_cn: f.client_cn.value,
+    send_mode: f.send_mode.value, outbound_groups: checkedIn('#fed-out-groups'), inbound_groups: checkedIn('#fed-in-groups'),
+    map_remote_groups: f.map_remote_groups.checked,
+  };
+}
+
+$('#fed-form').addEventListener('submit', async (e) => {
+  if (e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  const f = e.target;
+  $('#fed-error').textContent = '';
+  try {
+    if (f.dataset.pending) await api('POST', `api/federation/pending/${encodeURIComponent(f.dataset.pending)}/approve`, fedBody());
+    else if (editingFederate) await api('PUT', `api/federation/federates/${encodeURIComponent(editingFederate.id)}`, fedBody());
+    else await api('POST', 'api/federation/federates', fedBody());
+    delete f.dataset.tokenExpiration;
+    $('#fed-dialog').close();
+    toast('Federate saved');
+    loadFederation();
+  } catch (ex) {
+    $('#fed-error').textContent = ex.message;
+  }
+});
+
+$('#fed-fetch-ca').addEventListener('click', async () => {
+  const f = $('#fed-form');
+  const port = Number(f.port.value) || (f.auth_mode.value === 'token' ? 9002 : 9001);
+  $('#fed-fetch-state').textContent = 'Connecting…';
+  try {
+    // The web port can use another certificate; ask it too when its admin login is used.
+    const ports = $('.fed-tak').open ? [port, Number(f.tak_port.value) || 8446] : [port];
+    const r = await api('POST', 'api/federation/fetch-ca', { address: f.address.value, ports });
+    $('#fed-fetch-state').textContent = '';
+    const box = $('#fed-fetched');
+    box.hidden = false;
+    box.innerHTML = `<p><strong>Check these fingerprints with the other server's admin before trusting them.</strong></p>` +
+      r.cas.map((c) => `<div class="fed-ca"><div>${esc(c.subject)} <span class="muted">(ports ${c.ports.join(', ')})</span></div><div class="mono fp">${esc(c.fingerprint.match(/.{2}/g).join(':'))}</div></div>`).join('') +
+      (r.suggested_tls_server_name ? `<p class="muted">Its certificate names ${esc(r.server_names.join(', '))}.</p>` : '') +
+      `<button type="button" class="small primary" id="fed-trust-fetched">Trust ${r.cas.length > 1 ? 'these' : 'this'} CA</button>`;
+    $('#fed-trust-fetched').onclick = () => {
+      f.ca_pem.value = r.ca_pem;
+      box.hidden = true;
+      $('#fed-fetch-state').textContent = `CA saved in the form (${plural(r.cas.length, 'certificate')})`;
+    };
+  } catch (ex) {
+    $('#fed-fetch-state').textContent = ex.message;
+  }
+});
+
+function takLogin() {
+  const f = $('#fed-form');
+  return { address: f.address.value, port: Number(f.tak_port.value) || 8446, ca_pem: f.ca_pem.value, username: f.tak_user.value, password: f.tak_password.value };
+}
+
+$('#fed-tak-token').addEventListener('click', async () => {
+  const f = $('#fed-form');
+  $('#fed-tak-state').textContent = 'Signing in to the TAK Server…';
+  try {
+    const r = await api('POST', 'api/federation/tak/token', { ...takLogin(), name: fed.identity.server_name, days: Number(f.tak_days.value) || 0 });
+    f.token.value = r.token;
+    f.dataset.tokenExpiration = r.expiration;
+    f.tak_password.value = '';
+    $('#fed-tak-state').textContent = `Token received${r.expiration > 0 ? `, valid until ${new Date(r.expiration).toLocaleDateString()}` : ''}. Save to use it.`;
+  } catch (ex) {
+    $('#fed-tak-state').textContent = ex.message;
+  }
+});
+
+$('#fed-tak-trust').addEventListener('click', async () => {
+  const f = $('#fed-form');
+  $('#fed-tak-state').textContent = 'Signing in to the TAK Server…';
+  try {
+    const groups = f.tak_groups.value.split(',').map((g) => g.trim()).filter(Boolean);
+    const r = await api('POST', 'api/federation/tak/trust', { ...takLogin(), groups });
+    f.tak_password.value = '';
+    $('#fed-tak-state').textContent = `${r.uploaded ? 'EdgeTAK\'s CA was added to the TAK Server' : 'The TAK Server already trusted EdgeTAK\'s CA'}` +
+      (r.groups?.length ? `, with groups ${r.groups.join(', ')}` : '') +
+      (r.federate_found ? `. The existing EdgeTAK federate there has groups: ${(r.federate_groups || []).join(', ') || 'none'}.` : '. The TAK Server adds EdgeTAK as a federate when it first connects.');
+  } catch (ex) {
+    $('#fed-tak-state').textContent = ex.message;
+  }
+});
+
+$('#tab-federation').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('[data-fed]');
+  if (!b) return;
+  const f = fed.federates.find((x) => x.id === b.dataset.id);
+  switch (b.dataset.fed) {
+    case 'edit':
+      return openFedDialog(f);
+    case 'toggle':
+      await api('PUT', `api/federation/federates/${encodeURIComponent(f.id)}`, { ...f, enabled: !f.enabled, token: '' });
+      return loadFederation();
+    case 'delete':
+      if (!confirm(`Delete the federate ${f.name}? EdgeTAK stops sharing with it.`)) return;
+      await api('DELETE', `api/federation/federates/${encodeURIComponent(f.id)}`);
+      toast('Federate deleted');
+      return loadFederation();
+    case 'approve':
+      return openFedDialog(null, fed.pending.find((p) => p.fingerprint === b.dataset.fp));
+    case 'dismiss':
+      await api('DELETE', `api/federation/pending/${encodeURIComponent(b.dataset.fp)}`);
+      return loadFederation();
   }
 }));
 

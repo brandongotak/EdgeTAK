@@ -20,6 +20,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/chatlog"
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/federation"
 	"github.com/brandongotak/EdgeTAK/internal/health"
 	"github.com/brandongotak/EdgeTAK/internal/history"
 	"github.com/brandongotak/EdgeTAK/internal/mediamtx"
@@ -51,6 +52,11 @@ type App struct {
 	Addrs map[string]string
 	// Listen opens listeners; it defaults to net.Listen and exists for tests.
 	Listen func(network, address string) (net.Listener, error)
+	// Dial opens outbound federation connections; it defaults to TCP and
+	// exists for tests.
+	Dial func(address string) (net.Conn, error)
+	// Federation runs TAK Server federation (set by Start).
+	Federation *federation.Manager
 
 	nodeID string
 }
@@ -303,7 +309,15 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		ws.MediaMTX = &mediamtx.Manager{Binary: vc.MediaMTXBinary, Config: conf, APIAddr: vc.APIAddr,
 			Log: a.Log.With("component", "mediamtx"), APIAuth: ws.MediaMTXAPIAuth}
 	}
+	fedCfg := federation.Config{Router: a.Router, Store: a.Store, Cert: func() *tls.Certificate { return &a.CA.ServerCert },
+		ServerName: a.Cfg.ServerName, NodeID: a.nodeID, Version: a.Version, AnonGroup: a.Cfg.AnonymousGroup,
+		Log:    a.Log.With("component", "federation"),
+		Listen: func(addr string) (net.Listener, error) { return a.Listen("tcp", addr) }, Dial: a.Dial}
+	a.Federation = federation.New(fedCfg)
+	ws.Federation = a.Federation
+	ws.FederationDial = a.Dial
 	ws.Start(ctx) // server contact, Inbox and video (writes mediamtx.yml)
+	a.Federation.Start(ctx.Done())
 
 	var wg sync.WaitGroup
 	wg.Add(1)

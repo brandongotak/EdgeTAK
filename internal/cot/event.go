@@ -503,3 +503,48 @@ func fmtTime(t time.Time) string {
 }
 
 func fmtFloat(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }
+
+// FederationDetail splits the event for TAK Server federation, as TAK
+// Server's ProtoBufHelper does: the <detail> XML without <track>, the
+// battery <status> and <precisionlocation>, which federation carries in
+// fields of their own (returned when present), so they are not duplicated
+// when the other side adds them back.
+func (e *Event) FederationDetail() (detail string, track *Track, status *Status, ploc *PrecisionLocation) {
+	var b bytes.Buffer
+	b.WriteString(`<detail>`)
+	d := &e.Detail
+	if c := d.Contact; c != nil && d.inXML&bitContact == 0 {
+		b.WriteString(`<contact`)
+		if c.Endpoint != "" {
+			attr(&b, "endpoint", c.Endpoint)
+		}
+		attr(&b, "callsign", c.Callsign)
+		b.WriteString(`/>`)
+	}
+	if g := d.Group; g != nil && d.inXML&bitGroup == 0 {
+		b.WriteString(`<__group`)
+		attr(&b, "name", g.Name)
+		attr(&b, "role", g.Role)
+		b.WriteString(`/>`)
+	}
+	if t := d.Takv; t != nil && d.inXML&bitTakv == 0 {
+		b.WriteString(`<takv`)
+		attr(&b, "device", t.Device)
+		attr(&b, "platform", t.Platform)
+		attr(&b, "os", t.OS)
+		attr(&b, "version", t.Version)
+		b.WriteString(`/>`)
+	}
+	if d.inXML&bitTrack == 0 {
+		track = d.Track
+	}
+	if d.inXML&bitStatus == 0 {
+		status = d.Status
+	}
+	if d.inXML&bitPrecisionLocation == 0 {
+		ploc = d.PrecisionLocation
+	}
+	b.WriteString(d.XML)
+	b.WriteString(`</detail>`)
+	return b.String(), track, status, ploc
+}

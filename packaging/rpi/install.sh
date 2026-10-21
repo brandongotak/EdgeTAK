@@ -25,6 +25,7 @@ LE=0
 LE_EMAIL=""
 NO_PLAINTEXT=0
 VIDEO=1 # on by default; --no-video turns it off (remembered)
+FEDERATION=0 # --federation opens the federation port (9001) in the firewall (remembered)
 VIDEO_TARBALL=""
 
 # Options are remembered: reruns of the installer and updates from the admin
@@ -83,6 +84,9 @@ Usage: sudo sh $SELF [options]
   --video              require video (fail instead of skipping it)
   --video-tarball FILE use this mediamtx_v${MTX_VERSION}_linux_<arch>.tar.gz instead
                        of downloading it (for offline installs)
+  --federation         open port 9001 in the firewall for TAK Server federation
+                       (other servers connecting to this one; turn that on on
+                       the console's Federation tab). --no-federation closes it.
   --no-firewall        do not open ports in ufw/firewalld
   --binary PATH        install this edgetak binary instead of the bundled one
   --import-data DIR    copy an existing EdgeTAK data directory (e.g. from a
@@ -118,6 +122,8 @@ while [ $# -gt 0 ]; do
 		--no-video) VIDEO=0; VIDEO_EXPLICIT=1; shift ;;
 		--video-tarball) [ $# -ge 2 ] || die "--video-tarball needs a file"; VIDEO=1; VIDEO_EXPLICIT=1; VIDEO_TARBALL=$2; shift 2 ;;
 		--video-tarball=*) VIDEO=1; VIDEO_EXPLICIT=1; VIDEO_TARBALL=${1#*=}; shift ;;
+		--federation) FEDERATION=1; shift ;;
+		--no-federation) FEDERATION=0; shift ;;
 		--no-firewall) FIREWALL=0; shift ;;
 		--uninstall) ACTION=uninstall; shift ;;
 		--purge) PURGE=1; shift ;;
@@ -141,6 +147,7 @@ fi
 PORTS="8089 8443 8446"
 [ "$NO_PLAINTEXT" -eq 1 ] || PORTS="8087 $PORTS 8080"
 [ "$LE" -eq 0 ] || PORTS="80 $PORTS"
+[ "$FEDERATION" -eq 0 ] || PORTS="$PORTS 9001"
 BASE_PORTS=$PORTS
 VIDEO_PORTS="8554 1935 8890/udp"
 [ "$VIDEO" -eq 0 ] || PORTS="$PORTS $VIDEO_PORTS"
@@ -238,6 +245,7 @@ LE_EMAIL=$(q "$LE_EMAIL")
 NO_PLAINTEXT=$NO_PLAINTEXT
 FIREWALL=$FIREWALL
 VIDEO=$VIDEO_WANTED
+FEDERATION=$FEDERATION
 EOF
 	chmod 0644 "$CONF.tmp"
 	mv -f "$CONF.tmp" "$CONF"

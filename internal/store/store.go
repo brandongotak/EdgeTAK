@@ -181,6 +181,8 @@ type db struct {
 	Emergencies []*Emergency `json:"emergencies"` // oldest first, the last maxEmergencies
 
 	DeviceProfiles map[string]*DeviceProfile `json:"device_profiles"` // by id
+
+	Federation Federation `json:"federation"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -1495,5 +1497,108 @@ func (s *Store) DeleteDeviceProfile(id string) error {
 		return ErrNotFound
 	}
 	delete(s.db.DeviceProfiles, id)
+	return s.save()
+}
+
+// ---- federation ----
+
+// Federation holds TAK Server Federation v2 settings: whether other servers
+// may connect here (inbound), and every federate.
+type Federation struct {
+	ListenEnabled bool       `json:"listen_enabled"`
+	ListenPort    int        `json:"listen_port"` // 0 = 9001
+	Federates     []Federate `json:"federates"`
+}
+
+// Federate is one server EdgeTAK federates with.
+type Federate struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Enabled   bool   `json:"enabled"`
+	Direction string `json:"direction"` // "outbound" (EdgeTAK connects) or "inbound" (it connects here)
+
+	// Outbound
+	Address         string `json:"address,omitempty"`
+	Port            int    `json:"port,omitempty"`
+	TLSServerName   string `json:"tls_server_name,omitempty"`
+	AuthMode        string `json:"auth_mode,omitempty"` // "certificate" (port 9001) or "token" (9002)
+	Token           string `json:"token,omitempty"`     // secret
+	TokenExpiration int64  `json:"token_expiration,omitempty"`
+	UseTLS          bool   `json:"use_tls"`
+
+	// CAPEM is the CA certificate(s) that signed the other server's
+	// certificate: it is trusted for this federate only.
+	CAPEM string `json:"ca_pem,omitempty"`
+
+	// Inbound: the other server's client certificate must have this SHA-256
+	// fingerprint, or be issued by CAPEM with this common name.
+	Fingerprint string `json:"fingerprint,omitempty"`
+	ClientCN    string `json:"client_cn,omitempty"`
+
+	// What is shared: SendMode "all" (everything devices send) or "groups"
+	// (only what is sent to OutboundGroups). Received events go to
+	// InboundGroups (none = every device), plus groups named like the
+	// remote federate groups when MapRemoteGroups is set.
+	SendMode        string   `json:"send_mode"`
+	OutboundGroups  []string `json:"outbound_groups"`
+	InboundGroups   []string `json:"inbound_groups"`
+	MapRemoteGroups bool     `json:"map_remote_groups,omitempty"`
+
+	Created time.Time `json:"created"`
+}
+
+func cloneFederate(f Federate) Federate {
+	f.OutboundGroups = slices.Clone(f.OutboundGroups)
+	f.InboundGroups = slices.Clone(f.InboundGroups)
+	return f
+}
+
+// FederationSettings returns the federation settings and federates.
+func (s *Store) FederationSettings() Federation {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	f := s.db.Federation
+	f.Federates = make([]Federate, len(s.db.Federation.Federates))
+	for i, x := range s.db.Federation.Federates {
+		f.Federates[i] = cloneFederate(x)
+	}
+	if f.ListenPort == 0 {
+		f.ListenPort = 9001
+	}
+	return f
+}
+
+// SetFederationListener changes whether other servers may connect here.
+func (s *Store) SetFederationListener(enabled bool, port int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Federation.ListenEnabled, s.db.Federation.ListenPort = enabled, port
+	return s.save()
+}
+
+// PutFederate adds or replaces a federate (by ID).
+func (s *Store) PutFederate(f Federate) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f = cloneFederate(f)
+	for i := range s.db.Federation.Federates {
+		if s.db.Federation.Federates[i].ID == f.ID {
+			s.db.Federation.Federates[i] = f
+			return s.save()
+		}
+	}
+	s.db.Federation.Federates = append(s.db.Federation.Federates, f)
+	return s.save()
+}
+
+func (s *Store) DeleteFederate(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fs := s.db.Federation.Federates
+	i := slices.IndexFunc(fs, func(f Federate) bool { return f.ID == id })
+	if i < 0 {
+		return ErrNotFound
+	}
+	s.db.Federation.Federates = slices.Delete(fs, i, i+1)
 	return s.save()
 }

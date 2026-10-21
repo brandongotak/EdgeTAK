@@ -248,6 +248,24 @@ td.wrap { white-space: normal; max-width: 320px; }
 .issue { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: var(--panel); }
 .issue.critical { border-color: var(--danger); }
 .issue.warning { border-color: var(--warn); }
+.fed-dialog { width: min(780px, calc(100vw - 24px)); }
+.fed-section { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; margin: 0; }
+.fed-section legend { padding: 0 6px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.fed-section[hidden] { display: none; }
+.fed-section textarea { font-family: var(--mono); font-size: 12px; }
+.fed-fetched { border: 1px solid var(--warn); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.fed-ca .fp { font-size: 11px; }
+.fed-tak summary { cursor: pointer; }
+.fed-tak > * + * { margin-top: 8px; }
+.fed-item { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.fed-item + .fed-item { margin-top: 10px; }
+.fed-item.dim { opacity: .7; }
+.fed-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.fed-head .actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-start; }
+.fed-meta { font-size: 13px; }
+.fed-recent td { font-size: 12px; padding: 4px 8px; }
+dd.fp, td.fp, div.fp { word-break: break-all; font-size: 12px; }
+#fed-listener-form > label, #fed-listener-form > input { flex: 0 0 auto; }
 .profile-dialog { width: min(720px, calc(100vw - 24px)); }
 .profile-prefs { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
 .pref-row { display: grid; grid-template-columns: 2fr 1.2fr 2fr auto; gap: 6px; align-items: center; }

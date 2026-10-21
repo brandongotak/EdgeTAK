@@ -19,6 +19,7 @@ import (
 
 	"github.com/brandongotak/EdgeTAK/internal/chatlog"
 	"github.com/brandongotak/EdgeTAK/internal/config"
+	"github.com/brandongotak/EdgeTAK/internal/federation"
 	"github.com/brandongotak/EdgeTAK/internal/health"
 	"github.com/brandongotak/EdgeTAK/internal/history"
 	"github.com/brandongotak/EdgeTAK/internal/mediamtx"
@@ -41,13 +42,16 @@ type Server struct {
 	Public     *publiccert.Provider // nil unless a public certificate is configured
 	History    *history.Recorder
 	Chat       *chatlog.Log
-	MediaMTX   *mediamtx.Manager // nil unless EdgeTAK runs MediaMTX itself
-	Health     *health.Sampler
-	Log        *slog.Logger
-	PackageDir string
-	NodeID     string
-	Version    string
-	Started    time.Time
+	Federation *federation.Manager
+	// FederationDial reaches other servers for federation setup (tests).
+	FederationDial func(addr string) (net.Conn, error)
+	MediaMTX       *mediamtx.Manager // nil unless EdgeTAK runs MediaMTX itself
+	Health         *health.Sampler
+	Log            *slog.Logger
+	PackageDir     string
+	NodeID         string
+	Version        string
+	Started        time.Time
 	// Addrs maps listener names (tcp, tls, https, enroll, http) to their
 	// bound addresses. It is set before serving starts and not modified.
 	Addrs map[string]string
@@ -117,6 +121,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.recordingRoutes(mux)
 	s.emergencyRoutes(mux)
 	s.profileRoutes(mux)
+	s.federationRoutes(mux)
 	s.accountRoutes(mux)
 
 	files := http.StripPrefix("/admin/", http.FileServerFS(staticSub()))

@@ -33,6 +33,7 @@ services:
       - "1935:1935"       # video: RTMP
       - "8890:8890/udp"   # video: SRT
       # - "80:80"         # Let's Encrypt
+      # - "9001:9001"     # federation: other servers connecting here (Federation tab)
     volumes:
       - edgetak-data:/data
 

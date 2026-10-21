@@ -33,6 +33,7 @@
       <button data-tab="send">Send</button>
       <button data-tab="chat">Chat log</button>
       <button data-tab="connect">Connect</button>
+      <button data-tab="federation">Federation</button>
       <button data-tab="settings">Settings</button>
     </nav>
     <div class="who"><button id="install-app" class="ghost" hidden title="Install the console as an app">Install app</button> <a class="button ghost" href="/account" title="Your own devices, certificates and password">My account</a> <button id="map-toggle" class="ghost" aria-pressed="false" title="Show or hide the map">Map</button> <span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
@@ -64,6 +65,103 @@
           <tbody></tbody>
         </table></div>
       </div>
+    </section>
+
+    <section id="tab-federation" class="tab" hidden>
+      <div class="card">
+        <div class="card-head"><h2>This server</h2><a class="button ghost small" href="api/ca.pem">Download EdgeTAK CA (PEM)</a></div>
+        <p class="muted">Federation shares positions, markers, chat and direct messages with TAK Servers and other EdgeTAKs (TAK Server Federation v2). Data packages and Data Sync missions stay on each server for now.</p>
+        <dl class="kv" id="fed-identity"></dl>
+        <form id="fed-listener-form" class="inline-form fed-listener">
+          <label class="check"><input type="checkbox" name="enabled"> Let other servers connect on port</label>
+          <input type="number" name="port" min="1" max="65535" class="days-input" aria-label="Port">
+          <button class="small" type="submit">Save</button>
+          <span id="fed-listener-state"></span>
+        </form>
+        <p class="muted">A server you haven't approved is turned away and listed below, so you can approve it. Open the port in the firewall (installer option <code>--federation</code>) and, with Docker, map it in <code>docker-compose.yml</code>.</p>
+      </div>
+      <div class="card" id="fed-pending-card" hidden>
+        <h2>Waiting for approval</h2>
+        <p class="muted">These servers tried to connect. Check the fingerprint with the other server's admin before approving.</p>
+        <div class="table-wrap"><table id="fed-pending">
+          <thead><tr><th>Server</th><th>Certificate fingerprint (SHA-256)</th><th>From</th><th>Last tried</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Federates</h2><button type="button" class="primary small" id="fed-add">+ Connect to a server</button></div>
+        <div id="fed-list"></div>
+      </div>
+      <dialog id="fed-dialog" class="card dialog fed-dialog">
+        <form method="dialog" id="fed-form" class="stack wide">
+          <div class="card-head"><h2 id="fed-dialog-title">Connect to a server</h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
+          <label>Name <input name="name" required maxlength="100" placeholder="e.g. Regional TAK Server"></label>
+          <div class="inline-form">
+            <label class="check"><input type="radio" name="direction" value="outbound" checked> EdgeTAK connects to it</label>
+            <label class="check"><input type="radio" name="direction" value="inbound"> It connects to EdgeTAK</label>
+            <label class="check"><input type="checkbox" name="enabled" checked> Enabled</label>
+          </div>
+
+          <fieldset id="fed-outbound" class="fed-section">
+            <legend>The other server</legend>
+            <div class="inline-form">
+              <label>Address <input name="address" placeholder="tak.example.com"></label>
+              <label>Sign in with
+                <select name="auth_mode"><option value="certificate">Certificate (port 9001, standard)</option><option value="token">Federation token (port 9002, TAK Server 5.6+)</option></select>
+              </label>
+              <label>Port <input type="number" name="port" min="1" max="65535" class="days-input" placeholder="9001"></label>
+            </div>
+            <label>Its CA certificate (PEM)
+              <textarea name="ca_pem" rows="3" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+            </label>
+            <div class="inline-form"><button type="button" class="small" id="fed-fetch-ca">Get it from the server</button><span class="muted" id="fed-fetch-state"></span></div>
+            <div id="fed-fetched" class="fed-fetched" hidden></div>
+            <label>TLS server name (optional) <input name="tls_server_name" placeholder="only if its certificate must name a host"></label>
+            <div id="fed-token-wrap" class="stack wide" hidden>
+              <label>Federation token <textarea name="token" rows="2" placeholder="paste a token, or get one below"></textarea></label>
+              <label class="check"><input type="checkbox" name="use_tls" checked> Use TLS (turn off only if the TAK Server's token port has no TLS)</label>
+            </div>
+            <details class="fed-tak">
+              <summary>Set up with a TAK Server admin login</summary>
+              <p class="muted">EdgeTAK signs in to the TAK Server's web port once for this; the login is not saved. <span id="fed-tak-hint"></span></p>
+              <div class="inline-form">
+                <label>Web port <input type="number" name="tak_port" class="days-input" value="8446"></label>
+                <label>Admin username <input name="tak_user" autocomplete="off"></label>
+                <label>Password <input type="password" name="tak_password" autocomplete="new-password"></label>
+              </div>
+              <div class="inline-form" id="fed-tak-token-row">
+                <label class="inline-label">Token valid for <input type="number" name="tak_days" class="days-input" value="0" min="0"> days <span class="muted">(0 = no expiry)</span></label>
+                <button type="button" class="small" id="fed-tak-token">Get a token</button>
+              </div>
+              <div class="inline-form" id="fed-tak-trust-row">
+                <label>TAK Server groups for EdgeTAK <input name="tak_groups" placeholder="groups your TAK users are in, e.g. Admin, Cyan"></label>
+                <button type="button" class="small" id="fed-tak-trust">Make the TAK Server trust EdgeTAK</button>
+              </div>
+              <p class="muted" id="fed-tak-state"></p>
+            </details>
+          </fieldset>
+
+          <fieldset id="fed-inbound" class="fed-section" hidden>
+            <legend>Its client certificate</legend>
+            <label>SHA-256 fingerprint <input name="fingerprint" placeholder="AB:CD:…" class="mono"></label>
+            <p class="muted">Or, instead of a fingerprint, the certificate's common name and the CA that issued it (lets the other server renew its certificate):</p>
+            <label>Common name <input name="client_cn"></label>
+            <label>CA certificate (PEM) <textarea name="in_ca_pem" rows="3" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
+          </fieldset>
+
+          <fieldset class="fed-section">
+            <legend>What is shared</legend>
+            <label class="check"><input type="radio" name="send_mode" value="all"> Everything EdgeTAK's devices send</label>
+            <label class="check"><input type="radio" name="send_mode" value="groups"> Only what is sent to these groups</label>
+            <div id="fed-out-groups" class="group-picker"></div>
+            <div class="muted picker-label">Deliver what it sends to these groups (none selected = every device)</div>
+            <div id="fed-in-groups" class="group-picker"></div>
+            <label class="check"><input type="checkbox" name="map_remote_groups"> Also deliver to EdgeTAK groups named like the other server's groups</label>
+          </fieldset>
+          <p class="error" id="fed-error" role="alert"></p>
+          <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
+        </form>
+      </dialog>
     </section>
 
     <section id="tab-settings" class="tab" hidden>
