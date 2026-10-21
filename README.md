@@ -54,10 +54,15 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   maps like ATAK's: Streets, Satellite, Hybrid, Google Hybrid, Topo, USGS Topo, USGS
   Imagery Topo and Dark. Add your own tile sources or import ATAK map source
   `.xml` files; overlays for devices, callsigns and the server contact.
+  **Weather and terrain** overlays: weather radar worldwide (RainViewer,
+  coarse past zoom 7) and detailed over the US (NEXRAD, from the Iowa
+  Environmental Mesonet), refreshed every 5 minutes with its age shown, and
+  hillshade (Esri) to show the shape of the land on any base map.
   **Show on map** on the Data Packages tab draws a package's CoT markers,
   routes, polygons, rectangles and circles, and any KML, KMZ or GeoJSON in
   it, as its own overlay. The console's libraries are built in, so it works
-  without internet access; only online base maps need it.
+  without internet access; only online base maps and the weather and terrain
+  overlays need it.
 - **Position history** (off by default): turn on recording under the map's
   **History** button and choose how long to keep it (6 hours to 30 days).
   Positions are thinned (a point when a device moves 5 m, or once a minute)

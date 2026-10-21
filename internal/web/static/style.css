@@ -94,6 +94,8 @@ main { padding: 16px; max-width: 1400px; margin: 0 auto; display: flex; flex-dir
 .map-toolbar { display: flex; gap: 6px; align-items: center; padding: 8px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .map-toolbar select { padding: 4px 8px; font-size: 13px; max-width: 200px; }
 #map { flex: 1; min-height: 0; display: grid; place-items: center; }
+.hillshade-tiles { mix-blend-mode: multiply; }
+.radar-age { background: var(--panel); color: var(--text); padding: 2px 8px; border-radius: 4px; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
 .leaflet-container { background: var(--panel-2); font: inherit; }
 .map-off { padding: 16px; text-align: center; }
 .no-labels .leaflet-tooltip { display: none; }

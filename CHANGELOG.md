@@ -10,6 +10,21 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.7.0 (2026-10-21)
+
+### Added
+- **Weather and terrain on the console map,** as overlays in the layer
+  switcher:
+  - **Weather radar:** worldwide, from RainViewer. Its free radar stops at
+    zoom 7, so it is coarse when zoomed in.
+  - **Weather radar (US, detailed):** NEXRAD reflectivity from the Iowa
+    Environmental Mesonet, sharper over the US.
+  - Radar refreshes every 5 minutes while shown, and a label on the map
+    says how old the picture is.
+  - **Hillshade:** the shape of the land (Esri World Hillshade), blended into
+    any base map.
+  - They need internet access, like the online base maps.
+
 ## v0.6.0 (2026-10-21)
 
 ### Added

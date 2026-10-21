@@ -764,6 +764,7 @@ let labelsLayer = null;
 let trailsLayer = null;
 let trailsTimer = null;
 let videoLayer = null;
+let weather = null; // radar and hillshade overlays, see initWeather
 let mapSources = [];
 let mapTimer = null;
 let latestClients = [];
@@ -815,6 +816,7 @@ function initMap() {
   labelsLayer.on('remove', () => el.classList.add('no-labels'));
   videoLayer = L.layerGroup();
   videoLayer.on('add', () => loadVideoFeeds().catch(() => {}));
+  weather = initWeather();
   trailsLayer = L.layerGroup();
   trailsLayer.on('add', () => {
     $('#trails-show').checked = true;
@@ -847,6 +849,73 @@ function initMap() {
   for (const hash of prefs.get('map.packages', [])) showPackage(hash, { quiet: true }).catch(() => forgetPackage(hash));
 }
 
+// ---------- weather and terrain ----------
+//
+// Overlays from free public services (the console needs internet for them,
+// as for the base maps):
+// - Weather radar: RainViewer's worldwide composite. Its free tiles stop at
+//   zoom 7 and are enlarged beyond that.
+// - Weather radar (US, detailed): NEXRAD base reflectivity from the Iowa
+//   Environmental Mesonet, sharper over the US.
+// - Hillshade: Esri's World Hillshade, blended into the base map.
+// Radar refreshes every 5 minutes while shown, and a label says how old it is.
+
+const RADAR_REFRESH = 5 * 60 * 1000;
+const NEXRAD = 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png';
+const NEXRAD_TIME = 'https://mesonet.agron.iastate.edu/data/gis/images/4326/USCOMP/n0q_0.json';
+
+function initWeather() {
+  const radar = L.layerGroup();
+  const nexrad = tileLayer(NEXRAD + '?t=0', { maxNativeZoom: 10, opacity: 0.7, className: 'radar-tiles',
+    attribution: 'NEXRAD radar &copy; Iowa Environmental Mesonet' });
+  const hillshade = tileLayer(esri('Elevation/World_Hillshade'), { maxNativeZoom: 16, opacity: 0.5, className: 'hillshade-tiles',
+    attribution: 'Hillshade &copy; Esri, USGS, NGA, NASA, CGIAR' });
+  const label = L.control({ position: 'bottomleft' });
+  label.onAdd = () => L.DomUtil.create('div', 'radar-age');
+  const times = { radar: 0, nexrad: 0 };
+  let timer = null;
+
+  // The label shows the oldest radar picture on the map.
+  const showAge = () => {
+    const shown = [map.hasLayer(radar) && times.radar, map.hasLayer(nexrad) && times.nexrad].filter(Boolean);
+    if (!shown.length) { label.remove(); return; }
+    if (!label.getContainer()?.parentNode) label.addTo(map);
+    label.getContainer().textContent = `Radar ${ago(new Date(Math.min(...shown)).toISOString())}`;
+  };
+  const loadRadar = async () => {
+    const r = await fetch('https://api.rainviewer.com/public/weather-maps.json').then((res) => res.json());
+    const frame = r.radar?.past?.at(-1);
+    if (!frame) return;
+    const layer = tileLayer(`${r.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`, { maxNativeZoom: 7, opacity: 0.7, className: 'radar-tiles',
+      attribution: 'Radar &copy; <a href="https://www.rainviewer.com" target="_blank" rel="noopener">RainViewer</a>' });
+    radar.clearLayers();
+    radar.addLayer(layer);
+    times.radar = frame.time * 1000;
+  };
+  const refresh = () => {
+    if (map.hasLayer(radar)) loadRadar().then(showAge).catch(() => {});
+    if (map.hasLayer(nexrad)) {
+      // IEM updates every 5 minutes; a new query string fetches fresh tiles.
+      nexrad.setUrl(NEXRAD + '?t=' + Math.floor(Date.now() / RADAR_REFRESH));
+      fetch(NEXRAD_TIME).then((res) => res.json()).then((r) => { times.nexrad = Date.parse(r.meta.valid) || 0; showAge(); }).catch(() => {});
+    }
+    showAge();
+  };
+  const watch = () => {
+    clearInterval(timer);
+    if (map.hasLayer(radar) || map.hasLayer(nexrad)) {
+      timer = setInterval(refresh, RADAR_REFRESH);
+      setTimeout(refresh, 0);
+    } else {
+      showAge();
+    }
+  };
+  for (const l of [radar, nexrad]) l.on('add remove', () => setTimeout(watch, 0));
+  // Keep the age label current between refreshes.
+  setInterval(() => { if (map && mapVisible()) showAge(); }, 30000);
+  return { radar, nexrad, hillshade };
+}
+
 // buildLayers (re)creates the layer switcher from the built-in base maps and
 // the admin-defined sources, restoring the viewer's last choices.
 function buildLayers() {
@@ -861,7 +930,8 @@ function buildLayers() {
 
   baseLayers = {};
   for (const [name, def] of BASEMAPS) baseLayers[name] = buildBase(def);
-  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer };
+  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer,
+    'Weather radar': weather.radar, 'Weather radar (US, detailed)': weather.nexrad, Hillshade: weather.hillshade };
   for (const p of packageLayers.values()) overlayLayers[p.name] = p.layer;
   for (const s of mapSources) {
     const layer = tileLayer(s.url, {
