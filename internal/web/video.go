@@ -81,22 +81,23 @@ type publisher struct {
 
 // feedView is a feed as one viewer sees it.
 type feedView struct {
-	UID       string   `json:"uid"`
-	Alias     string   `json:"alias"`
-	URL       string   `json:"url"` // with the viewer's credentials for server streams
-	Protocol  string   `json:"protocol"`
-	Address   string   `json:"-"`
-	Port      int      `json:"-"`
-	Path      string   `json:"path,omitempty"` // MediaMTX path for server streams
-	Hosted    bool     `json:"hosted"`
-	Live      bool     `json:"live"`
-	Saved     bool     `json:"saved"`
-	Groups    []string `json:"groups"`
-	Lat       *float64 `json:"lat,omitempty"`
-	Lon       *float64 `json:"lon,omitempty"`
-	Readers   int      `json:"readers"`
-	Tracks    []string `json:"tracks,omitempty"`
-	Publisher string   `json:"publisher,omitempty"`
+	UID         string   `json:"uid"`
+	Alias       string   `json:"alias"`
+	URL         string   `json:"url"` // with the viewer's credentials for server streams
+	Protocol    string   `json:"protocol"`
+	Address     string   `json:"-"`
+	Port        int      `json:"-"`
+	Path        string   `json:"path,omitempty"` // MediaMTX path for server streams
+	Hosted      bool     `json:"hosted"`
+	Live        bool     `json:"live"`
+	Saved       bool     `json:"saved"`
+	Groups      []string `json:"groups"`
+	Lat         *float64 `json:"lat,omitempty"`
+	Lon         *float64 `json:"lon,omitempty"`
+	Readers     int      `json:"readers"`
+	Tracks      []string `json:"tracks,omitempty"`
+	Publisher   string   `json:"publisher,omitempty"`
+	OpenPublish bool     `json:"open_publish,omitempty"`
 }
 
 func (s *Server) videoCfg() config.Video { return s.Cfg.Video.Normalized() }
@@ -196,7 +197,7 @@ func (s *Server) visibleFeeds(id *identity) []feedView {
 		if !id.canSee(feedGroups(f.Groups, s.Cfg.AnonymousGroup)) {
 			continue
 		}
-		v := feedView{UID: f.UID, Alias: f.Alias, Saved: true, Groups: f.Groups, Lat: f.Lat, Lon: f.Lon, Path: f.Path}
+		v := feedView{UID: f.UID, Alias: f.Alias, Saved: true, Groups: f.Groups, Lat: f.Lat, Lon: f.Lon, Path: f.Path, OpenPublish: f.OpenPublish}
 		if f.Path != "" {
 			s.hostedURL(&v, id)
 			ls, ok := live[f.Path]
@@ -358,6 +359,7 @@ func (s *Server) videoRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/video", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
 		writeJSON(w, http.StatusOK, s.videoStatus(id))
 	}))
+	mux.HandleFunc("PUT /admin/api/video/settings", s.admin(s.setVideoSettings))
 	mux.HandleFunc("POST /admin/api/video/feeds", s.admin(s.saveFeed))
 	mux.HandleFunc("PUT /admin/api/video/feeds/{uid}", s.admin(s.saveFeed))
 	mux.HandleFunc("DELETE /admin/api/video/feeds/{uid}", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
@@ -552,18 +554,38 @@ func (s *Server) videoStatus(id *identity) map[string]any {
 	return map[string]any{
 		"enabled": s.Cfg.Video.Enabled, "mediamtx_error": apiErr, "polled": polled,
 		"host": host, "rtsp_port": vc.RTSPPort, "rtmp_port": vc.RTMPPort, "srt_port": vc.SRTPort,
-		"feeds": s.visibleFeeds(id),
+		"feeds": s.visibleFeeds(id), "settings": s.Store.VideoSettings(),
 	}
+}
+
+func (s *Server) setVideoSettings(w http.ResponseWriter, r *http.Request, id *identity) {
+	var req store.VideoSettings
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	if req.AnonPublish != "off" && req.AnonPublish != "feeds" && req.AnonPublish != "any" {
+		jsonError(w, http.StatusBadRequest, "anon_publish must be off, feeds or any")
+		return
+	}
+	req.AnonGroups = cleanGroups(req.AnonGroups)
+	if err := s.Store.SetVideoSettings(req); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.Log.Info("video settings changed", "admin", id.Username, "anon_publish", req.AnonPublish, "anon_groups", req.AnonGroups)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) saveFeed(w http.ResponseWriter, r *http.Request, id *identity) {
 	var req struct {
-		Alias  string   `json:"alias"`
-		URL    string   `json:"url"`
-		Path   string   `json:"path"`
-		Groups []string `json:"groups"`
-		Lat    *float64 `json:"lat"`
-		Lon    *float64 `json:"lon"`
+		Alias       string   `json:"alias"`
+		URL         string   `json:"url"`
+		Path        string   `json:"path"`
+		Groups      []string `json:"groups"`
+		Lat         *float64 `json:"lat"`
+		Lon         *float64 `json:"lon"`
+		OpenPublish bool     `json:"open_publish"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid request")
@@ -571,6 +593,7 @@ func (s *Server) saveFeed(w http.ResponseWriter, r *http.Request, id *identity) 
 	}
 	f := store.VideoFeed{UID: r.PathValue("uid"), Alias: req.Alias, URL: strings.TrimSpace(req.URL), Path: strings.Trim(strings.TrimSpace(req.Path), "/"),
 		Groups: cleanGroups(req.Groups), Lat: req.Lat, Lon: req.Lon, Created: time.Now().UTC(), CreatedBy: id.Username}
+	f.OpenPublish = req.OpenPublish && f.Path != ""
 	if f.UID == "" {
 		f.UID = uuid()
 	} else if old, ok := s.Store.VideoFeed(f.UID); ok {
@@ -646,6 +669,9 @@ func (s *Server) authorizeMedia(req mediamtxAuth) (bool, string) {
 	if req.User == internalVideoUser {
 		return subtle.ConstantTimeCompare([]byte(req.Password), []byte(s.internalVideoPass())) == 1, "bad internal credentials"
 	}
+	if req.User == "" && req.Action == "publish" {
+		return s.anonPublish(req)
+	}
 	if req.User == "" {
 		return false, "credentials required" // MediaMTX then asks the client to authenticate
 	}
@@ -692,6 +718,39 @@ func (s *Server) authorizeMedia(req mediamtxAuth) (bool, string) {
 	default:
 		return false, "not allowed"
 	}
+}
+
+// anonPublish decides a publish without credentials, for apps such as TAK ICU
+// that cannot send a login.
+func (s *Server) anonPublish(req mediamtxAuth) (bool, string) {
+	vs := s.Store.VideoSettings()
+	if vs.AnonPublish != "feeds" && vs.AnonPublish != "any" {
+		return false, "credentials required"
+	}
+	if !videoPathRE.MatchString(req.Path) {
+		return false, "invalid stream name"
+	}
+	var groups []string
+	found := false
+	for _, f := range s.Store.VideoFeeds() {
+		if f.Path == req.Path {
+			if !f.OpenPublish {
+				return false, "credentials required" // a saved feed that needs a login
+			}
+			groups, found = feedGroups(f.Groups, s.Cfg.AnonymousGroup), true
+		}
+	}
+	if !found {
+		if vs.AnonPublish != "any" {
+			return false, "credentials required"
+		}
+		groups = feedGroups(vs.AnonGroups, s.Cfg.AnonymousGroup)
+	}
+	s.video.mu.Lock()
+	s.video.publishers[req.Path] = publisher{Groups: groups}
+	s.video.mu.Unlock()
+	s.Log.Info("video stream publishing without a login", "path", req.Path, "protocol", req.Protocol, "ip", req.IP)
+	return true, ""
 }
 
 // checkVideoPassword verifies a password, caching successes briefly since

@@ -154,23 +154,36 @@ type db struct {
 
 	History HistorySettings `json:"history"`
 
-	VideoFeeds  map[string]*VideoFeed `json:"video_feeds"` // by uid
-	VideoSecret string                `json:"video_secret"`
+	VideoFeeds    map[string]*VideoFeed `json:"video_feeds"` // by uid
+	VideoSecret   string                `json:"video_secret"`
+	VideoSettings VideoSettings         `json:"video_settings"`
+}
+
+// VideoSettings controls publishing to the server's media server without
+// a login (for apps such as TAK ICU that cannot send one): "off"
+// (default), "feeds" (only to feeds with OpenPublish) or "any" (any stream
+// name; such streams are visible to AnonGroups).
+type VideoSettings struct {
+	AnonPublish string   `json:"anon_publish"`
+	AnonGroups  []string `json:"anon_groups"`
 }
 
 // VideoFeed is a registered video stream. Path names a stream on the
 // server's MediaMTX (its URL is built per viewer); otherwise URL points at
 // an external source.
 type VideoFeed struct {
-	UID       string    `json:"uid"`
-	Alias     string    `json:"alias"`
-	URL       string    `json:"url,omitempty"`
-	Path      string    `json:"path,omitempty"`
-	Groups    []string  `json:"groups"`
-	Lat       *float64  `json:"lat,omitempty"`
-	Lon       *float64  `json:"lon,omitempty"`
-	Created   time.Time `json:"created"`
-	CreatedBy string    `json:"created_by"`
+	UID    string   `json:"uid"`
+	Alias  string   `json:"alias"`
+	URL    string   `json:"url,omitempty"`
+	Path   string   `json:"path,omitempty"`
+	Groups []string `json:"groups"`
+	Lat    *float64 `json:"lat,omitempty"`
+	Lon    *float64 `json:"lon,omitempty"`
+	// OpenPublish lets devices publish to Path without a login (when the
+	// server's AnonPublish is "feeds" or "any").
+	OpenPublish bool      `json:"open_publish,omitempty"`
+	Created     time.Time `json:"created"`
+	CreatedBy   string    `json:"created_by"`
 }
 
 // HistorySettings controls position history recording (off by default).
@@ -547,6 +560,25 @@ func (s *Store) DeleteVideoFeed(uid string) error {
 		return ErrNotFound
 	}
 	delete(s.db.VideoFeeds, uid)
+	return s.save()
+}
+
+func (s *Store) VideoSettings() VideoSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v := s.db.VideoSettings
+	if v.AnonPublish == "" {
+		v.AnonPublish = "off"
+	}
+	v.AnonGroups = slices.Clone(v.AnonGroups)
+	return v
+}
+
+func (s *Store) SetVideoSettings(v VideoSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v.AnonGroups = slices.Clone(v.AnonGroups)
+	s.db.VideoSettings = v
 	return s.save()
 }
 

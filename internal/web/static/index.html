@@ -211,6 +211,20 @@
 
     <section id="tab-video" class="tab" hidden>
       <div class="card" id="video-server"></div>
+      <div class="card" id="anon-card" hidden>
+        <h2>Publishing without a login</h2>
+        <p class="muted">For TAK ICU and cameras that cannot send a username and password. They publish to <code id="anon-url">rtsp://host:8554/NAME</code>. Watching still needs an EdgeTAK login or a device's personal link.</p>
+        <form id="anon-form" class="stack wide">
+          <label class="check"><input type="radio" name="anon" value="off"> Off: a login is always required</label>
+          <label class="check"><input type="radio" name="anon" value="feeds"> Only to feeds marked <em>Allow publishing without a login</em> (recommended)</label>
+          <label class="check"><input type="radio" name="anon" value="any"> Any stream name: anyone who can reach the server can publish</label>
+          <div id="anon-groups-wrap" hidden>
+            <div class="muted picker-label">Who sees streams published this way (none selected = __ANON__)</div>
+            <div id="anon-groups" class="group-picker"></div>
+          </div>
+          <div><button class="primary" type="submit">Save</button></div>
+        </form>
+      </div>
       <div class="card" id="mediamtx-card" hidden>
         <div class="card-head"><h2>MediaMTX</h2><span id="mediamtx-state"></span></div>
         <dl class="kv" id="mediamtx-info"></dl>
@@ -241,6 +255,7 @@
             <label class="check"><input type="radio" name="kind" value="url"> External URL</label>
           </div>
           <label id="feed-path-label">Stream name <input name="path" placeholder="e.g. drone1"></label>
+          <label class="check" id="feed-open-label"><input type="checkbox" name="open_publish"> Allow publishing without a login (TAK ICU, simple cameras)</label>
           <label id="feed-url-label" hidden>URL <input name="url" placeholder="rtsp://camera.local:554/live"></label>
           <div>
             <div class="muted picker-label">Who can watch (none selected = __ANON__)</div>

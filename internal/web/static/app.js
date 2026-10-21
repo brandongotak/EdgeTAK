@@ -1454,6 +1454,7 @@ async function loadVideoFeeds() {
 async function loadVideo() {
   const [st, groups] = await Promise.all([loadVideoFeeds(), api('GET', 'api/groups'), loadMediaMTX().catch(() => {})]);
   allGroups = groups;
+  renderAnon(st);
   const host = st.host;
   $('#video-server').innerHTML = !st.enabled
     ? `<h2>Media server</h2><p class="muted">The MediaMTX media server is not set up, so this server only lists external feeds (cameras or media servers with their own URL).
@@ -1473,7 +1474,10 @@ async function loadVideo() {
       ? (f.live ? `<span class="pill ok">live</span> <span class="muted">${f.readers} watching${f.tracks?.length ? ' · ' + esc(f.tracks.join(', ')) : ''}</span>` : '<span class="pill">offline</span>')
       : '<span class="pill">external</span>';
     const pos = f.lat != null ? `<span class="mono">${f.lat.toFixed(5)}, ${f.lon.toFixed(5)}</span>` : '<span class="muted">—</span>';
-    const src = f.hosted ? `server stream <span class="mono">${esc(f.path)}</span>${f.publisher ? ` · from ${esc(f.publisher)}` : ''}` : `<span class="mono">${esc(redactURL(f.url))}</span>`;
+    const anonOn = st.settings && st.settings.anon_publish !== 'off';
+    const openNote = f.open_publish
+      ? `<div class="muted">${anonOn ? '' : '<span class="pill warn" title="Turn on publishing without a login above">off</span> '}No-login publish: <span class="mono">rtsp://${esc(host)}:${st.rtsp_port}/${esc(f.path)}</span></div>` : '';
+    const src = (f.hosted ? `server stream <span class="mono">${esc(f.path)}</span>${f.publisher ? ` · from ${esc(f.publisher)}` : (f.live ? ' · no login' : '')}` : `<span class="mono">${esc(redactURL(f.url))}</span>`) + openNote;
     return `<tr>
       <td><strong>${esc(f.alias)}</strong><div class="muted">${src}</div></td>
       <td>${status}</td>
@@ -1579,6 +1583,7 @@ function openFeedDialog(f) {
   form.url.value = f && !f.hosted ? f.url : '';
   form.lat.value = f?.lat ?? '';
   form.lon.value = f?.lon ?? '';
+  form.open_publish.checked = !!f?.open_publish;
   syncFeedKind();
   renderChips('#feed-groups', f?.groups || []);
   $('#feed-dialog').showModal();
@@ -1588,7 +1593,37 @@ function syncFeedKind() {
   const url = $('#feed-form').kind.value === 'url';
   $('#feed-url-label').hidden = !url;
   $('#feed-path-label').hidden = url;
+  $('#feed-open-label').hidden = url;
 }
+
+// ---- publishing without a login ----
+
+let anonEditing = false; // don't overwrite the form while the admin is changing it
+
+function renderAnon(st) {
+  $('#anon-card').hidden = !st.enabled;
+  if (!st.enabled || anonEditing) return;
+  const s = st.settings || { anon_publish: 'off', anon_groups: [] };
+  for (const r of document.querySelectorAll('#anon-form input[name="anon"]')) r.checked = r.value === s.anon_publish;
+  renderChips('#anon-groups', s.anon_groups || []);
+  $('#anon-groups-wrap').hidden = s.anon_publish !== 'any';
+  $('#anon-url').textContent = `rtsp://${st.host}:${st.rtsp_port}/NAME`;
+}
+
+$('#anon-form').addEventListener('change', (e) => {
+  anonEditing = true;
+  if (e.target.name === 'anon') $('#anon-groups-wrap').hidden = e.target.value !== 'any';
+});
+
+$('#anon-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const mode = new FormData(e.target).get('anon') || 'off';
+  if (mode === 'any' && !confirm('Let anyone who can reach this server publish video under any stream name?\n\nThe safer choice is "Only to feeds marked …", which limits it to stream names you saved.')) return;
+  await api('PUT', 'api/video/settings', { anon_publish: mode, anon_groups: checkedIn('#anon-groups') });
+  anonEditing = false;
+  toast('Saved');
+  loadVideo();
+}));
 for (const r of document.querySelectorAll('#feed-form input[name="kind"]')) r.addEventListener('change', syncFeedKind);
 
 $('#video-add').addEventListener('click', () => openFeedDialog(null));
@@ -1608,7 +1643,7 @@ $('#feed-form').addEventListener('submit', guard(async (e) => {
   const num = (v) => (v === '' ? null : Number(v));
   const body = {
     alias: f.alias.value, groups: checkedIn('#feed-groups'), lat: num(f.lat.value), lon: num(f.lon.value),
-    ...(f.kind.value === 'url' ? { url: f.url.value } : { path: f.path.value }),
+    ...(f.kind.value === 'url' ? { url: f.url.value } : { path: f.path.value, open_publish: f.open_publish.checked }),
   };
   if ((body.lat == null) !== (body.lon == null)) throw new Error('Enter both latitude and longitude, or neither');
   await api(editingFeed ? 'PUT' : 'POST', editingFeed ? `api/video/feeds/${encodeURIComponent(editingFeed)}` : 'api/video/feeds', body);

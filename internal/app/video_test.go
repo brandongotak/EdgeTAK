@@ -126,6 +126,50 @@ func TestVideo(t *testing.T) {
 		}
 	}
 
+	// Publishing without a login (TAK ICU): off by default, then only to
+	// feeds marked open, then to any stream name.
+	anonPub := func(path string) int {
+		return auth(map[string]string{"action": "publish", "path": path, "protocol": "rtsp"})
+	}
+	if got := anonPub("icu1"); got != 401 {
+		t.Errorf("no-login publish while off = %d", got)
+	}
+	if code, _ := call("PUT", "/admin/api/video/settings", map[string]any{"anon_publish": "feeds"}); code != 204 {
+		t.Fatalf("settings = %d", code)
+	}
+	if got := anonPub("drone1"); got != 401 {
+		t.Errorf("no-login publish to a feed that needs a login = %d", got)
+	}
+	if got := anonPub("icu1"); got != 401 {
+		t.Errorf("no-login publish to an unsaved stream in feeds mode = %d", got)
+	}
+	if code, _ := call("POST", "/admin/api/video/feeds", map[string]any{"alias": "ICU", "path": "icu1", "groups": []string{"Cyan"}, "open_publish": true}); code != 200 {
+		t.Fatalf("save open feed = %d", code)
+	}
+	if got := anonPub("icu1"); got != 200 {
+		t.Errorf("no-login publish to an open feed = %d", got)
+	}
+	// Watching an open feed still needs access.
+	if got := auth(map[string]string{"action": "read", "path": "icu1"}); got != 401 {
+		t.Errorf("no-login read of an open feed = %d", got)
+	}
+	if got := auth(map[string]string{"user": "bob", "password": "password-bob", "action": "read", "path": "icu1"}); got != 401 {
+		t.Errorf("other group reading an open feed = %d", got)
+	}
+	call("PUT", "/admin/api/video/settings", map[string]any{"anon_publish": "any", "anon_groups": []string{"Red"}})
+	if got := anonPub("random-cam"); got != 200 {
+		t.Errorf("no-login publish in any mode = %d", got)
+	}
+	if got := auth(map[string]string{"user": "bob", "password": "password-bob", "action": "read", "path": "random-cam"}); got != 200 {
+		t.Errorf("anon group member reading an any-mode stream = %d", got)
+	}
+	if got := auth(map[string]string{"user": "alice", "password": "password-alice", "action": "read", "path": "random-cam"}); got != 401 {
+		t.Errorf("non-member reading an any-mode stream = %d", got)
+	}
+	if code, _ := call("PUT", "/admin/api/video/settings", map[string]any{"anon_publish": "everyone"}); code != 400 {
+		t.Errorf("bad mode accepted: %d", code)
+	}
+
 	// Deleting a positioned feed removes its marker from devices.
 	if code, _ := call("DELETE", "/admin/api/video/feeds/"+gate["uid"].(string), nil); code != 204 {
 		t.Fatalf("delete = %d", code)

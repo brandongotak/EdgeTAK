@@ -264,6 +264,14 @@ github.com for updates.
 | RTMP (DJI, ATAK UAS tool) | `rtmp://<host>:1935/NAME?user=USER&pass=PASSWORD` |
 | SRT | `srt://<host>:8890?streamid=publish:NAME:USER:PASSWORD` |
 
+**Apps that cannot log in** (TAK ICU, simple cameras): on the Video tab, set
+**Publishing without a login** to *Only to feeds marked…*. Then add a feed
+with a stream name, its groups, and **Allow publishing without a login**
+ticked. The app publishes to `rtsp://<host>:8554/NAME` with no username or
+password, and only those stream names accept that. *Any stream name* is
+also available, but it lets anyone who can reach the server publish.
+Watching always needs a login or a device's personal link.
+
 A live stream appears on the **Video** tab right away, visible to the
 publisher's groups. **Save as feed** gives it a name, chooses who can watch,
 and can give it a position. MPEG-TS sent inside RTSP, which UAS and ISR
