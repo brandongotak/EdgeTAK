@@ -177,6 +177,8 @@ td.actions { text-align: right; display: flex; gap: 6px; justify-content: flex-e
 }
 .version-tag:empty { display: none; }
 .login .version { margin: 0; font-size: 12px; text-align: center; }
+.login .version a, .console-footer a { color: inherit; }
+.console-footer { font-size: 12px; text-align: center; padding: 8px 0 4px; }
 .register-card { width: min(460px, 100%); }
 .register-card h2 { margin: 8px 0 4px; }
 .register-card p { margin: 0; }

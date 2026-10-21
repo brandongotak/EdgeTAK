@@ -463,3 +463,39 @@ the starting points for the planned plugin API.
 - Data Sync extras: mission feeds, map layers, external data, mission hierarchy
 - CoT history and replay, video stream registry, custom device profiles
 - Packaging: deb/rpm, Docker, Windows service
+
+## License
+
+Copyright (C) 2026 the EdgeTAK contributors.
+
+EdgeTAK is free software: you can redistribute it and/or modify it under the
+terms of the [GNU Affero General Public License](LICENSE) as published by the
+Free Software Foundation, version 3 of the License. It is distributed in the
+hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+the license for details.
+
+**Running a modified EdgeTAK for others:** the AGPL's section 13 requires
+offering your modified source code to the people who use it over the network.
+The admin console and sign-up page link to the source; if you run a fork,
+point those links (in `internal/web/static/index.html` and `register.html`)
+at your fork's source.
+
+EdgeTAK includes or uses these third-party components under their own
+licenses, all compatible with the AGPL:
+
+| Component | Use | License |
+|---|---|---|
+| [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto), x/net, x/text | password hashing, ACME, TLS | BSD-3-Clause |
+| [google.golang.org/protobuf](https://pkg.go.dev/google.golang.org/protobuf) | TAK protobuf | BSD-3-Clause |
+| [go-pkcs12](https://pkg.go.dev/software.sslmate.com/src/go-pkcs12) | client certificates | BSD-3-Clause |
+| [Leaflet](https://leafletjs.com/) 1.9.4 | console map | BSD-2-Clause |
+| [milsymbol](https://github.com/spatialillusions/milsymbol) 2.2.0 | MIL-STD-2525 symbols | MIT |
+| [JSZip](https://stuk.github.io/jszip/) 3.10.1 | reading data packages | MIT (dual MIT/GPLv3) |
+| [toGeoJSON](https://github.com/mapbox/togeojson) 0.16.0 | KML on the map | BSD-2-Clause |
+| [qrcodejs](https://github.com/davidshimjs/qrcodejs) 1.0.0 | QR codes | MIT |
+| [hls.js](https://github.com/video-dev/hls.js) 1.7.2 | console video player | Apache-2.0 |
+| [MediaMTX](https://github.com/bluenviron/mediamtx) | media server, downloaded by `--video` (not bundled) | MIT |
+
+The bundled libraries' license texts are in
+[`internal/web/static/vendor/`](internal/web/static/vendor/).
