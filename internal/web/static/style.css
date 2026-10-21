@@ -11,12 +11,16 @@
   --danger: #ef6b6b;
   --radius: 10px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Chart series (validated for colour-vision deficiency on these surfaces). */
+  --series-1: #3987e5;
+  --series-2: #d95926;
 }
 @media (prefers-color-scheme: light) {
   :root {
     --bg: #f3f5f6; --panel: #ffffff; --panel-2: #f0f3f4; --line: #d9e0e3;
     --text: #172024; --muted: #5d6c72; --accent: #1f8f5c; --accent-ink: #ffffff;
     --warn: #a86f00; --danger: #c43c3c;
+    --series-1: #2a78d6; --series-2: #eb6834;
   }
 }
 * { box-sizing: border-box; }
@@ -186,6 +190,45 @@ td.wrap { white-space: normal; max-width: 320px; }
 .publish-urls { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: baseline; margin: 8px 0; }
 .publish-urls code { word-break: break-all; background: var(--panel-2); padding: 3px 6px; border-radius: 5px; }
 .camera-icon { background: none; border: none; }
+/* ---- Health ---- */
+.health-filter { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.segmented button { border: none; border-radius: 0; background: transparent; color: var(--muted); padding: 6px 12px; }
+.segmented button + button { border-left: 1px solid var(--line); }
+.segmented button.active { background: var(--panel-2); color: var(--text); font-weight: 600; }
+.stat .spark { display: block; margin-top: 6px; width: 100%; height: 28px; }
+.stat .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+.chart-card h2 { margin-bottom: 4px; }
+.chart-card .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.chart-card .legend span::before { content: ""; display: inline-block; width: 14px; height: 2px; margin-right: 6px; vertical-align: middle; background: var(--key); }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart .grid line { stroke: var(--line); stroke-width: 1; }
+.chart .axis text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .crosshair { stroke: var(--muted); stroke-width: 1; }
+.chart .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px #0003; white-space: nowrap; z-index: 5; }
+.chart .tip .t { color: var(--muted); margin-bottom: 2px; }
+.chart .tip .row { display: flex; align-items: center; gap: 6px; }
+.chart .tip .row::before { content: ""; width: 12px; height: 2px; background: var(--key); }
+.chart .tip strong { font-variant-numeric: tabular-nums; }
+.chart .empty { padding: 30px 0; text-align: center; color: var(--muted); }
+.issue { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: var(--panel); }
+.issue.critical { border-color: var(--danger); }
+.issue.warning { border-color: var(--warn); }
+.status-icon { font-weight: 700; }
+.status-icon.critical { color: var(--danger); }
+.status-icon.warning { color: var(--warn); }
+.status-icon.ok { color: var(--accent); }
+.status-icon.info { color: var(--muted); }
+#device-health-table td { vertical-align: top; }
+#device-health-table td > div { min-width: 0; flex: 1; }
+#device-health-table ul { margin: 0; padding-left: 16px; white-space: normal; min-width: 180px; }
+.batt { display: flex; align-items: center; gap: 8px; }
+.batt svg { width: 70px; height: 20px; }
+
 pre.notes { max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 12px/1.45 var(--mono);
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 8px 0 0; }
 details summary { cursor: pointer; color: var(--muted); margin-top: 10px; }

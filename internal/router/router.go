@@ -34,6 +34,22 @@ type Router struct {
 	presence func() *cot.Event // server-originated event every new client receives
 	onJoin   []func(*Client)   // called for every new client after presence and replay
 	nextID   atomic.Uint64
+
+	// Message counts of clients that have disconnected, so Totals never
+	// goes backwards.
+	goneIn, goneOut, goneDropped atomic.Uint64
+}
+
+// Totals returns the events received from and sent to all clients since
+// start, and events dropped because a client could not keep up.
+func (r *Router) Totals() (in, out, dropped uint64) {
+	in, out, dropped = r.goneIn.Load(), r.goneOut.Load(), r.goneDropped.Load()
+	for _, c := range r.Clients() {
+		in += c.In.Load()
+		out += c.Out.Load()
+		dropped += c.Dropped.Load()
+	}
+	return
 }
 
 // OnJoin registers fn to run (in its own goroutine) for each client that
@@ -149,6 +165,11 @@ func (r *Router) SetUserGroups(username string, in, out []string) {
 
 func (r *Router) Unregister(c *Client) {
 	r.mu.Lock()
+	if _, ok := r.clients[c.ID]; ok {
+		r.goneIn.Add(c.In.Load())
+		r.goneOut.Add(c.Out.Load())
+		r.goneDropped.Add(c.Dropped.Load())
+	}
 	delete(r.clients, c.ID)
 	r.mu.Unlock()
 	uid, cs := c.Identity()

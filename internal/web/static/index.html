@@ -27,6 +27,7 @@
     <div class="brand"><span class="logo">◆</span> <span id="server-name">EdgeTAK</span> <span id="server-version" class="version-tag" title="EdgeTAK version"></span></div>
     <nav id="tabs" class="tabs" role="tablist">
       <button data-tab="dashboard" class="active">Dashboard</button>
+      <button data-tab="health">Health</button>
       <button data-tab="users">Users</button>
       <button data-tab="groups">Groups</button>
       <button data-tab="signups">Sign-ups</button>
@@ -64,6 +65,29 @@
           <tbody></tbody>
         </table></div>
       </div>
+    </section>
+
+    <section id="tab-health" class="tab" hidden>
+      <div class="health-filter">
+        <div class="segmented" role="group" aria-label="Time range">
+          <button type="button" data-minutes="60" class="active">1 hour</button>
+          <button type="button" data-minutes="360">6 hours</button>
+          <button type="button" data-minutes="1440">24 hours</button>
+        </div>
+        <span class="muted" id="health-updated"></span>
+      </div>
+      <div id="health-issues"></div>
+      <div class="stats" id="health-tiles"></div>
+      <div class="chart-grid" id="health-charts"></div>
+      <details class="card"><summary>Server data as a table</summary><div class="table-wrap"><table id="health-table"></table></div></details>
+      <div class="card">
+        <div class="card-head"><h2>Devices</h2><span class="muted" id="device-summary"></span></div>
+        <div class="table-wrap"><table id="device-health-table">
+          <thead><tr><th>Status</th><th>Device</th><th>Battery</th><th>Last report</th><th>Position</th><th>Connection</th><th>Messages in / out</th><th>Issues</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <p class="muted" id="health-machine"></p>
     </section>
 
     <section id="tab-users" class="tab" hidden>

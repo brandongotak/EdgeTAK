@@ -19,6 +19,7 @@ import (
 
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/health"
 	"github.com/brandongotak/EdgeTAK/internal/history"
 	"github.com/brandongotak/EdgeTAK/internal/mediamtx"
 	"github.com/brandongotak/EdgeTAK/internal/mission"
@@ -272,6 +273,19 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		a.Addrs["video_auth"] = videoLn.Addr().String()
 	}
 	ws.Addrs = a.Addrs
+	ws.Health = &health.Sampler{DataDir: a.DataDir, Src: health.Sources{
+		Clients: func() int { return len(a.Router.Clients()) },
+		CoT:     a.Router.Totals,
+		Video:   ws.VideoBytes,
+	}}
+	a.Router.AddHook(func(src *router.Client, ev *cot.Event) bool {
+		if src != nil && ev.Detail.Status != nil && strings.HasPrefix(ev.Type, "a-") {
+			if uid, _ := src.Identity(); uid != "" && uid == ev.UID {
+				ws.Health.RecordBattery(uid, int(ev.Detail.Status.Battery), time.Now())
+			}
+		}
+		return true
+	})
 	if vc := a.Cfg.Video.Normalized(); vc.Enabled && vc.MediaMTXBinary != "" {
 		conf := vc.MediaMTXConfig
 		if conf == "" {
@@ -287,6 +301,8 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	go func() { defer wg.Done(); a.Missions.FlushLoop(ctx.Done()) }()
 	wg.Add(1)
 	go func() { defer wg.Done(); a.History.Run(ctx) }()
+	wg.Add(1)
+	go func() { defer wg.Done(); ws.Health.Run(ctx) }()
 	if ws.MediaMTX != nil {
 		wg.Add(1)
 		go func() { defer wg.Done(); ws.MediaMTX.Run(ctx) }()

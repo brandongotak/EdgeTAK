@@ -62,6 +62,8 @@ type videoState struct {
 	publishers map[string]publisher  // path -> who published it
 	authCache  map[string]time.Time  // hash(user, pass) -> expiry
 	apiErr     string                // last MediaMTX API error ("" = reachable)
+	bytesIn    uint64                // bytes received/sent by MediaMTX's current streams
+	bytesOut   uint64
 	polled     time.Time
 	markers    map[string]bool // feed UIDs with a marker on devices
 }
@@ -449,6 +451,14 @@ func (s *Server) mediamtxStatus(ctx context.Context) any {
 	return s.MediaMTX.Status(ctx)
 }
 
+// VideoBytes returns the bytes MediaMTX's current streams have received and
+// sent, for the health graphs.
+func (s *Server) VideoBytes() (in, out uint64) {
+	s.video.mu.Lock()
+	defer s.video.mu.Unlock()
+	return s.video.bytesIn, s.video.bytesOut
+}
+
 // MediaMTXAPIAuth adds EdgeTAK's internal credentials to MediaMTX API requests.
 func (s *Server) MediaMTXAPIAuth(r *http.Request) {
 	r.SetBasicAuth(internalVideoUser, s.internalVideoPass())
@@ -830,7 +840,11 @@ func (s *Server) pollOnce(ctx context.Context, client *http.Client) {
 			Source        *struct {
 				Type string `json:"type"`
 			} `json:"source"`
-			Readers []json.RawMessage `json:"readers"`
+			Readers       []json.RawMessage `json:"readers"`
+			InboundBytes  uint64            `json:"inboundBytes"`
+			OutboundBytes uint64            `json:"outboundBytes"`
+			BytesReceived uint64            `json:"bytesReceived"` // older MediaMTX
+			BytesSent     uint64            `json:"bytesSent"`
 		} `json:"items"`
 	}
 	errText := ""
@@ -850,7 +864,10 @@ func (s *Server) pollOnce(ctx context.Context, client *http.Client) {
 		}
 	}
 	live := map[string]liveStream{}
+	var bytesIn, bytesOut uint64
 	for _, it := range list.Items {
+		bytesIn += max(it.InboundBytes, it.BytesReceived)
+		bytesOut += max(it.OutboundBytes, it.BytesSent)
 		if !it.Ready && !it.Available {
 			continue
 		}
@@ -870,6 +887,7 @@ func (s *Server) pollOnce(ctx context.Context, client *http.Client) {
 	s.video.apiErr, s.video.polled = errText, time.Now()
 	if err == nil {
 		s.video.live = live
+		s.video.bytesIn, s.video.bytesOut = bytesIn, bytesOut
 	}
 	s.video.mu.Unlock()
 	if errText != prevErr {

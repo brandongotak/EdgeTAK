@@ -70,6 +70,12 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   MediaMTX media server: cameras, drones and ATAK publish over RTSP, RTMP or
   SRT with an EdgeTAK login, streams become feeds automatically, viewers get
   personal links, and the console plays them live. See [Video](#video).
+- **Health**: server graphs for the last hour to 24 hours: CPU, memory,
+  disk, network, temperature (Raspberry Pi), connected devices, CoT messages
+  and video bandwidth, with warnings for a full disk, overheating or dropped
+  messages. A device table lists each device's battery (with history and
+  drain rate), last report, GPS fix and connection, worst problems first.
+  System figures need Linux; elsewhere only EdgeTAK's own are shown.
 - **Web admin console**: connected clients, users, groups,
   certificates, data packages, missions, and connection packages for each
   client.

@@ -152,6 +152,7 @@ $('#logout').addEventListener('click', async () => {
 
 const loaders = {
   dashboard: loadDashboard,
+  health: loadHealth,
   users: loadUsers,
   groups: loadGroups,
   signups: loadSignups,
@@ -176,6 +177,8 @@ function selectTab(name) {
   if (name === 'dashboard') {
     loadSelfUpdate().catch(() => {});
     pollTimer = setInterval(guard(loadDashboard), 3000);
+  } else if (name === 'health') {
+    pollTimer = setInterval(() => loadHealth().catch(() => {}), 10000);
   } else if (name === 'video') {
     pollTimer = setInterval(() => loadVideo().catch(() => {}), 5000); // live streams come and go
   } else if (name === 'send') {
@@ -261,6 +264,292 @@ async function loadDashboard() {
   $('#clients-table tbody').innerHTML = rows.join('') || emptyRow(12, 'No clients connected');
   $('#clients-updated').textContent = 'updated ' + new Date().toLocaleTimeString();
   updateMap(clients);
+}
+
+// ---------- health ----------
+
+let healthMinutes = null; // read from prefs on first load (prefs is defined further down)
+
+function fmtSize(n) {
+  if (n == null || n < 0) return '—';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return `${n >= 100 || i === 0 ? Math.round(n) : n.toFixed(1)} ${u[i]}`;
+}
+function fmtBits(bytesPerSec) {
+  if (bytesPerSec == null || bytesPerSec < 0) return '—';
+  let v = bytesPerSec * 8;
+  const u = ['bit/s', 'kbit/s', 'Mbit/s', 'Gbit/s'];
+  let i = 0;
+  while (v >= 1000 && i < u.length - 1) { v /= 1000; i++; }
+  return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${u[i]}`;
+}
+// Whole numbers stay whole; small fractions keep one decimal.
+const fmtNum = (v) => (Number.isInteger(v) ? String(v) : v < 10 ? v.toFixed(1) : String(Math.round(v)));
+const fmtPct = (v) => (v == null || v < 0 ? '—' : `${fmtNum(v)}%`);
+const fmtRate = (v) => (v == null ? '—' : `${fmtNum(v)}/s`);
+const fmtTime = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const known = (v) => (v == null || v < 0 ? null : v);
+
+function niceMax(v) {
+  if (!(v > 0)) return 1;
+  const e = 10 ** Math.floor(Math.log10(v));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * e >= v) return m * e;
+  return 10 * e;
+}
+
+const svgNS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs, parent) {
+  const el = document.createElementNS(svgNS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+
+// sparkline: a muted trend line with the latest value marked.
+function sparkline(values, { w = 120, h = 28 } = {}) {
+  const pts = values.map((v, i) => [i, v]).filter(([, v]) => v != null);
+  const svg = svgEl('svg', { viewBox: `0 0 ${w} ${h}`, class: 'spark', 'aria-hidden': 'true', preserveAspectRatio: 'none' });
+  if (pts.length < 2) return svg;
+  const max = Math.max(...pts.map(([, v]) => v)), min = Math.min(...pts.map(([, v]) => v));
+  const span = max - min || 1;
+  const x = (i) => (i / (values.length - 1)) * (w - 6) + 3;
+  const y = (v) => h - 4 - ((v - min) / span) * (h - 8);
+  svgEl('polyline', { points: pts.map(([i, v]) => `${x(i)},${y(v)}`).join(' '), fill: 'none', stroke: 'var(--muted)', 'stroke-width': 1.5,
+    'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke' }, svg);
+  const [li, lv] = pts[pts.length - 1];
+  svgEl('circle', { cx: x(li), cy: y(lv), r: 3, fill: 'var(--series-1)' }, svg);
+  return svg;
+}
+
+// lineChart draws series over time with one y axis, a crosshair and tooltip.
+function lineChart(box, { times, series, max, fmt }) {
+  box.innerHTML = '';
+  const have = series.some((s) => s.values.some((v) => v != null));
+  if (!have || times.length < 2) {
+    box.innerHTML = '<div class="empty">No data yet</div>';
+    return;
+  }
+  const W = Math.max(280, box.clientWidth || 560), H = 170, L = 52, R = 12, T = 10, B = 22;
+  const allMax = Math.max(...series.flatMap((s) => s.values.filter((v) => v != null)));
+  const yMax = max ?? niceMax(allMax * 1.1);
+  const t0 = times[0], t1 = times[times.length - 1];
+  const x = (t) => L + ((t - t0) / (t1 - t0 || 1)) * (W - L - R);
+  const y = (v) => T + (1 - Math.min(v, yMax) / yMax) * (H - T - B);
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img' });
+  const grid = svgEl('g', { class: 'grid' }, svg);
+  const axis = svgEl('g', { class: 'axis' }, svg);
+  for (const f of [0, 0.5, 1]) { // recessive: baseline, middle, top
+    const gy = y(yMax * f);
+    svgEl('line', { x1: L, x2: W - R, y1: gy, y2: gy }, grid);
+    svgEl('text', { x: L - 6, y: gy + 4, 'text-anchor': 'end' }, axis).textContent = fmt(yMax * f);
+  }
+  for (const [f, anchor] of [[0, 'start'], [0.5, 'middle'], [1, 'end']]) {
+    const t = t0 + (t1 - t0) * f;
+    svgEl('text', { x: x(t), y: H - 6, 'text-anchor': anchor }, axis).textContent = fmtTime(t);
+  }
+  for (const s of series) {
+    let d = '', open = false, area = '', last = null;
+    s.values.forEach((v, i) => {
+      if (v == null) { open = false; return; }
+      d += `${open ? 'L' : 'M'}${x(times[i]).toFixed(1)},${y(v).toFixed(1)}`;
+      open = true;
+      last = i;
+    });
+    if (series.length === 1) { // a single series gets a light wash under its line
+      const idx = s.values.map((v, i) => (v == null ? null : i)).filter((i) => i != null);
+      area = `M${x(times[idx[0]])},${y(0)}` + idx.map((i) => `L${x(times[i])},${y(s.values[i])}`).join('') + `L${x(times[idx[idx.length - 1]])},${y(0)}Z`;
+      svgEl('path', { d: area, fill: s.color, opacity: 0.1 }, svg);
+    }
+    svgEl('path', { d, fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+    if (last != null) svgEl('circle', { cx: x(times[last]), cy: y(s.values[last]), r: 4, fill: s.color, stroke: 'var(--panel)', 'stroke-width': 2 }, svg);
+  }
+  // Hover / keyboard layer.
+  const cross = svgEl('line', { class: 'crosshair', y1: T, y2: H - B, visibility: 'hidden' }, svg);
+  const dots = series.map((s) => svgEl('circle', { r: 4, fill: s.color, stroke: 'var(--panel)', 'stroke-width': 2, visibility: 'hidden' }, svg));
+  const hit = svgEl('rect', { x: L, y: T, width: W - L - R, height: H - T - B, fill: 'transparent', tabindex: 0, 'aria-label': 'Chart: use the arrow keys to read values' }, svg);
+  box.appendChild(svg);
+  const tip = document.createElement('div');
+  tip.className = 'tip';
+  tip.hidden = true;
+  box.appendChild(tip);
+  let cur = times.length - 1;
+  const show = (i) => {
+    cur = Math.max(0, Math.min(times.length - 1, i));
+    const cx = x(times[cur]);
+    cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
+    tip.replaceChildren();
+    const head = document.createElement('div');
+    head.className = 't';
+    head.textContent = new Date(times[cur]).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    tip.appendChild(head);
+    series.forEach((s, k) => {
+      const v = s.values[cur];
+      if (v == null) { dots[k].setAttribute('visibility', 'hidden'); } else {
+        dots[k].setAttribute('cx', cx); dots[k].setAttribute('cy', y(v)); dots[k].setAttribute('visibility', 'visible');
+      }
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.setProperty('--key', s.color);
+      const strong = document.createElement('strong');
+      strong.textContent = v == null ? '—' : fmt(v);
+      row.append(strong, document.createTextNode(series.length > 1 ? ` ${s.name}` : ''));
+      tip.appendChild(row);
+    });
+    tip.hidden = false;
+    const px = (cx / W) * box.clientWidth;
+    tip.style.left = `${Math.min(Math.max(px + 12, 0), box.clientWidth - tip.offsetWidth)}px`;
+    tip.style.top = '4px';
+    if (px + 12 + tip.offsetWidth > box.clientWidth) tip.style.left = `${Math.max(0, px - tip.offsetWidth - 12)}px`;
+  };
+  const hide = () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); dots.forEach((d) => d.setAttribute('visibility', 'hidden')); };
+  hit.addEventListener('pointermove', (e) => {
+    const r = svg.getBoundingClientRect();
+    const t = t0 + (((e.clientX - r.left) / r.width) * W - L) / (W - L - R) * (t1 - t0);
+    let best = 0;
+    for (let i = 1; i < times.length; i++) if (Math.abs(times[i] - t) < Math.abs(times[best] - t)) best = i;
+    show(best);
+  });
+  hit.addEventListener('pointerleave', hide);
+  hit.addEventListener('focus', () => show(cur));
+  hit.addEventListener('blur', hide);
+  hit.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') { show(cur - 1); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { show(cur + 1); e.preventDefault(); }
+  });
+}
+
+function chartCard(title, legend) {
+  const card = document.createElement('div');
+  card.className = 'card chart-card';
+  const h = document.createElement('h2');
+  h.textContent = title;
+  card.appendChild(h);
+  if (legend.length > 1) {
+    const lg = document.createElement('div');
+    lg.className = 'legend';
+    for (const [name, color] of legend) {
+      const s = document.createElement('span');
+      s.style.setProperty('--key', color);
+      s.textContent = name;
+      lg.appendChild(s);
+    }
+    card.appendChild(lg);
+  }
+  const box = document.createElement('div');
+  box.className = 'chart';
+  card.appendChild(box);
+  return [card, box];
+}
+
+const STATUS = {
+  critical: ['✖', 'Critical'], warning: ['▲', 'Warning'], info: ['●', 'Note'], ok: ['✓', 'OK'],
+};
+const statusBadge = (level) => `<span class="status-icon ${level}" aria-hidden="true">${STATUS[level][0]}</span> ${STATUS[level][1]}`;
+
+async function loadHealth() {
+  if (healthMinutes == null) {
+    healthMinutes = Number(prefs.get('health.minutes', 60)) || 60;
+    for (const o of document.querySelectorAll('.segmented button[data-minutes]')) o.classList.toggle('active', Number(o.dataset.minutes) === healthMinutes);
+  }
+  const [h, devices] = await Promise.all([api('GET', `api/health?minutes=${healthMinutes}`), api('GET', 'api/health/devices')]);
+  const S = h.samples;
+  const last = h.latest || S[S.length - 1] || {};
+  const times = S.map((s) => s.t);
+  const col = (k) => S.map((s) => known(s[k]));
+  $('#health-updated').textContent = `Updated ${new Date().toLocaleTimeString()} · samples every ${h.interval}s`;
+
+  $('#health-issues').innerHTML = h.issues.map((i) => `<div class="issue ${i.level}">${statusBadge(i.level)} <span>${esc(i.text)}</span></div>`).join('');
+
+  const memPct = last.mem_total ? (100 * last.mem_used) / last.mem_total : -1;
+  const diskPct = last.disk_total ? (100 * last.disk_used) / last.disk_total : -1;
+  const tiles = [
+    ['CPU', fmtPct(last.cpu), `EdgeTAK ${fmtPct(last.proc_cpu)}${h.info.cpus ? ` · ${h.info.cpus} cores` : ''}`, col('cpu')],
+    ['Memory', last.mem_total ? fmtPct(memPct) : fmtSize(last.proc_rss), last.mem_total ? `${fmtSize(last.mem_used)} of ${fmtSize(last.mem_total)} · EdgeTAK ${fmtSize(last.proc_rss)}` : 'EdgeTAK only', col('mem_used')],
+    ['Disk', fmtPct(diskPct), last.disk_total ? `${fmtSize(last.disk_total - last.disk_used)} free` : '', null],
+    ...(known(last.temp_c) != null ? [['Temperature', `${Math.round(last.temp_c)} °C`, '', col('temp_c')]] : []),
+    ['Network in', fmtBits(last.net_rx), `Out ${fmtBits(last.net_tx)}`, col('net_rx')],
+    ['Devices', String(last.clients ?? 0), `${fmtRate(last.cot_in)} messages in`, col('clients')],
+  ];
+  if (S.some((s) => s.video_in > 0 || s.video_out > 0)) tiles.push(['Video in', fmtBits(last.video_in), `Out ${fmtBits(last.video_out)}`, col('video_in')]);
+  $('#health-tiles').replaceChildren(...tiles.map(([k, v, sub, spark]) => {
+    const t = document.createElement('div');
+    t.className = 'stat';
+    t.innerHTML = `<div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="sub">${esc(sub)}</div>`;
+    if (spark) t.appendChild(sparkline(spark));
+    return t;
+  }));
+
+  const c1 = 'var(--series-1)', c2 = 'var(--series-2)';
+  const charts = [
+    ['CPU', [['System', c1, col('cpu')], ['EdgeTAK', c2, col('proc_cpu')]], 100, fmtPct],
+    ['Memory used', [['System', c1, col('mem_used')], ['EdgeTAK', c2, col('proc_rss')]], last.mem_total || null, fmtSize],
+    ['Network', [['In', c1, col('net_rx')], ['Out', c2, col('net_tx')]], null, fmtBits],
+    ['Connected devices', [['Devices', c1, col('clients')]], null, fmtNum],
+    ['CoT messages', [['In', c1, col('cot_in')], ['Out', c2, col('cot_out')]], null, fmtRate],
+  ];
+  if (S.some((s) => s.video_in > 0 || s.video_out > 0)) charts.push(['Video', [['In', c1, col('video_in')], ['Out', c2, col('video_out')]], null, fmtBits]);
+  const grid = $('#health-charts');
+  grid.replaceChildren();
+  for (const [title, ser, max, fmt] of charts) {
+    const shown = ser.filter(([, , v]) => v.some((x) => x != null));
+    const [card, box] = chartCard(title, (shown.length ? shown : ser).map(([n, c]) => [n, c]));
+    grid.appendChild(card);
+    lineChart(box, { times, series: (shown.length ? shown : ser).map(([name, color, values]) => ({ name, color, values })), max, fmt });
+  }
+
+  // Table view of the same data (about 24 rows).
+  const step = Math.max(1, Math.ceil(S.length / 24));
+  const rows = S.filter((_, i) => i % step === 0 || i === S.length - 1).reverse();
+  $('#health-table').innerHTML = '<thead><tr><th>Time</th><th>CPU</th><th>EdgeTAK CPU</th><th>Memory</th><th>Network in</th><th>Network out</th><th>Devices</th><th>CoT in</th><th>CoT out</th><th>Temp</th></tr></thead><tbody>' +
+    rows.map((s) => `<tr><td>${esc(new Date(s.t).toLocaleTimeString())}</td><td>${fmtPct(s.cpu)}</td><td>${fmtPct(s.proc_cpu)}</td><td>${fmtSize(s.mem_used || s.proc_rss)}</td>` +
+      `<td>${fmtBits(s.net_rx)}</td><td>${fmtBits(s.net_tx)}</td><td>${s.clients}</td><td>${fmtRate(s.cot_in)}</td><td>${fmtRate(s.cot_out)}</td>` +
+      `<td>${known(s.temp_c) == null ? '—' : Math.round(s.temp_c) + ' °C'}</td></tr>`).join('') + '</tbody>';
+
+  // Devices, worst first.
+  const counts = { critical: 0, warning: 0, info: 0, ok: 0 };
+  devices.forEach((d) => { counts[d.worst]++; });
+  $('#device-summary').textContent = devices.length
+    ? [['critical', 'critical'], ['warning', 'warning'], ['ok', 'OK']].filter(([k]) => counts[k] || k === 'ok').map(([k, l]) => `${counts[k] + (k === 'ok' ? counts.info : 0)} ${l}`).join(' · ')
+    : '';
+  $('#device-health-table tbody').innerHTML = devices.map((d) => {
+    const batt = d.battery != null
+      ? `<div class="batt"><strong>${d.battery}%</strong><span data-spark="${esc(d.uid)}"></span></div>${d.drain_per_hour > 0 ? `<div class="muted">−${d.drain_per_hour}%/h</div>` : ''}`
+      : '<span class="muted">—</span>';
+    const pos = d.lat != null && !(d.lat === 0 && d.lon === 0)
+      ? `<span class="mono">${d.lat.toFixed(4)}, ${d.lon.toFixed(4)}</span>${d.geo_source ? `<div class="muted">${esc(d.geo_source)}</div>` : ''}` : '<span class="muted">none</span>';
+    // Each cell's content sits in one block so it stacks in the phone card layout.
+    const cell = (html, attrs = '') => `<td${attrs}><div>${html}</div></td>`;
+    return `<tr>
+      ${cell(statusBadge(d.worst))}
+      ${cell(`<strong>${esc(d.callsign || '(no position yet)')}</strong><div class="muted">${esc(d.username || 'anonymous')}${d.team ? ' · ' + esc(d.team) : ''}</div>
+        <div class="muted">${esc([d.platform, d.version, d.device, d.os && 'Android ' + d.os].filter(Boolean).join(' · '))}</div>`)}
+      ${cell(batt)}
+      ${cell(esc(d.last_seen_ago < 5 ? 'just now' : ago(d.last_seen)), ` title="${esc(date(d.last_seen))}"`)}
+      ${cell(pos)}
+      ${cell(`<span class="pill ${d.transport === 'tls' ? 'ok' : 'warn'}">${esc(d.transport.toUpperCase())}</span> ${esc(d.format)}<div class="muted mono">${esc(d.remote)}</div><div class="muted">connected ${esc(ago(d.connected_at))}</div>`)}
+      ${cell(`<span class="mono">${d.in} / ${d.out}</span>${d.dropped ? `<div class="muted">${d.dropped} dropped</div>` : ''}`)}
+      ${cell(d.issues.length ? `<ul>${d.issues.map((i) => `<li><span class="status-icon ${i.level}" aria-hidden="true">${STATUS[i.level][0]}</span> ${esc(i.text)}</li>`).join('')}</ul>` : '<span class="muted">None</span>')}
+    </tr>`;
+  }).join('') || emptyRow(8, 'No devices connected');
+  for (const d of devices) {
+    const slot = document.querySelector(`[data-spark="${CSS.escape(d.uid)}"]`);
+    if (slot && d.battery_history?.length > 1) slot.appendChild(sparkline(d.battery_history.map((p) => p.pct), { w: 70, h: 20 }));
+  }
+
+  const i = h.info;
+  $('#health-machine').textContent = `${i.model || i.hostname} · ${i.os}/${i.arch} · ${i.cpus} CPU cores` +
+    (i.uptime ? ` · system up ${duration(i.uptime)}` : '') + ` · EdgeTAK ${h.version} up ${duration(h.edgetak_uptime)}`;
+}
+
+for (const b of document.querySelectorAll('.segmented button[data-minutes]')) {
+  b.addEventListener('click', guard(async () => {
+    healthMinutes = Number(b.dataset.minutes);
+    prefs.set('health.minutes', healthMinutes);
+    for (const o of document.querySelectorAll('.segmented button[data-minutes]')) o.classList.toggle('active', o === b);
+    await loadHealth();
+  }));
 }
 
 // ---------- EdgeTAK updates ----------
