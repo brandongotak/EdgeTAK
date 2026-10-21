@@ -7,7 +7,7 @@
 # SHA256SUMS, keeps a copy in /usr/local/lib/edgetak (for later --uninstall)
 # and runs it with the given options, e.g.:
 #
-#   ... | sudo sh -s -- --public-host tak.example.com --letsencrypt you@example.com --no-plaintext
+#   ... | sudo sh -s -- --public-host tak.example.com --letsencrypt --no-plaintext
 #
 # EDGETAK_VERSION=v0.2.0 selects a release (default: latest).
 set -eu

@@ -35,10 +35,14 @@ func main() {
 	cfgPath := flag.String("config", "", "config file (default <data>/edgetak.json)")
 	resetPassword := flag.String("reset-password", "", "set a new random password for `user`, print it and exit")
 	initOnly := flag.Bool("init", false, "create the data directory, config, CA and admin account, then exit")
-	enableLE := flag.String("enable-letsencrypt", "", "use a Let's Encrypt certificate on the enrollment port, registered to `email`; needs public_host to be a domain pointing here and port 80 reachable")
+	enableLE := flag.String("enable-letsencrypt", "", "use a Let's Encrypt certificate on the enrollment port, optionally registered to `email` (-enable-letsencrypt= for none); needs public_host to be a domain pointing here and port 80 reachable")
 	enableVideo := flag.Bool("enable-video", false, "connect EdgeTAK to a MediaMTX media server on this machine (the installer's --video sets it up)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+	// -enable-letsencrypt= (no email) still counts: Let's Encrypt no longer
+	// sends expiry emails, so the address is optional.
+	leSet := false
+	flag.Visit(func(f *flag.Flag) { leSet = leSet || f.Name == "enable-letsencrypt" })
 
 	if *showVersion {
 		fmt.Println("EdgeTAK", version)
@@ -68,7 +72,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	if *enableLE != "" {
+	if leSet {
 		if cfg.PublicHost == "" || net.ParseIP(cfg.PublicHost) != nil {
 			fatal(fmt.Errorf("Let's Encrypt needs public_host set to a domain name (it is %q)", cfg.PublicHost))
 		}

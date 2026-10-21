@@ -21,6 +21,7 @@ FIREWALL=1
 PURGE=0
 BINARY=""
 IMPORT_DATA=""
+LE=0
 LE_EMAIL=""
 NO_PLAINTEXT=0
 VIDEO=0
@@ -48,10 +49,12 @@ Usage: sudo sh $SELF [options]
 
   --public-host HOST   address clients use to reach this server
                        (default: detected automatically at each start)
-  --letsencrypt EMAIL  serve a Let's Encrypt certificate on the enrollment port
+  --letsencrypt [EMAIL] serve a Let's Encrypt certificate on the enrollment port
                        (8446) so clients can connect with only address,
                        username and password. Needs --public-host to be a
                        domain pointing at this server and port 80 reachable.
+                       The email is optional (Let's Encrypt no longer sends
+                       expiry emails; EdgeTAK renews by itself).
   --no-plaintext       disable the anonymous plaintext ports 8087 (CoT) and
                        8080 (HTTP API); recommended on internet-facing servers
   --video              also install the MediaMTX media server ($MTX_VERSION) so
@@ -83,8 +86,11 @@ while [ $# -gt 0 ]; do
 		--binary=*) BINARY=${1#*=}; shift ;;
 		--import-data) [ $# -ge 2 ] || die "--import-data needs a value"; IMPORT_DATA=$2; shift 2 ;;
 		--import-data=*) IMPORT_DATA=${1#*=}; shift ;;
-		--letsencrypt) [ $# -ge 2 ] || die "--letsencrypt needs an email address"; LE_EMAIL=$2; shift 2 ;;
-		--letsencrypt=*) LE_EMAIL=${1#*=}; shift ;;
+		--letsencrypt)
+			LE=1
+			# The email is optional; take the next argument only if it is one.
+			if [ $# -ge 2 ] && printf '%s' "$2" | grep -Eq '^[^-@ ][^@ ]*@[^@ ]+$'; then LE_EMAIL=$2; shift 2; else shift; fi ;;
+		--letsencrypt=*) LE=1; LE_EMAIL=${1#*=}; shift ;;
 		--no-plaintext) NO_PLAINTEXT=1; shift ;;
 		--video) VIDEO=1; shift ;;
 		--video-tarball) [ $# -ge 2 ] || die "--video-tarball needs a file"; VIDEO=1; VIDEO_TARBALL=$2; shift 2 ;;
@@ -102,9 +108,9 @@ done
 if [ -n "$PUBLIC_HOST" ]; then
 	printf '%s' "$PUBLIC_HOST" | grep -Eq '^[A-Za-z0-9.:-]+$' || die "invalid --public-host: $PUBLIC_HOST"
 fi
-if [ -n "$LE_EMAIL" ]; then
+if [ "$LE" -eq 1 ]; then
 	printf '%s' "$PUBLIC_HOST" | grep -Eq '[A-Za-z]' || die "--letsencrypt needs --public-host set to a domain name (not an IP address)"
-	printf '%s' "$LE_EMAIL" | grep -Eq '^[^@ ]+@[^@ ]+$' || die "invalid --letsencrypt email: $LE_EMAIL"
+	[ -z "$LE_EMAIL" ] || printf '%s' "$LE_EMAIL" | grep -Eq '^[^@ ]+@[^@ ]+$' || die "invalid --letsencrypt email: $LE_EMAIL"
 fi
 
 # Upgrades keep video once it is installed.
@@ -114,7 +120,7 @@ fi
 # given as port/udp).
 PORTS="8089 8443 8446"
 [ "$NO_PLAINTEXT" -eq 1 ] || PORTS="8087 $PORTS 8080"
-[ -z "$LE_EMAIL" ] || PORTS="80 $PORTS"
+[ "$LE" -eq 0 ] || PORTS="80 $PORTS"
 VIDEO_PORTS="8554 1935 8890/udp"
 [ "$VIDEO" -eq 0 ] || PORTS="$PORTS $VIDEO_PORTS"
 
@@ -341,8 +347,8 @@ do_install() {
 		sed -i 's|^\(  "tcp_addr": \)".*"|\1""|; s|^\(  "http_addr": \)".*"|\1""|' "$cfg"
 		say "Disabled plaintext ports 8087 and 8080"
 	fi
-	if [ -n "$LE_EMAIL" ]; then
-		if ! out=$(as_service_user "$BIN_PATH" -data "$DATA_DIR" -enable-letsencrypt "$LE_EMAIL" 2>&1); then
+	if [ "$LE" -eq 1 ]; then
+		if ! out=$(as_service_user "$BIN_PATH" -data "$DATA_DIR" "-enable-letsencrypt=$LE_EMAIL" 2>&1); then
 			printf '%s\n' "$out" >&2
 			die "enabling Let's Encrypt failed"
 		fi

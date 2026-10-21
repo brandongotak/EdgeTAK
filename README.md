@@ -96,7 +96,7 @@ curl -fsSL https://github.com/brandongotak/EdgeTAK/releases/latest/download/inst
 
 # B. Internet server with Let's Encrypt (do the DNS and firewall steps below first)
 curl -fsSL https://github.com/brandongotak/EdgeTAK/releases/latest/download/install.sh | sudo sh -s -- \
-    --public-host tak.example.com --letsencrypt you@example.com --no-plaintext
+    --public-host tak.example.com --letsencrypt --no-plaintext
 ```
 
 The script downloads the latest release's installer, verifies its SHA-256
@@ -168,12 +168,14 @@ its address, username and password, with no files to transfer.
 
 ```sh
 curl -fsSL https://github.com/brandongotak/EdgeTAK/releases/latest/download/install.sh | sudo sh -s -- \
-    --public-host tak.example.com --letsencrypt you@example.com --no-plaintext
+    --public-host tak.example.com --letsencrypt --no-plaintext
 ```
 
-- `--letsencrypt EMAIL` serves a Let's Encrypt certificate on 8446. EdgeTAK
+- `--letsencrypt` serves a Let's Encrypt certificate on 8446. EdgeTAK
   requests and renews it itself, without certbot, cron or restarts. Port 80
-  must stay reachable for renewal.
+  must stay reachable for renewal. An email address is optional
+  (`--letsencrypt you@example.com`), since Let's Encrypt no longer sends
+  expiry emails.
 - `--no-plaintext` turns off the anonymous ports 8087 and 8080, which should
   not be open on the internet.
 - Watch for `Let's Encrypt certificate ready` with `journalctl -u edgetak -f`.
