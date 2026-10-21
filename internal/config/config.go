@@ -67,6 +67,9 @@ type Video struct {
 	AuthAddr string `json:"auth_addr"`
 	APIAddr  string `json:"api_addr"` // MediaMTX control API (loopback)
 	HLSAddr  string `json:"hls_addr"` // MediaMTX HLS server (loopback; relayed by EdgeTAK)
+	// PlaybackAddr is MediaMTX's recording playback server (loopback; used to
+	// export recordings as one MP4).
+	PlaybackAddr string `json:"playback_addr"`
 	// BindHost limits MediaMTX's stream ports to one address ("" = all).
 	BindHost string `json:"bind_host"`
 	// Ports MediaMTX accepts streams on, advertised to clients.
@@ -85,6 +88,9 @@ func (v Video) Normalized() Video {
 	}
 	if v.HLSAddr == "" {
 		v.HLSAddr = "127.0.0.1:8888"
+	}
+	if v.PlaybackAddr == "" {
+		v.PlaybackAddr = "127.0.0.1:9996"
 	}
 	if v.RTSPPort == 0 {
 		v.RTSPPort = 8554

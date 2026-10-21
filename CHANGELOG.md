@@ -4,6 +4,37 @@ What changed in each EdgeTAK release. The release workflow publishes each
 version's section as its GitHub release notes, and the console's update card
 shows them, so add a section here before tagging a release.
 
+## v0.2.24 (2026-10-21)
+
+### Added
+- **Video recording** (Video tab, off by default):
+  - **What gets recorded:** *Saved feeds marked Record this stream*, or
+    *Every stream*. Streams are recorded while they are live, in 10-minute
+    parts in EdgeTAK's data folder.
+  - **How long they're kept:** a number of days you set (7 by default; 0
+    keeps them until deleted). The media server deletes older recordings
+    itself, and the rule also shows under Settings → Data retention.
+  - **Recordings card:** each stream's recordings with start time, length and
+    size. **Play** plays in the console part by part, with seeking;
+    **Download** saves a whole recording as one MP4; **Delete** removes one
+    recording or all of a stream's.
+  - **Feeds list:** live streams being recorded show **● rec**.
+  - **Full disk:** recording pauses by itself when the disk is 95% full
+    (shown on the Video and Health tabs) and resumes below 90%.
+- **Pick the user for a connection package from a dropdown** on the Connect
+  tab, instead of typing the name.
+  - **ATAK / WinTAK / TAKX packages:** the username is optional ("they type
+    it in the app").
+  - **iTAK packages:** a user is required, since the package includes their
+    certificate.
+  - **TCP packages:** the dropdown is off, since TCP is anonymous.
+- **Package** button for each user on the Users tab: opens the Connect tab
+  with that user picked.
+
+### Changed
+- Downloaded packages are named after the user, such as
+  `EdgeTAK-tak.example.com-alice-ssl.zip`.
+
 ## v0.2.23 (2026-10-21)
 
 ### Added

@@ -139,6 +139,7 @@ func (s *Server) retentionRoutes(mux *http.ServeMux) {
 		s.retention.mu.Unlock()
 		writeJSON(w, http.StatusOK, map[string]any{
 			"settings": set, "history": s.Store.HistorySettings(), "pending": s.applyRetention(set, true), "last": last,
+			"recording": s.Store.RecordingSettings(), "video": s.Cfg.Video.Enabled,
 		})
 	}))
 	// Preview: what the given settings would remove now, without saving.

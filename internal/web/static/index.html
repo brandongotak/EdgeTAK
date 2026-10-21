@@ -336,6 +336,24 @@
           <div><button class="primary" type="submit">Save</button></div>
         </form>
       </div>
+      <div class="card" id="record-card" hidden>
+        <div class="card-head"><h2>Recording</h2><span id="record-state"></span></div>
+        <p class="muted">The media server saves streams to EdgeTAK's data folder in <span id="record-seg-min">10</span>-minute pieces and deletes them after the days you keep them. Recording pauses by itself if the disk gets 95% full.</p>
+        <form id="record-form" class="stack wide">
+          <label class="check"><input type="radio" name="mode" value="off"> Off</label>
+          <label class="check"><input type="radio" name="mode" value="feeds"> Saved feeds marked <em>Record this stream</em></label>
+          <label class="check"><input type="radio" name="mode" value="all"> Every stream</label>
+          <div class="inline-form">
+            <label class="inline-label">Keep recordings for <input type="number" name="keep_days" min="0" max="3650" class="days-input" required> days <span class="muted">(0 = until deleted)</span></label>
+          </div>
+          <div><button class="primary" type="submit">Save</button></div>
+        </form>
+        <p class="muted" id="record-usage"></p>
+      </div>
+      <div class="card" id="recordings-card" hidden>
+        <div class="card-head"><h2>Recordings</h2><span class="muted" id="recordings-total"></span></div>
+        <div id="recordings"></div>
+      </div>
       <div class="card" id="mediamtx-card" hidden>
         <div class="card-head"><h2>MediaMTX</h2><span id="mediamtx-state"></span></div>
         <dl class="kv" id="mediamtx-info"></dl>
@@ -367,6 +385,7 @@
           </div>
           <label id="feed-path-label">Stream name <input name="path" placeholder="e.g. drone1"></label>
           <label class="check" id="feed-open-label"><input type="checkbox" name="open_publish"> Allow publishing without a login (TAK ICU, simple cameras)</label>
+          <label class="check" id="feed-record-label"><input type="checkbox" name="record"> Record this stream (when recording is set to saved feeds)</label>
           <label id="feed-url-label" hidden>URL <input name="url" placeholder="rtsp://camera.local:554/live"></label>
           <div>
             <div class="muted picker-label">Who can watch (none selected = __ANON__)</div>
@@ -385,6 +404,7 @@
           <div class="card-head"><h2 id="player-title">Video</h2><button class="small ghost" value="close" title="Close">✕</button></div>
           <video id="player" controls autoplay muted playsinline></video>
           <p class="muted" id="player-status"></p>
+          <div id="player-parts" class="player-parts" hidden></div>
         </form>
       </dialog>
     </section>
@@ -497,10 +517,13 @@
           <p class="muted">Import this zip in ATAK, WinTAK or iTAK. The SSL package includes the server's trust store and turns on certificate enrollment, so users only enter their username and password.</p>
           <form id="connect-form" class="stack">
             <label>Server address <input name="host" id="connect-host" required></label>
-            <label>Username (optional, pre-fills the login) <input name="username" id="connect-user"></label>
             <label>Transport
-              <select name="mode"><option value="ssl">ATAK / WinTAK / TAKX: SSL with certificate enrollment (recommended)</option><option value="itak">iTAK: SSL with a client certificate included (requires a username)</option><option value="tcp">TCP: unencrypted, anonymous</option></select>
+              <select name="mode" id="connect-mode"><option value="ssl">ATAK / WinTAK / TAKX: SSL with certificate enrollment (recommended)</option><option value="itak">iTAK: SSL with a client certificate included (requires a user)</option><option value="tcp">TCP: unencrypted, anonymous</option></select>
             </label>
+            <label>User
+              <select name="username" id="connect-user"><option value="">No username: they type it in the app</option></select>
+            </label>
+            <p class="muted" id="connect-user-hint">The package fills in the username; they still enter their password when the app enrolls.</p>
             <button class="primary" type="submit">Download package</button>
           </form>
         </div>

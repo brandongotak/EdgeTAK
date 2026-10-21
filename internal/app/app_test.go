@@ -574,6 +574,9 @@ func TestEndToEnd(t *testing.T) {
 		resp, _ = hc.Get(base + "/admin/api/connection-package?username=dave")
 		zipData, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if cd := resp.Header.Get("Content-Disposition"); !strings.Contains(cd, "-dave-ssl.zip") {
+			t.Errorf("package file name = %q, want the username in it", cd)
+		}
 		zr, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
 		if err != nil {
 			t.Fatalf("connection package: %d %v", resp.StatusCode, err)

@@ -574,7 +574,10 @@ async function loadRetention() {
       <div class="effect" data-effect="${key}"></div>`).join('') +
     `<div class="label"><strong>Position history</strong><span>set with the map's History button</span></div>
      <div>${esc(r.history.enabled ? plural(fmtNum(r.history.retention_hours / 24), 'day') : 'off')}</div>
-     <div class="effect muted">${r.history.enabled ? `kept ${esc(r.history.retention_hours)} hours` : 'not recorded'}</div>`;
+     <div class="effect muted">${r.history.enabled ? `kept ${esc(r.history.retention_hours)} hours` : 'not recorded'}</div>` +
+    (r.video ? `<div class="label"><strong>Video recordings</strong><span>set on the Video tab</span></div>
+     <div>${esc(r.recording.mode === 'off' ? 'off' : r.recording.keep_days ? plural(r.recording.keep_days, 'day') : 'forever')}</div>
+     <div class="effect muted">${r.recording.mode === 'off' ? 'not recorded' : 'deleted by the media server'}</div>` : '');
   renderRetentionEffects(r.pending);
   const last = r.last;
   $('#retention-last').textContent = last
@@ -1591,6 +1594,7 @@ async function loadUsers() {
       <button class="small" data-act="password" data-user="${esc(u.username)}">Password</button>
       <button class="small" data-act="admin" data-user="${esc(u.username)}" data-admin="${u.admin}">${u.admin ? 'Revoke admin' : 'Make admin'}</button>
       ${u.two_factor && u.username !== $('#me').textContent ? `<button class="small" data-act="reset2fa" data-user="${esc(u.username)}" title="For a lost phone">Reset 2FA</button>` : ''}
+      <button class="small" data-act="package" data-user="${esc(u.username)}" title="Connection data package for this user">Package</button>
       <button class="small" data-act="p12" data-user="${esc(u.username)}">Issue .p12</button>
       <button class="small danger" data-act="delete" data-user="${esc(u.username)}">Delete</button>
     </td></tr>`).join('') || emptyRow(6, 'No users');
@@ -1681,6 +1685,10 @@ $('#users-table').addEventListener('click', guard(async (e) => {
   switch (b.dataset.act) {
     case 'groups':
       openGroupsDialog(user);
+      return;
+    case 'package':
+      connectPick = user; // preselected when the Connect tab loads
+      selectTab('connect');
       return;
     case 'password': {
       const pw = prompt(`New password for ${user} (8+ characters)`);
@@ -2231,6 +2239,8 @@ async function loadVideo() {
   const [st, groups] = await Promise.all([loadVideoFeeds(), api('GET', 'api/groups'), loadMediaMTX().catch(() => {})]);
   allGroups = groups;
   renderAnon(st);
+  // The tab refreshes every 5 s; the recordings folder is scanned less often.
+  if (st.enabled && Date.now() - recCheckedAt > 15000) await loadRecordings().catch(() => {});
   const host = st.host;
   $('#video-server').innerHTML = !st.enabled
     ? `<h2>Media server</h2><p class="muted">The MediaMTX media server is not set up, so this server only lists external feeds (cameras or media servers with their own URL).
@@ -2246,8 +2256,10 @@ async function loadVideo() {
       <p class="muted">ATAK UAS tool / DJI: use the RTMP or RTSP address. Viewers never need the password: their devices get personal links.</p>`;
 
   $('#video-table tbody').innerHTML = st.feeds.map((f) => {
+    const rec = recStatus && !recStatus.paused && (recStatus.settings.mode === 'all' || (recStatus.settings.mode === 'feeds' && f.record));
     const status = f.hosted
-      ? (f.live ? `<span class="pill ok">live</span> <span class="muted">${f.readers} watching${f.tracks?.length ? ' · ' + esc(f.tracks.join(', ')) : ''}</span>` : '<span class="pill">offline</span>')
+      ? (f.live ? `<span class="pill ok">live</span>${rec ? ' <span class="pill bad" title="Being recorded">● rec</span>' : ''} <span class="muted">${f.readers} watching${f.tracks?.length ? ' · ' + esc(f.tracks.join(', ')) : ''}</span>`
+        : `<span class="pill">offline</span>${f.record && recStatus?.settings.mode === 'feeds' ? ' <span class="muted">records when live</span>' : ''}`)
       : '<span class="pill">external</span>';
     const pos = f.lat != null ? `<span class="mono">${f.lat.toFixed(5)}, ${f.lon.toFixed(5)}</span>` : '<span class="muted">—</span>';
     const anonOn = st.settings && st.settings.anon_publish !== 'off';
@@ -2360,6 +2372,7 @@ function openFeedDialog(f) {
   form.lat.value = f?.lat ?? '';
   form.lon.value = f?.lon ?? '';
   form.open_publish.checked = !!f?.open_publish;
+  form.record.checked = !!f?.record;
   syncFeedKind();
   renderChips('#feed-groups', f?.groups || []);
   $('#feed-dialog').showModal();
@@ -2370,6 +2383,7 @@ function syncFeedKind() {
   $('#feed-url-label').hidden = !url;
   $('#feed-path-label').hidden = url;
   $('#feed-open-label').hidden = url;
+  $('#feed-record-label').hidden = url;
 }
 
 // ---- publishing without a login ----
@@ -2419,7 +2433,7 @@ $('#feed-form').addEventListener('submit', guard(async (e) => {
   const num = (v) => (v === '' ? null : Number(v));
   const body = {
     alias: f.alias.value, groups: checkedIn('#feed-groups'), lat: num(f.lat.value), lon: num(f.lon.value),
-    ...(f.kind.value === 'url' ? { url: f.url.value } : { path: f.path.value, open_publish: f.open_publish.checked }),
+    ...(f.kind.value === 'url' ? { url: f.url.value } : { path: f.path.value, open_publish: f.open_publish.checked, record: f.record.checked }),
   };
   if ((body.lat == null) !== (body.lon == null)) throw new Error('Enter both latitude and longitude, or neither');
   await api(editingFeed ? 'PUT' : 'POST', editingFeed ? `api/video/feeds/${encodeURIComponent(editingFeed)}` : 'api/video/feeds', body);
@@ -2443,6 +2457,129 @@ $('#video-table').addEventListener('click', guard(async (e) => {
       return loadVideo();
   }
 }));
+
+// ---- recording ----
+
+let recStatus = null;
+let recCheckedAt = 0;
+let recEditing = false; // don't overwrite the form while the admin is changing it
+
+function fmtDuration(sec) {
+  sec = Math.round(sec || 0);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return h ? `${h} h ${String(m).padStart(2, '0')} min` : m ? `${m} min ${String(s).padStart(2, '0')} s` : `${s} s`;
+}
+
+const segURL = (stream, file, download) => `video/recordings/file?${new URLSearchParams({ path: stream, file, ...(download ? { download: '1' } : {}) })}`;
+
+async function loadRecordings() {
+  recCheckedAt = Date.now();
+  recStatus = await api('GET', 'api/video/recordings');
+  const r = recStatus;
+  $('#record-card').hidden = !r.enabled;
+  $('#recordings-card').hidden = !r.enabled || (!r.streams.length && r.settings.mode === 'off');
+  $('#record-seg-min').textContent = r.segment_minutes;
+  $('#record-state').innerHTML = r.paused ? '<span class="pill bad">paused: disk nearly full</span>'
+    : r.settings.mode === 'off' ? '<span class="pill">off</span>'
+    : `<span class="pill ok">${r.settings.mode === 'all' ? 'every stream' : 'saved feeds'}</span>`;
+  if (!recEditing) {
+    const f = $('#record-form');
+    for (const el of f.querySelectorAll('input[name="mode"]')) el.checked = el.value === r.settings.mode;
+    f.keep_days.value = r.settings.keep_days;
+  }
+  const disk = r.disk_total ? ` · disk ${Math.round((100 * r.disk_used) / r.disk_total)}% full (${fmtSize(r.disk_total - r.disk_used)} free)` : '';
+  $('#record-usage').textContent = `Recordings use ${fmtSize(r.bytes)}${disk}.`;
+  $('#recordings-total').textContent = r.streams.length ? `${plural(r.streams.reduce((n, s) => n + s.spans.length, 0), 'recording')} · ${fmtSize(r.bytes)}` : '';
+
+  $('#recordings').innerHTML = r.streams.map((st) => `<div class="rec-stream">
+      <div class="card-head"><h3>${esc(st.alias || st.path)}${st.alias ? ` <span class="muted mono">${esc(st.path)}</span>` : ''}</h3>
+        <span><span class="muted">${fmtSize(st.bytes)}</span> <button type="button" class="small danger" data-rec-act="delete-all" data-path="${esc(st.path)}">Delete all</button></span></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Started</th><th>Length</th><th>Size</th><th></th></tr></thead>
+        <tbody>${st.spans.map((sp, i) => `<tr>
+          <td>${esc(new Date(sp.start).toLocaleString())}${sp.recording ? ' <span class="pill bad">● recording</span>' : ''}</td>
+          <td>${esc(fmtDuration(sp.duration))}${sp.segments.length > 1 ? ` <span class="muted">(${sp.segments.length} parts)</span>` : ''}</td>
+          <td>${fmtSize(sp.bytes)}</td>
+          <td class="actions">
+            <button type="button" class="small primary" data-rec-act="play" data-path="${esc(st.path)}" data-i="${i}">Play</button>
+            <a class="button small" href="video/recordings/export?${new URLSearchParams({ path: st.path, start: sp.start, duration: sp.duration })}" title="One MP4 file, made by the media server">Download</a>
+            ${sp.recording ? '' : `<button type="button" class="small danger" data-rec-act="delete" data-path="${esc(st.path)}" data-i="${i}">Delete</button>`}
+          </td></tr>`).join('')}</tbody>
+      </table></div>
+    </div>`).join('') || `<p class="muted">${r.settings.mode === 'off' ? 'Recording is off.' : 'No recordings yet. Streams are recorded while they are live.'}</p>`;
+}
+
+$('#record-form').addEventListener('input', () => { recEditing = true; });
+$('#record-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const mode = new FormData(f).get('mode') || 'off';
+  await api('PUT', 'api/video/recording', { mode, keep_days: Number(f.keep_days.value) });
+  recEditing = false;
+  toast(mode === 'off' ? 'Recording is off' : 'Recording settings saved');
+  recCheckedAt = 0;
+  loadVideo();
+}));
+
+$('#recordings').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('[data-rec-act]');
+  if (!b) return;
+  const st = recStatus.streams.find((s) => s.path === b.dataset.path);
+  const sp = st?.spans[Number(b.dataset.i)];
+  const name = st?.alias || b.dataset.path;
+  switch (b.dataset.recAct) {
+    case 'play':
+      return playRecording(st, sp);
+    case 'delete':
+      if (!confirm(`Delete the recording of ${name} from ${new Date(sp.start).toLocaleString()}? This cannot be undone.`)) return;
+      await api('DELETE', `api/video/recordings?${new URLSearchParams({ path: st.path, start: sp.start })}`);
+      break;
+    case 'delete-all':
+      if (!confirm(`Delete every recording of ${name}? This cannot be undone.`)) return;
+      await api('DELETE', `api/video/recordings?${new URLSearchParams({ path: b.dataset.path })}`);
+      break;
+  }
+  toast('Recording deleted');
+  await loadRecordings();
+}));
+
+// A recording is played part by part (each part is one file, so seeking
+// works within it); the next part starts when one ends.
+let recQueue = null;
+
+function playRecording(st, sp) {
+  const video = $('#player');
+  stopPlayer();
+  const parts = sp.segments.slice().sort((a, b) => new Date(a.start) - new Date(b.start));
+  recQueue = { st, parts, i: 0 };
+  $('#player-title').textContent = `${st.alias || st.path} · ${new Date(sp.start).toLocaleString()}`;
+  const list = $('#player-parts');
+  list.hidden = parts.length < 2;
+  list.innerHTML = parts.map((p, i) => `<button type="button" class="small" data-part="${i}">${esc(new Date(p.start).toLocaleTimeString())}</button>`).join('')
+    + `<span class="spacer"></span><a class="button small" id="player-part-download" href="#">Download this part</a>`;
+  if (parts.length < 2) list.hidden = true;
+  $('#player-dialog').showModal();
+  playPart(0);
+  video.onended = () => { if (recQueue && recQueue.i < recQueue.parts.length - 1) playPart(recQueue.i + 1); };
+}
+
+function playPart(i) {
+  const video = $('#player');
+  const p = recQueue.parts[i];
+  recQueue.i = i;
+  video.src = segURL(recQueue.st.path, p.file);
+  video.play().catch(() => {});
+  const n = recQueue.parts.length;
+  $('#player-status').textContent = `Recorded ${new Date(p.start).toLocaleString()} · ${n > 1 ? `part ${i + 1} of ${n} · ` : ''}${fmtDuration(p.duration)}${p.recording ? ' · still recording' : ''}`;
+  for (const b of $('#player-parts').querySelectorAll('[data-part]')) b.classList.toggle('primary', Number(b.dataset.part) === i);
+  const dl = $('#player-part-download');
+  if (dl) dl.href = segURL(recQueue.st.path, p.file, true);
+}
+
+$('#player-parts').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-part]');
+  if (b && recQueue) playPart(Number(b.dataset.part));
+});
 
 // ---- player (HLS through EdgeTAK's relay) ----
 
@@ -2488,6 +2625,9 @@ function stopPlayer() {
   const video = $('#player');
   hlsPlayer?.destroy();
   hlsPlayer = null;
+  recQueue = null;
+  video.onended = null;
+  $('#player-parts').hidden = true;
   video.removeAttribute('src');
   video.load();
 }
@@ -2689,8 +2829,32 @@ $('#send-package-form').addEventListener('submit', guard(async (e) => {
 
 // ---------- connect ----------
 
+// The user dropdown suits the transport: iTAK packages carry the user's
+// certificate, so one is required; TCP is anonymous, so none applies.
+function connectModeChanged() {
+  const mode = $('#connect-mode').value, sel = $('#connect-user');
+  sel.disabled = mode === 'tcp';
+  sel.required = mode === 'itak';
+  sel.options[0].textContent = mode === 'itak' ? 'Choose a user' : mode === 'tcp' ? 'Not used for TCP' : 'No username: they type it in the app';
+  $('#connect-user-hint').textContent = mode === 'itak' ? 'The package includes a new certificate for this user, for one device.'
+    : mode === 'tcp' ? 'TCP connections are anonymous.' : 'The package fills in the username; they still enter their password when the app enrolls.';
+}
+$('#connect-mode').addEventListener('change', connectModeChanged);
+
+let connectPick = null;
+
 async function loadConnect() {
   if (!$('#connect-host').value && status) $('#connect-host').value = status.public_host || location.hostname;
+  const users = await api('GET', 'api/users');
+  const sel = $('#connect-user');
+  const keep = connectPick ?? sel.value;
+  connectPick = null;
+  sel.length = 1;
+  for (const u of users.sort((a, b) => a.username.localeCompare(b.username))) {
+    sel.add(new Option(u.username + (u.admin ? ' (admin)' : ''), u.username));
+  }
+  sel.value = users.some((u) => u.username === keep) ? keep : '';
+  connectModeChanged();
   const url = status?.signin_url || location.origin + '/';
   $('#account-url').textContent = url;
   $('#account-url').href = url;

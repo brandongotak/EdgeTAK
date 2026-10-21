@@ -114,6 +114,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.retentionRoutes(mux)
 	s.certStatusRoutes(mux)
 	s.chatRoutes(mux)
+	s.recordingRoutes(mux)
 	s.accountRoutes(mux)
 
 	files := http.StripPrefix("/admin/", http.FileServerFS(staticSub()))

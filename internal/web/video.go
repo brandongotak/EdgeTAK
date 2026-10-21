@@ -56,17 +56,18 @@ const (
 var videoPathRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._~-]{0,63}(/[A-Za-z0-9._~-]{1,64}){0,3}$`)
 
 type videoState struct {
-	mu         sync.Mutex
-	secret     string
-	live       map[string]liveStream // MediaMTX path -> stream
-	publishers map[string]publisher  // path -> who published it
-	authCache  map[string]time.Time  // hash(user, pass) -> expiry
-	apiErr     string                // last MediaMTX API error ("" = reachable)
-	bytesIn    uint64                // bytes received/sent by MediaMTX's current streams
-	bytesOut   uint64
-	polled     time.Time
-	warned     bool            // "unreachable" was logged
-	markers    map[string]bool // feed UIDs with a marker on devices
+	mu           sync.Mutex
+	secret       string
+	live         map[string]liveStream // MediaMTX path -> stream
+	publishers   map[string]publisher  // path -> who published it
+	authCache    map[string]time.Time  // hash(user, pass) -> expiry
+	apiErr       string                // last MediaMTX API error ("" = reachable)
+	bytesIn      uint64                // bytes received/sent by MediaMTX's current streams
+	bytesOut     uint64
+	polled       time.Time
+	warned       bool            // "unreachable" was logged
+	markers      map[string]bool // feed UIDs with a marker on devices
+	recordPaused bool            // recording stopped for a nearly full disk
 }
 
 type liveStream struct {
@@ -101,6 +102,7 @@ type feedView struct {
 	Tracks      []string `json:"tracks,omitempty"`
 	Publisher   string   `json:"publisher,omitempty"`
 	OpenPublish bool     `json:"open_publish,omitempty"`
+	Record      bool     `json:"record,omitempty"`
 }
 
 func (s *Server) videoCfg() config.Video { return s.Cfg.Video.Normalized() }
@@ -140,6 +142,7 @@ func (s *Server) videoStart(ctx context.Context) {
 		s.Log.Error("write mediamtx config", "err", err)
 	}
 	go s.pollMediaMTX(ctx)
+	go s.watchRecordingDisk(ctx)
 }
 
 // ---- tokens and internal credentials ----
@@ -200,7 +203,7 @@ func (s *Server) visibleFeeds(id *identity) []feedView {
 		if !id.canSee(feedGroups(f.Groups, s.Cfg.AnonymousGroup)) {
 			continue
 		}
-		v := feedView{UID: f.UID, Alias: f.Alias, Saved: true, Groups: f.Groups, Lat: f.Lat, Lon: f.Lon, Path: f.Path, OpenPublish: f.OpenPublish}
+		v := feedView{UID: f.UID, Alias: f.Alias, Saved: true, Groups: f.Groups, Lat: f.Lat, Lon: f.Lon, Path: f.Path, OpenPublish: f.OpenPublish, Record: f.Record}
 		if f.Path != "" {
 			s.hostedURL(&v, id)
 			ls, ok := live[f.Path]
@@ -372,6 +375,7 @@ func (s *Server) videoRoutes(mux *http.ServeMux) {
 			return
 		}
 		s.removeVideoMarker(uid)
+		s.applyRecording()
 		s.Log.Info("video feed deleted", "admin", id.Username, "uid", uid)
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -597,6 +601,7 @@ func (s *Server) saveFeed(w http.ResponseWriter, r *http.Request, id *identity) 
 		Lat         *float64 `json:"lat"`
 		Lon         *float64 `json:"lon"`
 		OpenPublish bool     `json:"open_publish"`
+		Record      bool     `json:"record"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid request")
@@ -605,6 +610,7 @@ func (s *Server) saveFeed(w http.ResponseWriter, r *http.Request, id *identity) 
 	f := store.VideoFeed{UID: r.PathValue("uid"), Alias: req.Alias, URL: strings.TrimSpace(req.URL), Path: strings.Trim(strings.TrimSpace(req.Path), "/"),
 		Groups: cleanGroups(req.Groups), Lat: req.Lat, Lon: req.Lon, Created: time.Now().UTC(), CreatedBy: id.Username}
 	f.OpenPublish = req.OpenPublish && f.Path != ""
+	f.Record = req.Record && f.Path != ""
 	if f.UID == "" {
 		f.UID = uuid()
 	} else if old, ok := s.Store.VideoFeed(f.UID); ok {
@@ -633,6 +639,7 @@ func (s *Server) saveFeed(w http.ResponseWriter, r *http.Request, id *identity) 
 	if f.Lat == nil {
 		s.removeVideoMarker(f.UID)
 	}
+	s.applyRecording()
 	go s.refreshVideoMarkers()
 	writeJSON(w, http.StatusOK, f)
 }
@@ -1022,6 +1029,7 @@ func (s *Server) writeMediaMTXConfig() error {
 	vc := s.videoCfg()
 	_, authPort, _ := net.SplitHostPort(vc.AuthAddr)
 	bind := func(port int) string { return net.JoinHostPort(vc.BindHost, strconv.Itoa(port)) }
+	recDefaults, recPaths := s.mediamtxRecordConfig()
 	cfg := fmt.Sprintf(`# Written by EdgeTAK; changes are overwritten when EdgeTAK starts.
 # Edit the "video" section of EdgeTAK's config.json instead.
 logLevel: info
@@ -1057,7 +1065,12 @@ hlsSegmentDuration: 2s
 hlsCDNSecret: %s
 
 webrtc: false
-playback: false
+# The playback server exports recordings as one MP4 for the console
+# (EdgeTAK relays it); the console plays segment files directly.
+playback: true
+playbackAddress: %s
+playbackAllowOrigins: []
+playbackTrustedProxies: ['127.0.0.1']
 metrics: false
 pprof: false
 # MoQ (on by default since v1.20) writes auto.key/auto.crt into the working
@@ -1068,10 +1081,11 @@ pathDefaults:
   # ATAK's UAS tool, TAKICU and ISR cameras send MPEG-TS (with KLV) inside
   # RTSP; unpack it so HLS and other readers get the video tracks.
   rtspDemuxMpegts: true
-
+  # Recording (Video tab): segments under EdgeTAK's data folder.
+%s
 paths:
-  all_others:
-`, authPort, vc.APIAddr, bind(vc.RTSPPort), bind(vc.RTMPPort), bind(vc.SRTPort), vc.HLSAddr, s.hlsCDNSecret())
+%s  all_others:
+`, authPort, vc.APIAddr, bind(vc.RTSPPort), bind(vc.RTMPPort), bind(vc.SRTPort), vc.HLSAddr, s.hlsCDNSecret(), vc.PlaybackAddr, recDefaults, recPaths)
 	path := s.mediamtxConfigPath()
 	if old, err := os.ReadFile(path); err == nil && string(old) == cfg {
 		return nil

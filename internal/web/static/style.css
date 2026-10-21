@@ -246,6 +246,11 @@ td.wrap { white-space: normal; max-width: 320px; }
 .issue { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: var(--panel); }
 .issue.critical { border-color: var(--danger); }
 .issue.warning { border-color: var(--warn); }
+.rec-stream + .rec-stream { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); }
+.rec-stream h3 { margin: 0; font-size: 15px; }
+.player-parts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.player-parts .spacer { flex: 1; }
+label.inline-label { flex-direction: row; align-items: center; gap: 6px; }
 .chat-filter { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
 .chat-filter input[type=search] { flex: 1 1 240px; }
 .chat-filter select { flex: 0 1 220px; min-width: 0; }

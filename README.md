@@ -364,6 +364,19 @@ cameras use, is unpacked automatically.
   on the map. The video is relayed over the console's HTTPS port with a few
   seconds of delay. Browsers play H.264, not H.265.
 
+**Recording** (Video tab, off by default):
+- **What gets recorded:** *Saved feeds marked Record this stream*, or *Every
+  stream*. Streams are recorded while they are live, into
+  `<data>/recordings/<stream>/` in 10-minute parts.
+- **How long they're kept:** a number of days you set (7 by default; 0 keeps
+  them until deleted). The media server deletes older recordings itself.
+- **In the console:** the **Recordings** card lists each stream's recordings
+  with their start time, length and size. **Play** plays a recording part by
+  part, with seeking; **Download** saves it as one MP4; **Delete** removes it.
+- **Full disk:** recording pauses by itself when the disk is 95% full, shown
+  on the Video and Health tabs, and resumes below 90%. On a Raspberry Pi,
+  1080p at about 4 Mbit/s fills roughly 1.8 GB per hour per stream.
+
 External cameras or media servers can be added with their own URL (`rtsp://`,
 `rtmp://`, `srt://`, `http(s)://`). Devices can watch those, but the console
 cannot play them. Bandwidth is the main limit: every viewer receives a full

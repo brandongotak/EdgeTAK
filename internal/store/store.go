@@ -172,6 +172,8 @@ type db struct {
 	CertWarnDays int `json:"cert_warn_days"` // flag certificates this long before they expire (0 = default)
 
 	ChatLog ChatLogSettings `json:"chat_log"`
+
+	VideoRecording RecordingSettings `json:"video_recording"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -185,6 +187,17 @@ type RetentionSettings struct {
 	CertsDays        int `json:"certs_days"`         // records of certificates expired this long ago
 	ChatDays         int `json:"chat_days"`          // chat log messages
 }
+
+// RecordingSettings controls video recording: Mode "off" (default), "feeds"
+// (saved feeds marked Record) or "all" (every stream). KeepDays is how long
+// recordings are kept (0 = forever).
+type RecordingSettings struct {
+	Mode     string `json:"mode"`
+	KeepDays int    `json:"keep_days"`
+}
+
+// DefaultRecordingDays is how long recordings are kept unless set.
+const DefaultRecordingDays = 7
 
 // ChatLogSettings controls recording of GeoChat messages (off by default).
 type ChatLogSettings struct {
@@ -213,9 +226,11 @@ type VideoFeed struct {
 	Lon    *float64 `json:"lon,omitempty"`
 	// OpenPublish lets devices publish to Path without a login (when the
 	// server's AnonPublish is "feeds" or "any").
-	OpenPublish bool      `json:"open_publish,omitempty"`
-	Created     time.Time `json:"created"`
-	CreatedBy   string    `json:"created_by"`
+	OpenPublish bool `json:"open_publish,omitempty"`
+	// Record saves the stream to disk when recording is set to saved feeds.
+	Record    bool      `json:"record,omitempty"`
+	Created   time.Time `json:"created"`
+	CreatedBy string    `json:"created_by"`
 }
 
 // HistorySettings controls position history recording (off by default).
@@ -558,6 +573,23 @@ func (s *Store) SetRetentionSettings(r RetentionSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.Retention = r
+	return s.save()
+}
+
+func (s *Store) RecordingSettings() RecordingSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	r := s.db.VideoRecording
+	if r.Mode == "" {
+		r.Mode, r.KeepDays = "off", DefaultRecordingDays
+	}
+	return r
+}
+
+func (s *Store) SetRecordingSettings(r RecordingSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.VideoRecording = r
 	return s.save()
 }
 

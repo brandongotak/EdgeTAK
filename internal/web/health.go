@@ -92,10 +92,13 @@ func (s *Server) serverIssues() []issue {
 	}
 	if s.Cfg.Video.Enabled {
 		s.video.mu.Lock()
-		apiErr := s.video.apiErr
+		apiErr, paused := s.video.apiErr, s.video.recordPaused
 		s.video.mu.Unlock()
 		if apiErr != "" {
 			out = append(out, issue{"critical", "MediaMTX is not reachable: video is down"})
+		}
+		if paused {
+			out = append(out, issue{"critical", "Video recording is paused: the disk is nearly full. Delete recordings or keep them for fewer days (Video tab)"})
 		}
 	}
 	return out

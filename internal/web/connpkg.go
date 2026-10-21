@@ -48,6 +48,9 @@ func (s *Server) connectionPackage(w http.ResponseWriter, r *http.Request, id *i
 		return
 	}
 	name := fmt.Sprintf("%s-%s-%s.zip", sanitize(s.Cfg.ServerName), sanitize(host), mode)
+	if username != "" && mode != "tcp" {
+		name = fmt.Sprintf("%s-%s-%s-%s.zip", sanitize(s.Cfg.ServerName), sanitize(host), sanitize(username), mode)
+	}
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
 	w.Write(data)
