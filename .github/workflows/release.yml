@@ -21,6 +21,15 @@ jobs:
         with:
           fetch-depth: 0 # git describe needs tags for the version
 
+      # First, so a release without a CHANGELOG.md section fails before building.
+      - name: Release notes
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          prev=$(git describe --tags --abbrev=0 "$VERSION^" 2>/dev/null || true)
+          sh packaging/release-notes.sh "$VERSION" "$prev" > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -47,7 +56,7 @@ jobs:
           VERSION: ${{ github.ref_name }}
         run: |
           cd dist
-          gh release create "$VERSION" --title "EdgeTAK $VERSION" --generate-notes \
+          gh release create "$VERSION" --title "EdgeTAK $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
             edgetak-installer.sh "edgetak-$VERSION-rpi-installer.sh" install.sh SHA256SUMS \
             $(cat binaries.txt)
 
