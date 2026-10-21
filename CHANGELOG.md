@@ -10,6 +10,22 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.8.0 (2026-10-21)
+
+### Added
+- **Plugins tab: an update server for ATAK.** Upload ATAK plugin and app
+  APKs, and devices install and update them from ATAK's **Plugins** screen.
+  - EdgeTAK reads each APK's name, version, description, icon, minimum
+    Android version and, for plugins, the ATAK version it is built for.
+  - Each device sees the builds for its ATAK version (ATAK asks for its own
+    version's list first), so plugins for several ATAK versions can be
+    offered side by side. A newer build for the same version replaces the
+    old one.
+  - Devices are pointed at it through their device profile when they enroll
+    or connect (a setting on the tab, on by default), at
+    `https://<server>:8443/update`. They download over their own connection:
+    their certificate, or a username and password.
+
 ## v0.7.0 (2026-10-21)
 
 ### Added

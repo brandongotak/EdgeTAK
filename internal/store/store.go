@@ -183,6 +183,9 @@ type db struct {
 	DeviceProfiles map[string]*DeviceProfile `json:"device_profiles"` // by id
 
 	Federation Federation `json:"federation"`
+
+	Apps        map[string]*App      `json:"apps"` // ATAK plugins and apps for the update server, by SHA-256
+	AppSettings UpdateServerSettings `json:"app_settings"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -331,7 +334,7 @@ type Store struct {
 // Open loads the store at path, creating an empty one if needed.
 func Open(path string) (*Store, error) {
 	s := &Store{path: path, db: db{Users: map[string]*User{}, Certs: map[string]*Cert{}, Packages: map[string]*Package{}, Groups: map[string]*Group{},
-		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, DeviceProfiles: map[string]*DeviceProfile{}, NextSeq: 1}}
+		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, DeviceProfiles: map[string]*DeviceProfile{}, Apps: map[string]*App{}, NextSeq: 1}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, s.save()
@@ -365,6 +368,9 @@ func Open(path string) (*Store, error) {
 	}
 	if s.db.DeviceProfiles == nil {
 		s.db.DeviceProfiles = map[string]*DeviceProfile{}
+	}
+	if s.db.Apps == nil {
+		s.db.Apps = map[string]*App{}
 	}
 	// Groups used to exist only as names on users; give them records.
 	for _, u := range s.db.Users {
@@ -1497,6 +1503,89 @@ func (s *Store) DeleteDeviceProfile(id string) error {
 		return ErrNotFound
 	}
 	delete(s.db.DeviceProfiles, id)
+	return s.save()
+}
+
+// ---- ATAK plugins and apps (update server) ----
+
+// App is an APK offered to devices through ATAK's update server. One build
+// is kept per package and ATAK plugin API, so plugins for different ATAK
+// versions can be offered side by side.
+type App struct {
+	SHA256      string    `json:"sha256"` // of the APK, also its file name and ID
+	Package     string    `json:"package"`
+	Name        string    `json:"name"`
+	Version     string    `json:"version"`
+	VersionCode int64     `json:"version_code"`
+	MinSDK      int       `json:"min_sdk"`
+	PluginAPI   string    `json:"plugin_api,omitempty"` // e.g. com.atakmap.app@5.4.0.CIV; empty for apps
+	Description string    `json:"description"`
+	Size        int64     `json:"size"`
+	HasIcon     bool      `json:"has_icon"`
+	FileName    string    `json:"file_name"` // as uploaded
+	Uploader    string    `json:"uploader"`
+	Uploaded    time.Time `json:"uploaded"`
+}
+
+// UpdateServerSettings: whether devices are pointed at EdgeTAK's update
+// server through their device profile (on by default).
+type UpdateServerSettings struct {
+	DontConfigureDevices bool `json:"dont_configure_devices,omitempty"`
+}
+
+// Apps returns the APKs, by name.
+func (s *Store) Apps() []App {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]App, 0, len(s.db.Apps))
+	for _, a := range s.db.Apps {
+		out = append(out, *a)
+	}
+	slices.SortFunc(out, func(a, b App) int {
+		if c := strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)); c != 0 {
+			return c
+		}
+		return strings.Compare(b.PluginAPI, a.PluginAPI)
+	})
+	return out
+}
+
+// PutApp adds an APK, replacing (and returning) the builds of the same
+// package for the same plugin API.
+func (s *Store) PutApp(a App) (replaced []App, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, old := range s.db.Apps {
+		if id != a.SHA256 && old.Package == a.Package && old.PluginAPI == a.PluginAPI {
+			replaced = append(replaced, *old)
+			delete(s.db.Apps, id)
+		}
+	}
+	s.db.Apps[a.SHA256] = &a
+	return replaced, s.save()
+}
+
+func (s *Store) DeleteApp(id string) (App, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.db.Apps[id]
+	if !ok {
+		return App{}, ErrNotFound
+	}
+	delete(s.db.Apps, id)
+	return *a, s.save()
+}
+
+func (s *Store) UpdateServer() UpdateServerSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.AppSettings
+}
+
+func (s *Store) SetUpdateServer(v UpdateServerSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.AppSettings = v
 	return s.save()
 }
 

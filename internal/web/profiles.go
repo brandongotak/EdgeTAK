@@ -155,6 +155,9 @@ func (s *Server) deviceProfile(kind string) handlerFunc {
 			host = h
 		}
 		entries := []profileEntry{{name: "enable-channels.pref", data: prefsXML(channelPrefEntries(host))}}
+		if prefs := s.updateServerPrefs(host); prefs != "" {
+			entries = append(entries, profileEntry{name: "update-server.pref", data: prefsXML(prefs)})
+		}
 		// The connection profile only carries what changed since the device
 		// last synced (syncSecago seconds ago; -1 or absent = everything).
 		var since time.Time

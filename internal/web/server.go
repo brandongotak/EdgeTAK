@@ -121,6 +121,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.recordingRoutes(mux)
 	s.emergencyRoutes(mux)
 	s.profileRoutes(mux)
+	s.appRoutes(mux)
 	s.federationRoutes(mux)
 	s.accountRoutes(mux)
 

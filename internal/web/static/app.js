@@ -130,6 +130,7 @@ const loaders = {
   signups: loadSignups,
   certs: loadCerts,
   packages: loadPackages,
+  plugins: loadApps,
   missions: loadMissions,
   video: loadVideo,
   send: loadSend,
@@ -2275,6 +2276,62 @@ async function loadPackages() {
       <button class="small danger" data-del="${esc(p.hash)}" data-name="${esc(p.name)}">Delete</button>
     </td></tr>`).join('') || emptyRow(7, 'No data packages');
 }
+
+// ---------- plugins (update server) ----------
+
+const ANDROID = { 21: '5.0', 22: '5.1', 23: '6', 24: '7', 25: '7.1', 26: '8', 27: '8.1', 28: '9', 29: '10', 30: '11', 31: '12', 32: '12L', 33: '13', 34: '14', 35: '15', 36: '16' };
+
+function renderApps(r) {
+  $('#apk-url').textContent = r.url || '(set the public host in Settings)';
+  $('#apk-configure').checked = r.configure_devices;
+  $('#apk-table tbody').innerHTML = r.apps.map((a) => {
+    const flavor = a.plugin_api ? a.plugin_api.split('.').pop() : '';
+    return `<tr>
+    <td><img class="app-icon" src="api/apps/${esc(a.sha256)}/icon" alt=""></td>
+    <td><strong>${esc(a.name)}</strong><div class="muted mono">${esc(a.package)}</div>${a.description && a.description !== a.name ? `<div class="muted">${esc(a.description.length > 120 ? a.description.slice(0, 120) + "…" : a.description)}</div>` : ''}</td>
+    <td>${esc(a.version || String(a.version_code))}</td>
+    <td>${a.plugin_api ? `<span class="pill">ATAK ${esc(a.atak_version)}${flavor && flavor !== a.atak_version ? ' ' + esc(flavor) : ''}</span>` : '<span class="pill">App</span>'}</td>
+    <td>${a.min_sdk ? esc(ANDROID[a.min_sdk] ? ANDROID[a.min_sdk] + '+' : 'API ' + a.min_sdk) : ''}</td>
+    <td>${bytes(a.size)}</td>
+    <td>${esc(date(a.uploaded))}<div class="muted">${esc(a.uploader)}</div></td>
+    <td class="actions"><a class="button small" href="api/apps/${esc(a.sha256)}/apk">Download</a>
+      <button class="small danger" data-del-app="${esc(a.sha256)}" data-name="${esc(a.name)} ${esc(a.version)}">Delete</button></td></tr>`;
+  }).join('') || emptyRow(8, 'No plugins or apps yet');
+}
+
+async function loadApps() {
+  renderApps(await api('GET', 'api/apps'));
+}
+
+$('#apk-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const files = [...e.target.apk.files];
+  if (!files.length) return;
+  const fd = new FormData();
+  for (const f of files) fd.append('apk', f, f.name);
+  $('#apk-state').textContent = `Uploading ${plural(files.length, 'file')}…`;
+  try {
+    const r = await api('POST', 'api/apps', fd);
+    renderApps(r);
+    e.target.reset();
+    if (r.added?.length) toast(`Added ${r.added.join(', ')}`);
+    $('#apk-state').textContent = r.problems?.length ? r.problems.join('; ') : '';
+  } catch (ex) {
+    $('#apk-state').textContent = '';
+    throw ex;
+  }
+}));
+
+$('#apk-configure').addEventListener('change', guard(async (e) => {
+  renderApps(await api('PUT', 'api/apps/settings', { configure_devices: e.target.checked }));
+  toast(e.target.checked ? 'Devices get the update server when they next connect' : 'Devices are no longer pointed at the update server');
+}));
+
+$('#apk-table').addEventListener('click', guard(async (e) => {
+  const id = e.target.dataset.delApp;
+  if (!id || !confirm(`Delete ${e.target.dataset.name}? Devices can no longer install or update it from here.`)) return;
+  renderApps(await api('DELETE', `api/apps/${encodeURIComponent(id)}`));
+}));
 
 $('#package-form').addEventListener('submit', guard(async (e) => {
   e.preventDefault();

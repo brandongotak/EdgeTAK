@@ -92,6 +92,11 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   between servers, in either direction, with certificate or token sign-in,
   approval of servers that connect, and per-federate group sharing. See
   [Federation](#federation).
+- **Plugins** (update server): upload ATAK plugin and app APKs, and devices
+  install and update them from ATAK's **Plugins** screen. Names, versions,
+  icons and the ATAK version each plugin is built for are read from the
+  APK; each device sees the builds for its ATAK version. Device profiles
+  point ATAK at it. See [Plugins](#plugins).
 - **Device profiles** (Groups tab): settings and files sent to the TAK
   devices of a group's members, or of every user, as on the official server.
   - **Contents:** ATAK settings (entered as key, type and value), `.pref`
@@ -407,6 +412,29 @@ External cameras or media servers can be added with their own URL (`rtsp://`,
 cannot play them. Bandwidth is the main limit: every viewer receives a full
 copy of the stream, about 2 to 4 Mbit/s for 1080p.
 
+### Plugins
+
+The **Plugins** tab is an update server for ATAK, like the one ATAK's
+**Plugins** screen reads from tak.gov:
+
+1. **Upload** plugin or app APKs (several at once). EdgeTAK reads each one's
+   name, version, description, icon, minimum Android version and, for
+   plugins, the ATAK version it is built for (its plugin API).
+2. **Devices** find it at `https://<server>:8443/update`. With **Point
+   devices at this update server** on (the default), their device profile
+   turns ATAK's update server on with that address when they enroll or
+   connect. To set it by hand: in ATAK's **Plugins** screen, open the
+   settings, turn on **Update Server** and enter the address.
+3. **Installing:** ATAK lists the plugins and apps, and installs or updates
+   them over the device's own connection (its certificate, or a username and
+   password, which ATAK asks for).
+
+ATAK only loads plugins built for its exact version, and asks for its own
+version's list first. Upload a build per ATAK version your devices run; a
+device on ATAK 5.4.0 sees the 5.4.0 builds (and apps). A newer build of a
+plugin for the same ATAK version replaces the old one. Icons drawn as
+vectors (adaptive icons) show as a plain placeholder.
+
 ### Federation
 
 EdgeTAK federates with TAK Servers and other EdgeTAKs using TAK Server
@@ -615,6 +643,7 @@ cmd/edgetak/        entry point and flags
 internal/cot/       CoT event model, XML <-> TAK protobuf codec, stream framing
 internal/router/    client registry, group routing (IN/OUT, live changes), hooks
 internal/federation/ TAK Server Federation v2 (gRPC): federates, listener, CoT and contacts
+internal/apps/      ATAK update server: APK reading, product.inf(z) indexes
 internal/stream/    TCP/TLS stream sessions and protocol negotiation
 internal/web/       Marti API, enrollment, OAuth, groups/channels, admin console (embedded)
 internal/mission/   Data Sync missions: roles, contents, change feed, notifications
@@ -666,6 +695,8 @@ licenses, all compatible with the AGPL:
 | [google.golang.org/protobuf](https://pkg.go.dev/google.golang.org/protobuf) | TAK protobuf | BSD-3-Clause |
 | [grpc-go](https://pkg.go.dev/google.golang.org/grpc), genproto | federation | Apache-2.0 |
 | [go-pkcs12](https://pkg.go.dev/software.sslmate.com/src/go-pkcs12) | client certificates | BSD-3-Clause |
+| [androidbinary](https://github.com/shogo82148/androidbinary) | reading APKs (Plugins) | MIT |
+| [golang.org/x/image](https://pkg.go.dev/golang.org/x/image) | WebP plugin icons | BSD-3-Clause |
 | [Leaflet](https://leafletjs.com/) 1.9.4 | console map | BSD-2-Clause |
 | [milsymbol](https://github.com/spatialillusions/milsymbol) 2.2.0 | MIL-STD-2525 symbols | MIT |
 | [JSZip](https://stuk.github.io/jszip/) 3.10.1 | reading data packages | MIT (dual MIT/GPLv3) |

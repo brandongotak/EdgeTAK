@@ -28,6 +28,7 @@
       <button data-tab="signups">Sign-ups</button>
       <button data-tab="certs">Certificates</button>
       <button data-tab="packages">Data Packages</button>
+      <button data-tab="plugins">Plugins</button>
       <button data-tab="missions">Missions</button>
       <button data-tab="video">Video</button>
       <button data-tab="send">Send</button>
@@ -461,6 +462,26 @@
         <h2>Data packages</h2>
         <div class="table-wrap"><table id="packages-table">
           <thead><tr><th>Name</th><th>Size</th><th>Submitted by</th><th>Groups</th><th>Visibility</th><th>Submitted</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section id="tab-plugins" class="tab" hidden>
+      <div class="card">
+        <h2>ATAK plugins and apps</h2>
+        <p class="muted">Devices install and update these from ATAK's <strong>Plugins</strong> screen, which lists what this server offers (ATAK's update server). Upload plugin APKs built for the ATAK versions your devices run; each device sees the builds for its version. A newer build of a plugin for the same ATAK version replaces the old one.</p>
+        <form id="apk-form" class="inline-form">
+          <input type="file" name="apk" accept=".apk,application/vnd.android.package-archive" multiple required>
+          <button class="primary" type="submit">Upload</button>
+          <span class="muted" id="apk-state"></span>
+        </form>
+        <label class="check"><input type="checkbox" id="apk-configure"> Point devices at this update server (sent in their device profile when they connect or enroll)</label>
+        <p class="muted">Update server address: <code id="apk-url"></code>. To set it by hand, in ATAK open <strong>Plugins</strong>, the settings menu, turn on <strong>Update Server</strong> and enter this address.</p>
+      </div>
+      <div class="card">
+        <div class="table-wrap"><table id="apk-table">
+          <thead><tr><th></th><th>Name</th><th>Version</th><th>For</th><th>Android</th><th>Size</th><th>Uploaded</th><th></th></tr></thead>
           <tbody></tbody>
         </table></div>
       </div>
