@@ -270,6 +270,8 @@ async function loadSelfUpdate() {
 function renderSelfUpdate() {
   const u = selfUpd;
   if (!u) return;
+  // A dot on the Dashboard tab says an update is waiting.
+  $('#tabs button[data-tab="dashboard"]').classList.toggle('has-update', !!(u.available && u.update_available));
   const st = u.status;
   const running = st?.state === 'running' || !!selfUpdWatch;
   $('#update-state').innerHTML = running ? '<span class="pill warn">updating</span>'
@@ -279,7 +281,8 @@ function renderSelfUpdate() {
   if (!u.available) {
     text = esc(u.reason);
   } else {
-    text = `Running ${esc(u.version)}.` + (u.latest ? ` Latest release: ${esc(u.latest.version)} (${esc(new Date(u.latest.published).toLocaleDateString())}).` : '');
+    text = `Running ${esc(u.version)}.` + (u.latest ? ` Latest release: ${esc(u.latest.version)} (${esc(new Date(u.latest.published).toLocaleDateString())}).` : '') +
+      (u.checked_at ? ` <span class="muted">Checked ${esc(ago(u.checked_at))}.</span>` : '');
     if (running) text += ` <strong>${esc(st?.message || 'Starting the update')}…</strong> EdgeTAK restarts during the update; this page reloads when it is back.`;
     else if (st?.state === 'error') text += ` <span class="error">Last update failed: ${esc(st.message)}</span>`;
     else if (st?.state === 'done' && st.at && Date.now() - new Date(st.at) < 86400000) text += ` <span class="pill ok">done</span> ${esc(st.message)}.`;

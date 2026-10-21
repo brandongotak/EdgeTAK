@@ -91,9 +91,12 @@ func readUpdateStatus() *updateStatus {
 func (s *Server) selfUpdateView() map[string]any {
 	ok, why := s.updaterAvailable()
 	s.selfUpdate.mu.Lock()
-	latest, requested, at := s.selfUpdate.latest, s.selfUpdate.requested, s.selfUpdate.at
+	latest, requested, at, checked := s.selfUpdate.latest, s.selfUpdate.requested, s.selfUpdate.at, s.selfUpdate.checkedAt
 	s.selfUpdate.mu.Unlock()
 	v := map[string]any{"version": s.Version, "available": ok, "reason": why, "latest": latest, "status": readUpdateStatus()}
+	if !checked.IsZero() {
+		v["checked_at"] = checked
+	}
 	if latest != nil {
 		v["update_available"] = release.Newer(latest.Version, s.Version)
 	}

@@ -56,6 +56,7 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .tabs { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
 .tabs button { background: transparent; border-color: transparent; color: var(--muted); white-space: nowrap; }
 .tabs button.active { color: var(--text); background: var(--panel-2); border-color: var(--line); }
+.tabs button.has-update::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--warn); vertical-align: middle; }
 .who { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 #map-toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 
