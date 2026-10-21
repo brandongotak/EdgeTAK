@@ -192,6 +192,19 @@ td.wrap { white-space: normal; max-width: 320px; }
 .publish-urls { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: baseline; margin: 8px 0; }
 .publish-urls code { word-break: break-all; background: var(--panel-2); padding: 3px 6px; border-radius: 5px; }
 .camera-icon { background: none; border: none; }
+/* ---- Data retention ---- */
+.retention-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) 110px minmax(0, 1fr); gap: 8px 14px; align-items: center; margin-bottom: 12px; }
+.retention-grid .label strong { display: block; color: var(--text); }
+.retention-grid .label span { color: var(--muted); font-size: 12px; }
+.retention-grid input { width: 100%; }
+.retention-grid .effect { font-size: 13px; }
+.retention-grid .head { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+@media (max-width: 700px) {
+  .retention-grid { grid-template-columns: 1fr 90px; }
+  .retention-grid .effect { grid-column: 1 / -1; margin-top: -4px; }
+  .retention-grid .head:nth-child(3) { display: none; }
+}
+
 /* ---- Health ---- */
 .health-filter { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }

@@ -166,6 +166,19 @@ type db struct {
 	VideoFeeds    map[string]*VideoFeed `json:"video_feeds"` // by uid
 	VideoSecret   string                `json:"video_secret"`
 	VideoSettings VideoSettings         `json:"video_settings"`
+
+	Retention RetentionSettings `json:"retention"`
+}
+
+// RetentionSettings are how long kinds of data are kept, in days (0 = keep
+// forever). Position history has its own HistorySettings.
+type RetentionSettings struct {
+	PackagesDays     int `json:"packages_days"`      // data packages, by upload time (files missions use are kept)
+	MissionsIdleDays int `json:"missions_idle_days"` // missions with no changes for this long
+	InboxDays        int `json:"inbox_days"`         // messages to the server contact
+	RequestsDays     int `json:"requests_days"`      // pending sign-up requests (auto-rejected)
+	InvitesDays      int `json:"invites_days"`       // used-up, expired or revoked invites
+	CertsDays        int `json:"certs_days"`         // records of certificates expired this long ago
 }
 
 // VideoSettings controls publishing to the server's media server without
@@ -521,6 +534,110 @@ func (s *Store) SetServerContact(c ServerContact) error {
 	defer s.mu.Unlock()
 	s.db.ServerContact = c
 	return s.save()
+}
+
+// ---- data retention ----
+
+func (s *Store) RetentionSettings() RetentionSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.Retention
+}
+
+func (s *Store) SetRetentionSettings(r RetentionSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Retention = r
+	return s.save()
+}
+
+// PruneInbox removes server-contact messages older than before; with dry
+// it only counts them.
+func (s *Store) PruneInbox(before time.Time, dry bool) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keep := s.db.Inbox[:0:0]
+	n := 0
+	for _, m := range s.db.Inbox {
+		if m.Time.Before(before) {
+			n++
+		} else {
+			keep = append(keep, m)
+		}
+	}
+	if dry || n == 0 {
+		return n, nil
+	}
+	s.db.Inbox = keep
+	return n, s.save()
+}
+
+// PruneRequests rejects sign-up requests waiting since before.
+func (s *Store) PruneRequests(before time.Time, dry bool) (int, error) {
+	return s.pruneMap(dry, func() int {
+		n := 0
+		for id, r := range s.db.Requests {
+			if r.Created.Before(before) {
+				n++
+				if !dry {
+					delete(s.db.Requests, id)
+				}
+			}
+		}
+		return n
+	})
+}
+
+// PruneInvites removes invites that can no longer be used and ended before
+// before: by their expiry, or by when they were made if used up or revoked.
+func (s *Store) PruneInvites(before, now time.Time, dry bool) (int, error) {
+	return s.pruneMap(dry, func() int {
+		n := 0
+		for code, inv := range s.db.Invites {
+			if inv.Usable(now) {
+				continue
+			}
+			ended := inv.Created
+			if !inv.Expires.IsZero() && inv.Expires.Before(now) {
+				ended = inv.Expires
+			}
+			if ended.Before(before) {
+				n++
+				if !dry {
+					delete(s.db.Invites, code)
+				}
+			}
+		}
+		return n
+	})
+}
+
+// PruneCerts removes records of certificates that expired before before.
+// Unexpired ones always stay, revoked or not: the record is what keeps a
+// revoked certificate from working.
+func (s *Store) PruneCerts(before time.Time, dry bool) (int, error) {
+	return s.pruneMap(dry, func() int {
+		n := 0
+		for serial, c := range s.db.Certs {
+			if !c.Expires.IsZero() && c.Expires.Before(before) {
+				n++
+				if !dry {
+					delete(s.db.Certs, serial)
+				}
+			}
+		}
+		return n
+	})
+}
+
+func (s *Store) pruneMap(dry bool, fn func() int) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := fn()
+	if dry || n == 0 {
+		return n, nil
+	}
+	return n, s.save()
 }
 
 // ---- two-factor login ----

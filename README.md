@@ -66,8 +66,8 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   everything kept, and **Replay this period** plays it back with a time
   slider, play/pause and speeds from 1× to 1200×.
 - **Video**: feeds for ATAK's and WinTAK's Video Player, limited by group,
-  with camera markers on devices. With `--video` the installer adds the
-  MediaMTX media server: cameras, drones and ATAK publish over RTSP, RTMP or
+  with camera markers on devices. The installer and the Docker image include
+  the MediaMTX media server (on by default): cameras, drones and ATAK publish over RTSP, RTMP or
   SRT with an EdgeTAK login, streams become feeds automatically, viewers get
   personal links, and the console plays them live. See [Video](#video).
 - **Health**: server graphs for the last hour to 24 hours: CPU, memory,
@@ -76,6 +76,14 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   messages. A device table lists each device's battery (with history and
   drain rate), last report, GPS fix and connection, worst problems first.
   System figures need Linux; elsewhere only EdgeTAK's own are shown.
+- **Data retention**: how long to keep data packages, idle missions, Inbox
+  messages, pending sign-ups, old invites and expired certificate records
+  (Dashboard). Rules run hourly, show what they would remove before you save,
+  and never remove files a mission uses or records of certificates that are
+  still valid.
+- **Install as an app**: the console installs on phones and desktops
+  (Install app in the top bar on Chrome/Edge; Share → Add to Home Screen on
+  iPhone). It needs a trusted certificate, so use port 8446 with Let's Encrypt.
 - **Web admin console**: connected clients, users, groups,
   certificates, data packages, missions, and connection packages for each
   client.
@@ -223,7 +231,7 @@ The compose file's settings apply on every start:
 | `EDGETAK_PUBLIC_HOST` | the address devices use (an IP or a domain); **set this**, since the container cannot see the host's address |
 | `EDGETAK_LETSENCRYPT` | `1` (or an email address) for Let's Encrypt on 8446; needs a domain and port 80 |
 | `EDGETAK_NO_PLAINTEXT` | `1` turns off ports 8087 and 8080 |
-| `EDGETAK_VIDEO` | `1` runs the bundled MediaMTX; also map 8554, 1935 and 8890/udp |
+| `EDGETAK_VIDEO` | video is on (the compose file maps 8554, 1935 and 8890/udp); `0` turns it off |
 | `EDGETAK_SERVER_NAME`, `EDGETAK_LOG_LEVEL` | the server name; `debug` logging |
 
 Everything else lives in the `edgetak-data` volume (`/data`): users, the CA,
@@ -285,13 +293,19 @@ address. Use **Open** only on servers you are happy for anyone to join.
 
 ### Video
 
-Add `--video` to the install command (or rerun it with `--video` to add it
-later). The installer downloads [MediaMTX](https://github.com/bluenviron/mediamtx),
-checks it against a pinned checksum, and puts it in EdgeTAK's data directory.
-Offline devices can use `--video-tarball mediamtx_v1.21.1_linux_<arch>.tar.gz`.
-EdgeTAK runs MediaMTX itself (and restarts it if it stops), writes its
-configuration, and approves every publish and view, so there are no separate
-video accounts.
+Video is on by default. The installer downloads
+[MediaMTX](https://github.com/bluenviron/mediamtx), checks it against a pinned
+checksum, and puts it in EdgeTAK's data directory; the Docker image has it
+built in. EdgeTAK runs MediaMTX itself (and restarts it if it stops), writes
+its configuration, and approves every publish and view, so there are no
+separate video accounts.
+
+- **No video:** install with `--no-video` (remembered for later updates), or
+  set `EDGETAK_VIDEO: "0"` in Docker.
+- **Offline devices:** if MediaMTX cannot be downloaded, the install goes on
+  without video and the next update tries again. To add it offline, use
+  `--video-tarball mediamtx_v1.21.1_linux_<arch>.tar.gz`. `--video` makes a
+  failed download stop the install instead.
 
 **Updating MediaMTX.** The **MediaMTX** card on the Video tab shows the
 running version and checks GitHub for newer releases. **Update** downloads the
@@ -410,11 +424,11 @@ authentication. These clients are anonymous and only see `__ANON__`.
 | 80 | Let's Encrypt challenges (only with `--letsencrypt`) |
 | 8087 | CoT streaming, plain TCP, anonymous (off with `--no-plaintext`) |
 | 8080 | Marti API, plaintext, for 8087 clients; admin console from localhost only (off with `--no-plaintext`) |
-| 8554 | Video: RTSP (only with `--video`) |
-| 1935 | Video: RTMP (only with `--video`) |
-| 8890/udp | Video: SRT (only with `--video`) |
+| 8554 | Video: RTSP (not with `--no-video`) |
+| 1935 | Video: RTMP (not with `--no-video`) |
+| 8890/udp | Video: SRT (not with `--no-video`) |
 
-With `--video`, MediaMTX's API (9997), its HLS server (8888) and EdgeTAK's
+With video on, MediaMTX's API (9997), its HLS server (8888) and EdgeTAK's
 video auth endpoint (8099) listen on localhost only. `video.bind_host` in the
 config limits the stream ports to one address, such as a VPN interface.
 
@@ -534,7 +548,7 @@ licenses, all compatible with the AGPL:
 | [toGeoJSON](https://github.com/mapbox/togeojson) 0.16.0 | KML on the map | BSD-2-Clause |
 | [qrcodejs](https://github.com/davidshimjs/qrcodejs) 1.0.0 | QR codes | MIT |
 | [hls.js](https://github.com/video-dev/hls.js) 1.7.2 | console video player | Apache-2.0 |
-| [MediaMTX](https://github.com/bluenviron/mediamtx) | media server, downloaded by `--video` (not bundled) | MIT |
+| [MediaMTX](https://github.com/bluenviron/mediamtx) | media server: downloaded by the installer, included in the Docker image | MIT |
 
 The bundled libraries' license texts are in
 [`internal/web/static/vendor/`](internal/web/static/vendor/).

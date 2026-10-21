@@ -20,18 +20,19 @@ services:
       # EDGETAK_LETSENCRYPT: "1"
       # Turn off the anonymous plain ports 8087 and 8080 (internet servers).
       # EDGETAK_NO_PLAINTEXT: "1"
-      # Video: run the bundled MediaMTX (uncomment the video ports below).
-      # EDGETAK_VIDEO: "1"
+      # Video (the bundled MediaMTX) is on; "0" turns it off (and drop the
+      # video ports below).
+      # EDGETAK_VIDEO: "0"
     ports:
       - "8089:8089"   # CoT over TLS (devices)
       - "8443:8443"   # Marti API and admin console
       - "8446:8446"   # certificate enrollment, sign-up page
       - "8087:8087"   # CoT plain TCP (local networks only)
       - "8080:8080"   # plain HTTP API for 8087 clients
-      # - "80:80"           # Let's Encrypt
-      # - "8554:8554"       # video: RTSP
-      # - "1935:1935"       # video: RTMP
-      # - "8890:8890/udp"   # video: SRT
+      - "8554:8554"       # video: RTSP
+      - "1935:1935"       # video: RTMP
+      - "8890:8890/udp"   # video: SRT
+      # - "80:80"         # Let's Encrypt
     volumes:
       - edgetak-data:/data
 

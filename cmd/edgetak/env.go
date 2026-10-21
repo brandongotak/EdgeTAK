@@ -23,7 +23,7 @@ import (
 //	EDGETAK_SERVER_NAME   name shown in the console and on devices
 //	EDGETAK_LETSENCRYPT   1 (or an email address) for a Let's Encrypt certificate on 8446
 //	EDGETAK_NO_PLAINTEXT  1 to turn off the plain TCP (8087) and HTTP (8080) ports
-//	EDGETAK_VIDEO         1 to run the bundled MediaMTX media server
+//	EDGETAK_VIDEO         1 to run the bundled MediaMTX media server (the image's default), 0 for no video
 //	EDGETAK_LOG_LEVEL     debug, info, warn or error
 func applyEnv(cfg *config.Config, dataDir string) error {
 	if v := strings.TrimSpace(os.Getenv("EDGETAK_PUBLIC_HOST")); v != "" {
@@ -48,7 +48,9 @@ func applyEnv(cfg *config.Config, dataDir string) error {
 	if isOn(os.Getenv("EDGETAK_NO_PLAINTEXT")) {
 		cfg.TCPAddr, cfg.HTTPAddr = "", ""
 	}
-	if isOn(os.Getenv("EDGETAK_VIDEO")) {
+	if isOff(os.Getenv("EDGETAK_VIDEO")) {
+		cfg.Video.Enabled = false
+	} else if isOn(os.Getenv("EDGETAK_VIDEO")) {
 		cfg.Video = cfg.Video.Normalized()
 		cfg.Video.Enabled = true
 		if cfg.Video.MediaMTXBinary == "" {

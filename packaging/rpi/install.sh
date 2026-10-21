@@ -24,7 +24,7 @@ IMPORT_DATA=""
 LE=0
 LE_EMAIL=""
 NO_PLAINTEXT=0
-VIDEO=0
+VIDEO=1 # on by default; --no-video turns it off (remembered)
 VIDEO_TARBALL=""
 
 # Options are remembered: reruns of the installer and updates from the admin
@@ -33,6 +33,9 @@ CONF=/etc/edgetak/install.conf
 if [ -f "$CONF" ] && [ ! -L "$CONF" ]; then
 	. "$CONF"
 fi
+# Whether --video/--no-video was given now: with video only on by default, a
+# failed MediaMTX download or a taken port skips video instead of failing.
+VIDEO_EXPLICIT=0
 
 # Updates from the admin console: EdgeTAK writes a version into REQUEST; the
 # path unit runs the root-owned UPDATER, which reruns this installer.
@@ -71,11 +74,13 @@ Usage: sudo sh $SELF [options]
                        expiry emails; EdgeTAK renews by itself).
   --no-plaintext       disable the anonymous plaintext ports 8087 (CoT) and
                        8080 (HTTP API); recommended on internet-facing servers
-  --video              also install the MediaMTX media server ($MTX_VERSION) so
-                       cameras, drones and ATAK can stream video through this
-                       server (RTSP 8554, RTMP 1935, SRT 8890/udp). EdgeTAK runs
-                       it; update it later from the console's Video tab. Kept
-                       on upgrades once installed.
+  --no-video           do not install the MediaMTX media server. Video is on by
+                       default: MediaMTX ($MTX_VERSION) lets cameras, drones and
+                       ATAK stream through this server (RTSP 8554, RTMP 1935,
+                       SRT 8890/udp); EdgeTAK runs it and the console's Video
+                       tab updates it. If it cannot be downloaded, the install
+                       continues without video.
+  --video              require video (fail instead of skipping it)
   --video-tarball FILE use this mediamtx_v${MTX_VERSION}_linux_<arch>.tar.gz instead
                        of downloading it (for offline installs)
   --no-firewall        do not open ports in ufw/firewalld
@@ -109,9 +114,10 @@ while [ $# -gt 0 ]; do
 			if [ $# -ge 2 ] && printf '%s' "$2" | grep -Eq '^[^-@ ][^@ ]*@[^@ ]+$'; then LE_EMAIL=$2; shift 2; else shift; fi ;;
 		--letsencrypt=*) LE=1; LE_EMAIL=${1#*=}; shift ;;
 		--no-plaintext) NO_PLAINTEXT=1; shift ;;
-		--video) VIDEO=1; shift ;;
-		--video-tarball) [ $# -ge 2 ] || die "--video-tarball needs a file"; VIDEO=1; VIDEO_TARBALL=$2; shift 2 ;;
-		--video-tarball=*) VIDEO=1; VIDEO_TARBALL=${1#*=}; shift ;;
+		--video) VIDEO=1; VIDEO_EXPLICIT=1; shift ;;
+		--no-video) VIDEO=0; VIDEO_EXPLICIT=1; shift ;;
+		--video-tarball) [ $# -ge 2 ] || die "--video-tarball needs a file"; VIDEO=1; VIDEO_EXPLICIT=1; VIDEO_TARBALL=$2; shift 2 ;;
+		--video-tarball=*) VIDEO=1; VIDEO_EXPLICIT=1; VIDEO_TARBALL=${1#*=}; shift ;;
 		--no-firewall) FIREWALL=0; shift ;;
 		--uninstall) ACTION=uninstall; shift ;;
 		--purge) PURGE=1; shift ;;
@@ -130,16 +136,24 @@ if [ "$LE" -eq 1 ]; then
 	[ -z "$LE_EMAIL" ] || printf '%s' "$LE_EMAIL" | grep -Eq '^[^@ ]+@[^@ ]+$' || die "invalid --letsencrypt email: $LE_EMAIL"
 fi
 
-# Upgrades keep video once it is installed.
-[ -f "$MTX_DIR/mediamtx" ] && [ "$ACTION" = install ] && VIDEO=1
-
 # Ports to open in the host firewall and to check for conflicts (tcp unless
 # given as port/udp).
 PORTS="8089 8443 8446"
 [ "$NO_PLAINTEXT" -eq 1 ] || PORTS="8087 $PORTS 8080"
 [ "$LE" -eq 0 ] || PORTS="80 $PORTS"
+BASE_PORTS=$PORTS
 VIDEO_PORTS="8554 1935 8890/udp"
 [ "$VIDEO" -eq 0 ] || PORTS="$PORTS $VIDEO_PORTS"
+
+# skip_video turns video off for this run (it stays wanted in install.conf).
+skip_video() {
+	warn "video skipped: $*"
+	VIDEO=0
+	VIDEO_SKIPPED=1
+	PORTS=$BASE_PORTS
+}
+VIDEO_SKIPPED=0
+VIDEO_WANTED=$VIDEO # what install.conf remembers, even if video is skipped this time
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 
@@ -223,6 +237,7 @@ LE=$LE
 LE_EMAIL=$(q "$LE_EMAIL")
 NO_PLAINTEXT=$NO_PLAINTEXT
 FIREWALL=$FIREWALL
+VIDEO=$VIDEO_WANTED
 EOF
 	chmod 0644 "$CONF.tmp"
 	mv -f "$CONF.tmp" "$CONF"
@@ -433,6 +448,9 @@ do_install() {
 			case "$p" in */*) continue ;; esac # only TCP listeners are checked
 			if ss -Hltn "sport = :$p" 2>/dev/null | grep -q .; then
 				ss -Hltnp "sport = :$p" 2>/dev/null | sed 's/^/    /' >&2
+				case " $VIDEO_PORTS " in
+					*" $p "*) if [ "$VIDEO_EXPLICIT" -eq 0 ]; then skip_video "port $p is already in use (another media server?)"; continue; fi ;;
+				esac
 				die "port $p is already in use. Stop whatever is listening (e.g. an edgetak you started by hand: pkill edgetak) and rerun."
 			fi
 		done
@@ -483,12 +501,22 @@ do_install() {
 		say "$out"
 	fi
 	if [ "$VIDEO" -eq 1 ]; then
-		install_mediamtx
-		chown -R "$SVC_USER:$SVC_USER" "$MTX_DIR"
-		if ! out=$(as_service_user "$BIN_PATH" -data "$DATA_DIR" -enable-video 2>&1); then
-			printf '%s\n' "$out" >&2
-			die "enabling video failed"
+		# In a subshell so a failed download can skip video rather than end the install.
+		if ( install_mediamtx ); then
+			chown -R "$SVC_USER:$SVC_USER" "$MTX_DIR"
+			if ! out=$(as_service_user "$BIN_PATH" -data "$DATA_DIR" -enable-video 2>&1); then
+				printf '%s\n' "$out" >&2
+				die "enabling video failed"
+			fi
+		elif [ "$VIDEO_EXPLICIT" -eq 1 ]; then
+			die "installing MediaMTX failed (see above)"
+		else
+			skip_video "MediaMTX could not be installed (offline?); the next update tries again, or use --no-video"
 		fi
+	fi
+	if [ "$VIDEO" -eq 0 ] && [ "$VIDEO_SKIPPED" -eq 0 ]; then
+		# --no-video: turn off video an earlier install set up.
+		as_service_user "$BIN_PATH" -data "$DATA_DIR" -disable-video >/dev/null 2>&1 || true
 	fi
 
 	write_unit

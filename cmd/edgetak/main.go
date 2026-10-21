@@ -36,7 +36,8 @@ func main() {
 	reset2FA := flag.String("reset-2fa", "", "turn off two-factor login for `user` (lost phone), then exit; stop EdgeTAK first")
 	initOnly := flag.Bool("init", false, "create the data directory, config, CA and admin account, then exit")
 	enableLE := flag.String("enable-letsencrypt", "", "use a Let's Encrypt certificate on the enrollment port, optionally registered to `email` (-enable-letsencrypt= for none); needs public_host to be a domain pointing here and port 80 reachable")
-	enableVideo := flag.Bool("enable-video", false, "connect EdgeTAK to a MediaMTX media server on this machine (the installer's --video sets it up)")
+	enableVideo := flag.Bool("enable-video", false, "connect EdgeTAK to a MediaMTX media server on this machine (the installer sets it up)")
+	disableVideo := flag.Bool("disable-video", false, "turn video off (the installer's --no-video)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	healthCheck := flag.Bool("healthcheck", false, "exit 0 if the running EdgeTAK answers on its enrollment port (container health check)")
 	flag.Parse()
@@ -94,6 +95,17 @@ func main() {
 			fatal(err)
 		}
 		fmt.Printf("Let's Encrypt enabled for %s on %v (restart EdgeTAK to apply)\n", cfg.PublicHost, cfg.PublicCert.Listeners)
+		return
+	}
+	if *disableVideo {
+		if !cfg.Video.Enabled {
+			return
+		}
+		cfg.Video.Enabled = false
+		if err := config.Save(*cfgPath, cfg); err != nil {
+			fatal(err)
+		}
+		fmt.Println("Video disabled (restart EdgeTAK to apply)")
 		return
 	}
 	if *enableVideo {

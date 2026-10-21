@@ -54,6 +54,7 @@ type Server struct {
 	signupLimiter *rateLimiter // public sign-up attempts per address
 	video         videoState
 	selfUpdate    selfUpdateState
+	retention     retentionState
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -107,6 +108,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.updateRoutes(mux)
 	s.twoFactorRoutes(mux)
 	s.healthRoutes(mux)
+	s.retentionRoutes(mux)
 
 	files := http.StripPrefix("/admin/", http.FileServerFS(staticSub()))
 	mux.HandleFunc("GET /admin/", func(w http.ResponseWriter, r *http.Request) {

@@ -44,6 +44,7 @@ COPY --from=build --chown=nonroot:nonroot /out/data /data
 COPY LICENSE /usr/share/doc/edgetak/LICENSE
 ENV EDGETAK_DATA=/data \
     EDGETAK_CONTAINER=1 \
+    EDGETAK_VIDEO=1 \
     EDGETAK_MEDIAMTX_SEED=/opt/mediamtx/mediamtx
 VOLUME /data
 # CoT TCP/TLS, HTTPS API + console, enrollment, plain HTTP, Let's Encrypt,

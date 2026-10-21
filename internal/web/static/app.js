@@ -176,6 +176,7 @@ function selectTab(name) {
   guard(loaders[name])();
   if (name === 'dashboard') {
     loadSelfUpdate().catch(() => {});
+    loadRetention().catch(() => {});
     pollTimer = setInterval(guard(loadDashboard), 3000);
   } else if (name === 'health') {
     pollTimer = setInterval(() => loadHealth().catch(() => {}), 10000);
@@ -551,6 +552,81 @@ for (const b of document.querySelectorAll('.segmented button[data-minutes]')) {
     await loadHealth();
   }));
 }
+
+// ---------- data retention ----------
+
+const RETENTION_RULES = [
+  ['packages_days', 'packages', 'Data packages', 'by upload date; files a mission uses are kept', 'package'],
+  ['missions_idle_days', 'missions', 'Missions', 'with no changes for this long', 'mission'],
+  ['inbox_days', 'inbox', 'Inbox messages', 'sent to the server contact', 'message'],
+  ['requests_days', 'requests', 'Pending sign-up requests', 'rejected when they have waited this long', 'request'],
+  ['invites_days', 'invites', 'Old invites', 'used up, expired or revoked', 'invite'],
+  ['certs_days', 'certs', 'Expired certificate records', 'after the certificate expired; valid ones are always kept', 'record'],
+];
+let retentionTimer = null;
+
+function plural(n, word) { return `${n} ${word}${Number(n) === 1 ? '' : 's'}`; }
+
+function renderRetentionEffects(pending) {
+  for (const [key, kind, , , noun] of RETENTION_RULES) {
+    const cell = $(`#retention-rows [data-effect="${key}"]`);
+    const days = Number($(`#retention-form [name="${key}"]`).value) || 0;
+    const n = pending?.removed?.[kind];
+    cell.innerHTML = days === 0 ? '<span class="muted">kept forever</span>'
+      : n ? `<span class="status-icon warning" aria-hidden="true">▲</span> ${esc(plural(n, noun))} would be removed now` : '<span class="muted">nothing to remove now</span>';
+  }
+}
+
+async function loadRetention() {
+  const r = await api('GET', 'api/retention');
+  const rows = $('#retention-rows');
+  rows.innerHTML = '<div class="head">Data</div><div class="head">Keep (days)</div><div class="head">Effect</div>' +
+    RETENTION_RULES.map(([key, , label, hint]) => `<div class="label"><strong>${esc(label)}</strong><span>${esc(hint)}</span></div>
+      <input type="number" min="0" max="3650" step="1" name="${key}" value="${Number(r.settings[key]) || 0}" aria-label="${esc(label)}: days to keep">
+      <div class="effect" data-effect="${key}"></div>`).join('') +
+    `<div class="label"><strong>Position history</strong><span>set with the map's History button</span></div>
+     <div>${esc(r.history.enabled ? plural(fmtNum(r.history.retention_hours / 24), 'day') : 'off')}</div>
+     <div class="effect muted">${r.history.enabled ? `kept ${esc(r.history.retention_hours)} hours` : 'not recorded'}</div>`;
+  renderRetentionEffects(r.pending);
+  const last = r.last;
+  $('#retention-last').textContent = last
+    ? `Last run ${new Date(last.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}: ` +
+      (Object.values(last.removed).some((n) => n) ? Object.entries(last.removed).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(', ') + ' removed' : 'nothing removed')
+    : '';
+}
+
+function retentionForm() {
+  return Object.fromEntries(RETENTION_RULES.map(([key]) => [key, Number($(`#retention-form [name="${key}"]`).value) || 0]));
+}
+
+// Preview as the admin types: what these numbers would remove now.
+$('#retention-form').addEventListener('input', () => {
+  clearTimeout(retentionTimer);
+  retentionTimer = setTimeout(guard(async () => {
+    renderRetentionEffects(await api('POST', 'api/retention/preview', retentionForm()));
+  }), 400);
+});
+
+$('#retention-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const set = retentionForm();
+  const preview = await api('POST', 'api/retention/preview', set);
+  const total = Object.values(preview.removed).reduce((a, b) => a + b, 0);
+  if (total && !confirm(`Save these rules? ${total} item(s) will be removed at the next hourly run (or press Run now). This cannot be undone.`)) return;
+  await api('PUT', 'api/retention', set);
+  toast('Retention rules saved');
+  loadRetention();
+}));
+
+$('#retention-run').addEventListener('click', guard(async () => {
+  const r = await api('GET', 'api/retention');
+  const total = Object.values(r.pending.removed).reduce((a, b) => a + b, 0);
+  if (!total) { toast('Nothing to remove with the saved rules'); return; }
+  if (!confirm(`Remove ${total} item(s) now with the saved rules? This cannot be undone.`)) return;
+  const res = await api('POST', 'api/retention/run');
+  toast(res.errors?.length ? `Done with errors: ${res.errors.join('; ')}` : `Removed ${Object.values(res.removed).reduce((a, b) => a + b, 0)} item(s)`, !!res.errors?.length);
+  loadRetention();
+}));
 
 // ---------- EdgeTAK updates ----------
 
@@ -2438,6 +2514,42 @@ for (const table of document.querySelectorAll('table')) {
   const body = table.querySelector('tbody');
   if (body) new MutationObserver(() => labelCells(table)).observe(body, { childList: true });
 }
+
+// ---------- install as an app ----------
+//
+// Browsers only offer installation over a trusted certificate (port 8446
+// with Let's Encrypt). Chrome and Edge raise beforeinstallprompt; iPhones
+// and iPads install from Safari's Share menu.
+
+let installPrompt = null;
+const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register('sw.js').catch(() => { /* e.g. an untrusted certificate */ });
+}
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  $('#install-app').hidden = false;
+});
+window.addEventListener('appinstalled', () => {
+  installPrompt = null;
+  $('#install-app').hidden = true;
+  toast('EdgeTAK is installed as an app');
+});
+if (isIOS && !standalone() && window.isSecureContext) $('#install-app').hidden = false;
+
+$('#install-app').addEventListener('click', async () => {
+  if (installPrompt) {
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') $('#install-app').hidden = true;
+    installPrompt = null;
+  } else if (isIOS) {
+    toast('In Safari, tap Share, then "Add to Home Screen"');
+  }
+});
 
 // The version endpoint needs no login, so the sign-in page can show it too.
 fetch('/Marti/api/version').then((r) => (r.ok ? r.text() : '')).then((v) => {

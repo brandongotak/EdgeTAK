@@ -872,6 +872,20 @@ type Summary struct {
 	LastEdited  time.Time `json:"last_edited"`
 }
 
+// ReferencedHashes returns the data packages that missions use as files, so
+// cleanup never removes a file a mission still lists.
+func (s *Service) ReferencedHashes() map[string]bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := map[string]bool{}
+	for _, m := range s.missions {
+		for _, c := range m.Contents {
+			out[c.Hash] = true
+		}
+	}
+	return out
+}
+
 // Summaries lists every mission for administrators.
 func (s *Service) Summaries() []Summary {
 	s.mu.RLock()

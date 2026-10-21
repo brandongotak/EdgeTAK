@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EdgeTAK Console</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#161c1f" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="EdgeTAK">
 <link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -39,7 +47,7 @@
       <button data-tab="send">Send</button>
       <button data-tab="connect">Connect</button>
     </nav>
-    <div class="who"><button id="map-toggle" class="ghost" aria-pressed="false" title="Show or hide the map">Map</button> <span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
+    <div class="who"><button id="install-app" class="ghost" hidden title="Install the console as an app">Install app</button> <button id="map-toggle" class="ghost" aria-pressed="false" title="Show or hide the map">Map</button> <span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
   </header>
 
   <div id="workspace" class="workspace">
@@ -58,6 +66,17 @@
           <button type="button" class="small primary" id="update-install" hidden></button>
         </div>
         <details id="update-notes" hidden><summary>Release notes</summary><pre class="notes"></pre></details>
+      </div>
+      <div class="card" id="retention-card">
+        <div class="card-head"><h2>Data retention</h2><span class="muted" id="retention-last"></span></div>
+        <p class="muted">How long to keep each kind of data, in days (0 = keep forever). Rules run every hour. The right column shows what a rule would remove right now.</p>
+        <form id="retention-form">
+          <div class="retention-grid" id="retention-rows"></div>
+          <div class="inline-form">
+            <button class="primary" type="submit">Save</button>
+            <button type="button" id="retention-run" title="Apply the saved rules now">Run now</button>
+          </div>
+        </form>
       </div>
       <div class="card">
         <div class="card-head"><h2>Connected clients</h2><span class="muted" id="clients-updated"></span></div>
