@@ -47,6 +47,15 @@
         <h2>Server</h2>
         <dl id="server-info" class="kv"></dl>
       </div>
+      <div class="card" id="update-card">
+        <div class="card-head"><h2>EdgeTAK updates</h2><span id="update-state"></span></div>
+        <p id="update-text" class="muted"></p>
+        <div class="inline-form">
+          <button type="button" class="small" id="update-check">Check for updates</button>
+          <button type="button" class="small primary" id="update-install" hidden></button>
+        </div>
+        <details id="update-notes" hidden><summary>Release notes</summary><pre class="notes"></pre></details>
+      </div>
       <div class="card">
         <div class="card-head"><h2>Connected clients</h2><span class="muted" id="clients-updated"></span></div>
         <div class="table-wrap"><table id="clients-table">

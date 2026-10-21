@@ -163,6 +163,7 @@ function selectTab(name) {
   clearInterval(pollTimer);
   guard(loaders[name])();
   if (name === 'dashboard') {
+    loadSelfUpdate().catch(() => {});
     pollTimer = setInterval(guard(loadDashboard), 3000);
   } else if (name === 'video') {
     pollTimer = setInterval(() => loadVideo().catch(() => {}), 5000); // live streams come and go
@@ -249,6 +250,94 @@ async function loadDashboard() {
   $('#clients-table tbody').innerHTML = rows.join('') || emptyRow(12, 'No clients connected');
   $('#clients-updated').textContent = 'updated ' + new Date().toLocaleTimeString();
   updateMap(clients);
+}
+
+// ---------- EdgeTAK updates ----------
+
+let selfUpd = null;
+let selfUpdChecked = false;
+let selfUpdWatch = null;
+
+async function loadSelfUpdate() {
+  selfUpd = await api('GET', 'api/server/update');
+  if (!selfUpdChecked && selfUpd.available && !selfUpd.latest) { // look once per visit
+    selfUpdChecked = true;
+    api('POST', 'api/server/update/check').then(() => loadSelfUpdate()).catch(() => {});
+  }
+  renderSelfUpdate();
+}
+
+function renderSelfUpdate() {
+  const u = selfUpd;
+  if (!u) return;
+  const st = u.status;
+  const running = st?.state === 'running' || !!selfUpdWatch;
+  $('#update-state').innerHTML = running ? '<span class="pill warn">updating</span>'
+    : u.update_available ? '<span class="pill warn">update available</span>'
+    : u.latest ? '<span class="pill ok">up to date</span>' : '';
+  let text;
+  if (!u.available) {
+    text = esc(u.reason);
+  } else {
+    text = `Running ${esc(u.version)}.` + (u.latest ? ` Latest release: ${esc(u.latest.version)} (${esc(new Date(u.latest.published).toLocaleDateString())}).` : '');
+    if (running) text += ` <strong>${esc(st?.message || 'Starting the update')}…</strong> EdgeTAK restarts during the update; this page reloads when it is back.`;
+    else if (st?.state === 'error') text += ` <span class="error">Last update failed: ${esc(st.message)}</span>`;
+    else if (st?.state === 'done' && st.at && Date.now() - new Date(st.at) < 86400000) text += ` <span class="pill ok">done</span> ${esc(st.message)}.`;
+  }
+  $('#update-text').innerHTML = text;
+  $('#update-check').hidden = !u.available;
+  $('#update-check').disabled = running;
+  const b = $('#update-install');
+  b.hidden = !u.available || !u.update_available || running;
+  if (u.latest) b.textContent = `Update to ${u.latest.version}`;
+  const notes = $('#update-notes');
+  notes.hidden = !u.latest?.notes;
+  if (u.latest) {
+    notes.querySelector('pre').textContent = u.latest.notes;
+    notes.querySelector('summary').innerHTML = `Release notes for ${esc(u.latest.version)} · <a href="${esc(u.latest.url)}" target="_blank" rel="noopener">GitHub</a>`;
+  }
+}
+
+$('#update-check').addEventListener('click', guard(async () => {
+  await api('POST', 'api/server/update/check');
+  await loadSelfUpdate();
+  toast(selfUpd.update_available ? `EdgeTAK ${selfUpd.latest.version} is available` : `EdgeTAK ${selfUpd.version} is the latest version`);
+}));
+
+$('#update-install').addEventListener('click', guard(async () => {
+  const v = selfUpd.latest.version;
+  if (!confirm(`Update EdgeTAK ${selfUpd.version} to ${v}?\n\nEdgeTAK restarts: devices reconnect by themselves within a minute, and live video drops briefly. The update downloads ${v} from GitHub, checks it against the release checksums, and reinstalls with this server's settings.`)) return;
+  await api('POST', 'api/server/update', { version: v });
+  watchSelfUpdate(selfUpd.version, v);
+}));
+
+// watchSelfUpdate follows the update through EdgeTAK's restart and reloads
+// the console once the new version answers.
+function watchSelfUpdate(from, to) {
+  const started = Date.now();
+  clearInterval(selfUpdWatch);
+  selfUpdWatch = setInterval(async () => {
+    let v = '';
+    try { v = (await (await fetch('/Marti/api/version', { cache: 'no-store' })).text()).trim(); } catch { /* restarting */ }
+    try { selfUpd = await api('GET', 'api/server/update'); } catch { /* restarting */ }
+    renderSelfUpdate();
+    if (v && v.includes(to)) {
+      clearInterval(selfUpdWatch);
+      selfUpdWatch = null;
+      toast(`Updated to ${to}; reloading`);
+      setTimeout(() => location.reload(), 1500);
+    } else if (selfUpd?.status?.state === 'error' && new Date(selfUpd.status.at) > started - 5000) {
+      clearInterval(selfUpdWatch);
+      selfUpdWatch = null;
+      renderSelfUpdate();
+      toast('The update failed; see the EdgeTAK updates card', true);
+    } else if (Date.now() - started > 15 * 60000) {
+      clearInterval(selfUpdWatch);
+      selfUpdWatch = null;
+      toast(`Still on ${from} after 15 minutes; check: journalctl -u edgetak-update`, true);
+    }
+  }, 3000);
+  renderSelfUpdate();
 }
 
 $('#clients-table').addEventListener('click', guard(async (e) => {

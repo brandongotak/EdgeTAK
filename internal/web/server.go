@@ -51,6 +51,7 @@ type Server struct {
 	history       sendHistory  // admin "send to devices" log
 	signupLimiter *rateLimiter // public sign-up attempts per address
 	video         videoState
+	selfUpdate    selfUpdateState
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -101,6 +102,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.mapRoutes(mux)
 	s.historyRoutes(mux)
 	s.videoRoutes(mux)
+	s.updateRoutes(mux)
 
 	files := http.StripPrefix("/admin/", http.FileServerFS(staticSub()))
 	mux.HandleFunc("GET /admin/", func(w http.ResponseWriter, r *http.Request) {

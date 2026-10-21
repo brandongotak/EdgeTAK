@@ -325,9 +325,18 @@ authentication. These clients are anonymous and only see `__ANON__`.
 
 ## Upgrade, back up, uninstall
 
-- **Upgrade:** rerun the one-line install (or a newer installer file) with
-  the **same flags**. Users, groups, certificates, packages and missions are
-  kept. Reconnect clients afterwards, and reload the admin console with Ctrl+F5.
+- **Upgrade from the console:** the **EdgeTAK updates** card on the Dashboard
+  checks GitHub for new releases and shows the release notes. **Update**
+  installs one: a small root updater, set up by the installer, downloads that
+  release's installer, verifies it against the release's checksums, and
+  reruns it with this server's options. EdgeTAK restarts, and the page reloads
+  when it is back. Servers installed before v0.2.15 need one manual upgrade
+  (below) to get this.
+- **Upgrade by hand:** rerun the one-line install (or a newer installer file).
+  The installer remembers the options from the last install in
+  `/etc/edgetak/install.conf`, so flags can be left out; flags you give
+  override them. Users, groups, certificates, packages and missions are kept.
+  Reload the admin console with Ctrl+F5 afterwards.
 - **Back up** `/var/lib/edgetak` (or `data/`). `certs/ca-key.pem` is the key
   every enrolled device trusts: if it is lost, every device must enroll again.
 - **Move a manual install into the service:** `--import-data <old data dir>`.

@@ -27,6 +27,20 @@ NO_PLAINTEXT=0
 VIDEO=0
 VIDEO_TARBALL=""
 
+# Options are remembered: reruns of the installer and updates from the admin
+# console reuse them, and options given on the command line override them.
+CONF=/etc/edgetak/install.conf
+if [ -f "$CONF" ] && [ ! -L "$CONF" ]; then
+	. "$CONF"
+fi
+
+# Updates from the admin console: EdgeTAK writes a version into REQUEST; the
+# path unit runs the root-owned UPDATER, which reruns this installer.
+UPDATER=/usr/local/lib/edgetak/edgetak-update.sh
+UPDATE_STATE=/var/lib/edgetak-update
+UPDATE_PATH_UNIT=/etc/systemd/system/edgetak-update.path
+UPDATE_SVC_UNIT=/etc/systemd/system/edgetak-update.service
+
 # MediaMTX companion (--video), pinned with its official release checksums.
 # EdgeTAK runs it as a child process from its data directory, so the admin
 # console can restart and update it without root.
@@ -68,6 +82,9 @@ Usage: sudo sh $SELF [options]
   --binary PATH        install this edgetak binary instead of the bundled one
   --import-data DIR    copy an existing EdgeTAK data directory (e.g. from a
                        manual run) into $DATA_DIR, keeping its CA and users
+Options are remembered in $CONF for reruns and for updates from the admin
+console; options given again override them.
+
   --uninstall          remove the service and binary (keeps $DATA_DIR)
   --purge              with --uninstall: also delete $DATA_DIR and the $SVC_USER user
   -h, --help           show this help
@@ -157,6 +174,9 @@ firewall() { # firewall open|close
 do_uninstall() {
 	say "Removing EdgeTAK service"
 	[ -f "$MTX_DIR/mediamtx" ] && PORTS="$PORTS $VIDEO_PORTS" # stopped with EdgeTAK; files go with --purge
+	systemctl disable --now edgetak-update.path >/dev/null 2>&1 || true
+	rm -f "$UPDATE_PATH_UNIT" "$UPDATE_SVC_UNIT" "$UPDATER"
+	rm -rf "$UPDATE_STATE"
 	systemctl disable --now edgetak.service >/dev/null 2>&1 || true
 	rm -f "$UNIT"
 	systemctl daemon-reload
@@ -164,6 +184,7 @@ do_uninstall() {
 	firewall close
 	if [ "$PURGE" -eq 1 ]; then
 		say "Deleting $DATA_DIR and user $SVC_USER"
+		rm -rf /etc/edgetak
 		rm -rf "$DATA_DIR" /usr/local/lib/edgetak # the latter: one-line installer's copy
 		id "$SVC_USER" >/dev/null 2>&1 && userdel "$SVC_USER" 2>/dev/null || true
 	else
@@ -187,6 +208,113 @@ pick_binary() {
 	b="$HERE/bin/edgetak-linux-$arch"
 	[ -f "$b" ] || die "no bundled binary for $arch ($b)"
 	echo "$b"
+}
+
+# save_options records this install's options for reruns and console updates.
+save_options() {
+	q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+	mkdir -p /etc/edgetak
+	cat >"$CONF.tmp" <<EOF
+# Written by the EdgeTAK installer: the options this server was installed
+# with. Reruns of the installer and updates from the admin console use them;
+# options given on the command line override them.
+PUBLIC_HOST=$(q "$PUBLIC_HOST")
+LE=$LE
+LE_EMAIL=$(q "$LE_EMAIL")
+NO_PLAINTEXT=$NO_PLAINTEXT
+FIREWALL=$FIREWALL
+EOF
+	chmod 0644 "$CONF.tmp"
+	mv -f "$CONF.tmp" "$CONF"
+}
+
+# write_updater installs the root-owned updater and the units that run it
+# when EdgeTAK requests an update.
+write_updater() {
+	mkdir -p "$(dirname "$UPDATER")" "$UPDATE_STATE"
+	chmod 0755 "$UPDATE_STATE"
+	install -d -o "$SVC_USER" -g "$SVC_USER" -m 0750 "$DATA_DIR/update"
+	# Written to a new file and renamed: a running updater keeps reading the old one.
+	cat >"$UPDATER.tmp" <<'EOF'
+#!/bin/sh
+# EdgeTAK updater, installed by the EdgeTAK installer. edgetak-update.service
+# runs it as root when the admin console asks for an update. The only input
+# it takes from EdgeTAK is a version number, which it validates; it downloads
+# that release's installer itself and verifies it against the release's
+# SHA256SUMS, then reruns it with the options in /etc/edgetak/install.conf.
+set -eu
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+REPO=brandongotak/EdgeTAK
+REQUEST=/var/lib/edgetak/update/request
+STATE=/var/lib/edgetak-update
+DEST=/usr/local/lib/edgetak
+MIN=0.2.15
+
+status() { # state message
+	printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >"$STATE/status.tmp"
+	mv -f "$STATE/status.tmp" "$STATE/status"
+	echo "$1: $2"
+}
+fail() { status error "$*"; exit 1; }
+fetch() { # url file
+	if command -v curl >/dev/null 2>&1; then curl -fsSL --retry 3 -o "$2" "$1"
+	else wget -q -O "$2" "$1"; fi
+}
+
+mkdir -p "$STATE"
+[ -f "$REQUEST" ] && [ ! -L "$REQUEST" ] || exit 0
+v=$(head -c 32 "$REQUEST" | tr -d '\r\n ')
+printf '%s' "$v" | grep -Eq '^v[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}$' || fail "invalid version requested"
+[ "$(printf '%s\n%s\n' "${v#v}" "$MIN" | sort -V | head -n1)" = "$MIN" ] || fail "versions before v$MIN cannot be installed from the console"
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT INT TERM
+base=https://github.com/$REPO/releases/download/$v
+status running "downloading $v"
+fetch "$base/edgetak-installer.sh" "$tmp/edgetak-installer.sh" || fail "download of $v failed (no internet, or no such release)"
+fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS" || fail "download of the $v checksums failed"
+want=$(awk '$2 == "edgetak-installer.sh" || $2 == "*edgetak-installer.sh" { print $1 }' "$tmp/SHA256SUMS")
+got=$(sha256sum "$tmp/edgetak-installer.sh" | awk '{print $1}')
+[ -n "$want" ] && [ "$got" = "$want" ] || fail "checksum mismatch for the $v installer; not installing"
+mkdir -p "$DEST"
+install -m 0755 "$tmp/edgetak-installer.sh" "$DEST/edgetak-installer.sh"
+
+status running "installing $v"
+if EDGETAK_INSTALLER="$DEST/edgetak-installer.sh" sh "$DEST/edgetak-installer.sh" >"$tmp/log" 2>&1; then
+	cat "$tmp/log"
+	status done "updated to $v"
+else
+	cat "$tmp/log"
+	esc=$(printf '\033')
+	fail "the $v installer failed: $(sed "s/${esc}\[[0-9;]*m//g" "$tmp/log" | grep -i 'error' | tail -n1 | cut -c1-200)"
+fi
+EOF
+	chmod 0755 "$UPDATER.tmp"
+	mv -f "$UPDATER.tmp" "$UPDATER"
+
+	cat >"$UPDATE_PATH_UNIT" <<EOF
+# Installed by the EdgeTAK installer: runs edgetak-update.service when the
+# admin console writes an update request.
+[Unit]
+Description=Watch for EdgeTAK update requests from the admin console
+
+[Path]
+PathChanged=$DATA_DIR/update/request
+Unit=edgetak-update.service
+
+[Install]
+WantedBy=multi-user.target
+EOF
+	cat >"$UPDATE_SVC_UNIT" <<EOF
+# Installed by the EdgeTAK installer. Runs as root: it reruns the installer.
+[Unit]
+Description=Update EdgeTAK (requested from the admin console)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh $UPDATER
+TimeoutStartSec=20min
+EOF
 }
 
 write_unit() {
@@ -364,8 +492,11 @@ do_install() {
 	fi
 
 	write_unit
+	write_updater
+	save_options
 	systemctl daemon-reload
 	systemctl enable edgetak.service >/dev/null 2>&1
+	systemctl enable --now edgetak-update.path >/dev/null 2>&1 || warn "could not enable updates from the console (edgetak-update.path)"
 	firewall open
 	systemctl restart edgetak.service
 

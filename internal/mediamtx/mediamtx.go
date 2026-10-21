@@ -25,12 +25,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/brandongotak/EdgeTAK/internal/release"
 )
 
 const (
@@ -66,12 +66,7 @@ type Manager struct {
 }
 
 // Release is a MediaMTX release on GitHub.
-type Release struct {
-	Version   string    `json:"version"`
-	Published time.Time `json:"published"`
-	URL       string    `json:"url"`
-	Notes     string    `json:"notes"`
-}
+type Release = release.Release
 
 // UpdateState reports a running or finished update.
 type UpdateState struct {
@@ -335,63 +330,20 @@ func readVersionFile(bin string) string {
 	return strings.TrimSpace(string(b))
 }
 
-var versionRE = regexp.MustCompile(`^v?(\d+)\.(\d+)\.(\d+)$`)
+var versionRE = release.VersionRE
 
-// newer reports whether version a is later than b.
-func newer(a, b string) bool {
-	pa, pb := versionRE.FindStringSubmatch(a), versionRE.FindStringSubmatch(b)
-	if pa == nil || pb == nil {
-		return false
-	}
-	for i := 1; i <= 3; i++ {
-		x, _ := strconv.Atoi(pa[i])
-		y, _ := strconv.Atoi(pb[i])
-		if x != y {
-			return x > y
-		}
-	}
-	return false
-}
+func newer(a, b string) bool { return release.Newer(a, b) }
 
 // CheckLatest fetches the latest stable release from GitHub.
 func (m *Manager) CheckLatest(ctx context.Context) (*Release, error) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, m.apiBase()+"/repos/"+repo+"/releases/latest", nil)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "EdgeTAK")
-	res, err := http.DefaultClient.Do(req)
+	rel, err := release.Latest(ctx, m.apiBase(), repo)
 	if err != nil {
-		return nil, fmt.Errorf("cannot reach GitHub: %w", err)
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub replied %s", res.Status)
-	}
-	var r struct {
-		Tag       string    `json:"tag_name"`
-		Published time.Time `json:"published_at"`
-		URL       string    `json:"html_url"`
-		Body      string    `json:"body"`
-	}
-	if err := json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(&r); err != nil {
 		return nil, err
 	}
-	if !versionRE.MatchString(r.Tag) {
-		return nil, fmt.Errorf("unexpected release tag %q", r.Tag)
-	}
-	rel := &Release{Version: r.Tag, Published: r.Published, URL: r.URL, Notes: truncate(r.Body, 8000)}
 	m.mu.Lock()
 	m.latest, m.checkedAt = rel, time.Now()
 	m.mu.Unlock()
 	return rel, nil
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
 }
 
 // ---- updates ----
