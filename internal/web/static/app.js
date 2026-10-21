@@ -147,6 +147,7 @@ const loaders = {
   certs: loadCerts,
   packages: loadPackages,
   missions: loadMissions,
+  video: loadVideo,
   send: loadSend,
   connect: loadConnect,
 };
@@ -163,6 +164,8 @@ function selectTab(name) {
   guard(loaders[name])();
   if (name === 'dashboard') {
     pollTimer = setInterval(guard(loadDashboard), 3000);
+  } else if (name === 'video') {
+    pollTimer = setInterval(() => loadVideo().catch(() => {}), 5000); // live streams come and go
   } else if (name === 'send') {
     pollTimer = setInterval(guard(loadSendLive), 5000); // Inbox updates
   }
@@ -297,6 +300,7 @@ let contactLayer = null;
 let labelsLayer = null;
 let trailsLayer = null;
 let trailsTimer = null;
+let videoLayer = null;
 let mapSources = [];
 let mapTimer = null;
 let latestClients = [];
@@ -346,6 +350,8 @@ function initMap() {
   labelsLayer = L.layerGroup();
   labelsLayer.on('add', () => el.classList.remove('no-labels'));
   labelsLayer.on('remove', () => el.classList.add('no-labels'));
+  videoLayer = L.layerGroup();
+  videoLayer.on('add', () => loadVideoFeeds().catch(() => {}));
   trailsLayer = L.layerGroup();
   trailsLayer.on('add', () => {
     $('#trails-show').checked = true;
@@ -382,7 +388,7 @@ function initMap() {
 function buildLayers() {
   if (!map) return;
   const activeBase = prefs.get('map.base', 'Streets');
-  const activeOverlays = new Set(prefs.get('map.overlays', ['Devices', 'Callsigns', 'Server contact']));
+  const activeOverlays = new Set(prefs.get('map.overlays', ['Devices', 'Callsigns', 'Server contact', 'Video']));
   // Detach the switcher first, or removing the old layers would be saved as
   // the viewer turning them off.
   rebuildingLayers = true;
@@ -391,7 +397,7 @@ function buildLayers() {
 
   baseLayers = {};
   for (const [name, def] of BASEMAPS) baseLayers[name] = buildBase(def);
-  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer };
+  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer };
   for (const p of packageLayers.values()) overlayLayers[p.name] = p.layer;
   for (const s of mapSources) {
     const layer = tileLayer(s.url, {
@@ -1432,6 +1438,274 @@ $('#packages-table').addEventListener('click', guard(async (e) => {
   await api('DELETE', `api/packages/${hash}`);
   toast('Package deleted');
   loadPackages();
+}));
+
+// ---------- video ----------
+
+let videoStatus = null;
+let editingFeed = null; // uid being edited, or null for a new feed
+
+async function loadVideoFeeds() {
+  videoStatus = await api('GET', 'api/video');
+  renderVideoMarkers();
+  return videoStatus;
+}
+
+async function loadVideo() {
+  const [st, groups] = await Promise.all([loadVideoFeeds(), api('GET', 'api/groups'), loadMediaMTX().catch(() => {})]);
+  allGroups = groups;
+  const host = st.host;
+  $('#video-server').innerHTML = !st.enabled
+    ? `<h2>Media server</h2><p class="muted">The MediaMTX media server is not set up, so this server only lists external feeds (cameras or media servers with their own URL).
+       To host streams here, reinstall with <code>--video</code>, which installs MediaMTX alongside EdgeTAK.</p>`
+    : `<div class="card-head"><h2>Media server</h2>${st.mediamtx_error
+      ? `<span class="pill bad" title="${esc(st.mediamtx_error)}">MediaMTX not reachable</span>` : '<span class="pill ok">MediaMTX connected</span>'}</div>
+      <p class="muted">Publish to this server with an EdgeTAK username and password; pick any stream name. Live streams appear below automatically, visible to the publisher's groups.</p>
+      <div class="publish-urls">
+        <span class="muted">RTSP</span><code>rtsp://USER:PASSWORD@${esc(host)}:${st.rtsp_port}/NAME</code>
+        <span class="muted">RTMP</span><code>rtmp://${esc(host)}:${st.rtmp_port}/NAME?user=USER&amp;pass=PASSWORD</code>
+        <span class="muted">SRT</span><code>srt://${esc(host)}:${st.srt_port}?streamid=publish:NAME:USER:PASSWORD</code>
+      </div>
+      <p class="muted">ATAK UAS tool / DJI: use the RTMP or RTSP address. Viewers never need the password: their devices get personal links.</p>`;
+
+  $('#video-table tbody').innerHTML = st.feeds.map((f) => {
+    const status = f.hosted
+      ? (f.live ? `<span class="pill ok">live</span> <span class="muted">${f.readers} watching${f.tracks?.length ? ' · ' + esc(f.tracks.join(', ')) : ''}</span>` : '<span class="pill">offline</span>')
+      : '<span class="pill">external</span>';
+    const pos = f.lat != null ? `<span class="mono">${f.lat.toFixed(5)}, ${f.lon.toFixed(5)}</span>` : '<span class="muted">—</span>';
+    const src = f.hosted ? `server stream <span class="mono">${esc(f.path)}</span>${f.publisher ? ` · from ${esc(f.publisher)}` : ''}` : `<span class="mono">${esc(redactURL(f.url))}</span>`;
+    return `<tr>
+      <td><strong>${esc(f.alias)}</strong><div class="muted">${src}</div></td>
+      <td>${status}</td>
+      <td>${groupPills(f.groups)}</td>
+      <td>${pos}</td>
+      <td class="actions">
+        ${f.hosted && f.live ? `<button class="small primary" data-act="watch" data-uid="${esc(f.uid)}">Watch</button>` : ''}
+        ${f.saved ? `<button class="small" data-act="edit" data-uid="${esc(f.uid)}">Edit</button>
+          <button class="small danger" data-act="delete" data-uid="${esc(f.uid)}">Delete</button>`
+        : `<button class="small" data-act="save" data-uid="${esc(f.uid)}" title="Name it, choose who can watch and give it a position">Save as feed</button>`}
+      </td></tr>`;
+  }).join('') || emptyRow(5, st.enabled ? 'No feeds yet. Publish a stream or add an external camera.' : 'No feeds yet');
+}
+
+// ---- MediaMTX process (when EdgeTAK runs it) ----
+
+let mtx = null;
+let mtxChecked = false;
+
+async function loadMediaMTX() {
+  mtx = await api('GET', 'api/video/mediamtx');
+  const card = $('#mediamtx-card');
+  card.hidden = !mtx.managed;
+  if (!mtx.managed) return;
+  if (!mtxChecked && !mtx.latest) { // look for updates once per visit
+    mtxChecked = true;
+    api('POST', 'api/video/mediamtx/check').then(() => loadMediaMTX()).catch(() => {});
+  }
+  const u = mtx.update;
+  $('#mediamtx-state').innerHTML = u.running ? '<span class="pill warn">updating</span>'
+    : mtx.running && mtx.version ? '<span class="pill ok">running</span>' : mtx.running ? '<span class="pill warn">starting</span>' : '<span class="pill bad">stopped</span>';
+  const info = [
+    ['Version', mtx.version || 'unknown'],
+    ['Latest release', mtx.latest ? `${mtx.latest.version} (${new Date(mtx.latest.published).toLocaleDateString()})` : 'not checked yet'],
+    ['Running since', mtx.started ? new Date(mtx.started).toLocaleString() : '—'],
+    ['Restarts', String(mtx.restarts)],
+  ];
+  if (mtx.last_exit) info.push(['Last exit', mtx.last_exit]);
+  $('#mediamtx-info').innerHTML = info.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+
+  $('#mediamtx-update-status').innerHTML = u.running ? `Updating: ${esc(u.step)}…`
+    : u.error ? `<span class="error">${esc(u.error)}</span>`
+    : u.result ? `<span class="pill ok">done</span> ${esc(u.result)}` : '';
+  const up = $('#mediamtx-update');
+  up.hidden = !mtx.update_available || u.running;
+  if (mtx.latest) up.textContent = `Update to ${mtx.latest.version}`;
+  const rb = $('#mediamtx-rollback');
+  rb.hidden = !mtx.previous || u.running;
+  rb.textContent = `Roll back to ${mtx.previous}`;
+  for (const b of document.querySelectorAll('#mediamtx-actions button')) b.disabled = u.running;
+  const notes = $('#mediamtx-notes');
+  notes.hidden = !mtx.latest?.notes;
+  if (mtx.latest) {
+    notes.querySelector('pre').textContent = mtx.latest.notes;
+    notes.querySelector('summary').innerHTML = `Release notes for ${esc(mtx.latest.version)} · <a href="${esc(mtx.latest.url)}" target="_blank" rel="noopener">GitHub</a>`;
+  }
+  const log = $('#mediamtx-log');
+  const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+  log.textContent = mtx.log.join('\n') || '(no output yet)';
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+$('#mediamtx-check').addEventListener('click', guard(async () => {
+  await api('POST', 'api/video/mediamtx/check');
+  await loadMediaMTX();
+  toast(mtx.update_available ? `MediaMTX ${mtx.latest.version} is available` : `MediaMTX ${mtx.version} is the latest version`);
+}));
+
+$('#mediamtx-update').addEventListener('click', guard(async () => {
+  const v = mtx.latest.version;
+  if (!confirm(`Update MediaMTX ${mtx.version} to ${v}?\n\nLive streams drop for a few seconds while it restarts. If ${v} does not start, EdgeTAK goes back to ${mtx.version} automatically.`)) return;
+  await api('POST', 'api/video/mediamtx/update', { version: v });
+  toast(`Updating MediaMTX to ${v}`);
+  await loadMediaMTX();
+}));
+
+$('#mediamtx-rollback').addEventListener('click', guard(async () => {
+  if (!confirm(`Go back to MediaMTX ${mtx.previous}? Live streams drop for a few seconds.`)) return;
+  await api('POST', 'api/video/mediamtx/rollback');
+  toast(`Rolled back to ${mtx.previous}`);
+  await loadMediaMTX();
+}));
+
+$('#mediamtx-restart').addEventListener('click', guard(async () => {
+  if (!confirm('Restart MediaMTX? Live streams drop for a few seconds.')) return;
+  await api('POST', 'api/video/mediamtx/restart');
+  toast('MediaMTX restarting');
+  setTimeout(() => loadMediaMTX().catch(() => {}), 2000);
+}));
+
+const redactURL = (u) => String(u || '').replace(/\/\/([^:/@]+):[^@]*@/, '//$1:•••@');
+const feedByUID = (uid) => videoStatus?.feeds.find((f) => f.uid === uid);
+
+function openFeedDialog(f) {
+  editingFeed = f?.saved ? f.uid : null;
+  const form = $('#feed-form');
+  form.reset();
+  $('#feed-dialog-title').textContent = f?.saved ? `Edit ${f.alias}` : 'Add feed';
+  form.alias.value = f?.alias || '';
+  const kind = f && !f.hosted ? 'url' : 'path';
+  form.kind.value = kind;
+  form.path.value = f?.hosted ? f.path : '';
+  form.url.value = f && !f.hosted ? f.url : '';
+  form.lat.value = f?.lat ?? '';
+  form.lon.value = f?.lon ?? '';
+  syncFeedKind();
+  renderChips('#feed-groups', f?.groups || []);
+  $('#feed-dialog').showModal();
+}
+
+function syncFeedKind() {
+  const url = $('#feed-form').kind.value === 'url';
+  $('#feed-url-label').hidden = !url;
+  $('#feed-path-label').hidden = url;
+}
+for (const r of document.querySelectorAll('#feed-form input[name="kind"]')) r.addEventListener('change', syncFeedKind);
+
+$('#video-add').addEventListener('click', () => openFeedDialog(null));
+
+$('#feed-map-center').addEventListener('click', () => {
+  initMap();
+  if (!map) return;
+  const c = map.getCenter();
+  $('#feed-form').lat.value = c.lat.toFixed(6);
+  $('#feed-form').lon.value = c.lng.toFixed(6);
+});
+
+$('#feed-form').addEventListener('submit', guard(async (e) => {
+  if (e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  const f = e.target;
+  const num = (v) => (v === '' ? null : Number(v));
+  const body = {
+    alias: f.alias.value, groups: checkedIn('#feed-groups'), lat: num(f.lat.value), lon: num(f.lon.value),
+    ...(f.kind.value === 'url' ? { url: f.url.value } : { path: f.path.value }),
+  };
+  if ((body.lat == null) !== (body.lon == null)) throw new Error('Enter both latitude and longitude, or neither');
+  await api(editingFeed ? 'PUT' : 'POST', editingFeed ? `api/video/feeds/${encodeURIComponent(editingFeed)}` : 'api/video/feeds', body);
+  $('#feed-dialog').close();
+  toast('Feed saved');
+  loadVideo();
+}));
+
+$('#video-table').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  const f = feedByUID(b.dataset.uid);
+  switch (b.dataset.act) {
+    case 'watch': return playFeed(f);
+    case 'edit': return openFeedDialog(f);
+    case 'save': return openFeedDialog({ ...f, saved: false, alias: f.alias });
+    case 'delete':
+      if (!confirm(`Delete the feed ${f.alias}? Devices lose it from their list.`)) return;
+      await api('DELETE', `api/video/feeds/${encodeURIComponent(f.uid)}`);
+      toast('Feed deleted');
+      return loadVideo();
+  }
+}));
+
+// ---- player (HLS through EdgeTAK's relay) ----
+
+let hlsPlayer = null;
+let hlsLoading = null;
+function loadHls() {
+  if (window.Hls) return Promise.resolve();
+  hlsLoading ||= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'vendor/hls.min.js';
+    s.onload = resolve;
+    s.onerror = () => { hlsLoading = null; reject(new Error('The video player could not be loaded')); };
+    document.head.appendChild(s);
+  });
+  return hlsLoading;
+}
+
+async function playFeed(f) {
+  if (!f?.hosted) throw new Error('Only streams on this server can be played in the console');
+  const video = $('#player');
+  stopPlayer();
+  $('#player-title').textContent = f.alias;
+  $('#player-status').textContent = 'Connecting…';
+  $('#player-dialog').showModal();
+  const src = `video/hls/${f.path.split('/').map(encodeURIComponent).join('/')}/index.m3u8`;
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = src; // Safari plays HLS natively
+  } else {
+    await loadHls();
+    if (!Hls.isSupported()) throw new Error('This browser cannot play HLS video');
+    hlsPlayer = new Hls({ liveSyncDurationCount: 2, manifestLoadingMaxRetry: 6 });
+    hlsPlayer.on(Hls.Events.ERROR, (_, d) => {
+      if (d.fatal) $('#player-status').textContent = `Playback error: ${d.details}. The stream may have stopped, or use a codec browsers can't play (H.265).`;
+    });
+    hlsPlayer.loadSource(src);
+    hlsPlayer.attachMedia(video);
+  }
+  video.onplaying = () => { $('#player-status').textContent = 'Live. Delay is a few seconds behind real time.'; };
+  video.play().catch(() => {});
+}
+
+function stopPlayer() {
+  const video = $('#player');
+  hlsPlayer?.destroy();
+  hlsPlayer = null;
+  video.removeAttribute('src');
+  video.load();
+}
+$('#player-dialog').addEventListener('close', stopPlayer);
+
+// ---- camera markers on the map ----
+
+function cameraIcon(live) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="13" fill="${live ? '#1f8f5c' : '#5d6c72'}" stroke="#000" stroke-width="1.5"/>` +
+    '<rect x="7" y="10" width="12" height="10" rx="2" fill="#fff"/><path d="M19 13.5l5-3v9l-5-3z" fill="#fff"/></svg>';
+  return L.divIcon({ className: 'camera-icon', html: svg, iconSize: [30, 30], iconAnchor: [15, 15], tooltipAnchor: [14, 0], popupAnchor: [0, -14] });
+}
+
+function renderVideoMarkers() {
+  if (!map || !videoLayer) return;
+  videoLayer.clearLayers();
+  for (const f of videoStatus?.feeds || []) {
+    if (f.lat == null || f.lon == null) continue;
+    const m = L.marker([f.lat, f.lon], { icon: cameraIcon(!f.hosted || f.live) })
+      .bindTooltip(esc(f.alias), { permanent: true, direction: 'right' })
+      .bindPopup(`<strong>${esc(f.alias)}</strong><br>${f.hosted ? (f.live ? 'Live' : 'Offline') : 'External camera'}` +
+        (f.hosted && f.live ? `<br><button class="small primary" data-watch="${esc(f.uid)}">Watch</button>` : ''));
+    m.addTo(videoLayer);
+  }
+}
+
+document.addEventListener('click', guard(async (e) => {
+  const uid = e.target.dataset?.watch;
+  if (uid) await playFeed(feedByUID(uid));
 }));
 
 // ---------- missions ----------

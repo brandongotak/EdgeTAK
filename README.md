@@ -65,6 +65,11 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   shows each device's path in its team colour over the last 15 minutes to
   everything kept, and **Replay this period** plays it back with a time
   slider, play/pause and speeds from 1× to 1200×.
+- **Video**: feeds for ATAK's and WinTAK's Video Player, limited by group,
+  with camera markers on devices. With `--video` the installer adds the
+  MediaMTX media server: cameras, drones and ATAK publish over RTSP, RTMP or
+  SRT with an EdgeTAK login, streams become feeds automatically, viewers get
+  personal links, and the console plays them live. See [Video](#video).
 - **Web admin console**: connected clients, users, groups,
   certificates, data packages, missions, and connection packages for each
   client.
@@ -231,6 +236,53 @@ code (on servers with Let's Encrypt), and connection packages for ATAK, WinTAK,
 TAKX and iTAK. Sign-up only works over HTTPS, and attempts are rate-limited per
 address. Use **Open** only on servers you are happy for anyone to join.
 
+### Video
+
+Add `--video` to the install command (or rerun it with `--video` to add it
+later). The installer downloads [MediaMTX](https://github.com/bluenviron/mediamtx),
+checks it against a pinned checksum, and puts it in EdgeTAK's data directory.
+Offline devices can use `--video-tarball mediamtx_v1.21.1_linux_<arch>.tar.gz`.
+EdgeTAK runs MediaMTX itself (and restarts it if it stops), writes its
+configuration, and approves every publish and view, so there are no separate
+video accounts.
+
+**Updating MediaMTX.** The **MediaMTX** card on the Video tab shows the
+running version and checks GitHub for newer releases. **Update** downloads the
+release for this device, verifies it against the release's SHA-256 checksums
+and checks it is built for this processor, keeps the current version, and
+restarts. If the new version does not start, EdgeTAK goes back to the old one
+automatically. **Roll back** returns to the previous version, and the card
+also shows MediaMTX's log and has a **Restart** button. Live streams drop for a
+few seconds during a restart. The server needs internet access to reach
+github.com for updates.
+
+**Publishing.** Use any EdgeTAK username and password, and any stream name:
+
+| Protocol | Address |
+|---|---|
+| RTSP | `rtsp://USER:PASSWORD@<host>:8554/NAME` |
+| RTMP (DJI, ATAK UAS tool) | `rtmp://<host>:1935/NAME?user=USER&pass=PASSWORD` |
+| SRT | `srt://<host>:8890?streamid=publish:NAME:USER:PASSWORD` |
+
+A live stream appears on the **Video** tab right away, visible to the
+publisher's groups. **Save as feed** gives it a name, chooses who can watch,
+and can give it a position. MPEG-TS sent inside RTSP, which UAS and ISR
+cameras use, is unpacked automatically.
+
+**Watching.**
+- **ATAK and WinTAK:** open **Video Player** and import from the server.
+  Feeds with a position also appear as camera markers; tap one to play it.
+  Each user's links carry a personal read-only token, never their password.
+  Deleting the user revokes the token.
+- **Admin console:** click **Watch** on the Video tab, or on a camera marker
+  on the map. The video is relayed over the console's HTTPS port with a few
+  seconds of delay. Browsers play H.264, not H.265.
+
+External cameras or media servers can be added with their own URL (`rtsp://`,
+`rtmp://`, `srt://`, `http(s)://`). Devices can watch those, but the console
+cannot play them. Bandwidth is the main limit: every viewer receives a full
+copy of the stream, about 2 to 4 Mbit/s for 1080p.
+
 ## Connect clients
 
 There are two ways to connect, depending on the server:
@@ -286,6 +338,13 @@ authentication. These clients are anonymous and only see `__ANON__`.
 | 80 | Let's Encrypt challenges (only with `--letsencrypt`) |
 | 8087 | CoT streaming, plain TCP, anonymous (off with `--no-plaintext`) |
 | 8080 | Marti API, plaintext, for 8087 clients; admin console from localhost only (off with `--no-plaintext`) |
+| 8554 | Video: RTSP (only with `--video`) |
+| 1935 | Video: RTMP (only with `--video`) |
+| 8890/udp | Video: SRT (only with `--video`) |
+
+With `--video`, MediaMTX's API (9997), its HLS server (8888) and EdgeTAK's
+video auth endpoint (8099) listen on localhost only. `video.bind_host` in the
+config limits the stream ports to one address, such as a VPN interface.
 
 ## Configuration
 

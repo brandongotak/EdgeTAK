@@ -32,7 +32,16 @@ type Router struct {
 	hooks    []Hook
 	missions MissionResolver
 	presence func() *cot.Event // server-originated event every new client receives
+	onJoin   []func(*Client)   // called for every new client after presence and replay
 	nextID   atomic.Uint64
+}
+
+// OnJoin registers fn to run (in its own goroutine) for each client that
+// connects, e.g. to send it per-user events.
+func (r *Router) OnJoin(fn func(*Client)) {
+	r.mu.Lock()
+	r.onJoin = append(r.onJoin, fn)
+	r.mu.Unlock()
 }
 
 // SetPresence registers a function whose event (if non-nil) is sent to each
@@ -89,7 +98,7 @@ func (r *Router) Register(c *Client) {
 	c.ID = r.nextID.Add(1)
 	r.mu.Lock()
 	r.clients[c.ID] = c
-	presence := r.presence
+	presence, onJoin := r.presence, r.onJoin
 	r.mu.Unlock()
 	if presence != nil {
 		if ev := presence(); ev != nil {
@@ -97,6 +106,9 @@ func (r *Router) Register(c *Client) {
 		}
 	}
 	r.replayTo(c)
+	for _, fn := range onJoin {
+		go fn(c)
+	}
 	r.log.Info("client connected", "id", c.ID, "remote", c.Remote, "user", c.Username, "transport", c.Transport,
 		"groups_in", c.InGroups(), "groups_out", c.OutGroups())
 }

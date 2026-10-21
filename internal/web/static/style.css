@@ -180,6 +180,14 @@ td.actions { text-align: right; display: flex; gap: 6px; justify-content: flex-e
 #tab-send .grid-2.even, #tab-signups .grid-2.even { grid-template-columns: 1fr 1fr; }
 @media (max-width: 900px) { #tab-send .grid-2.even, #tab-signups .grid-2.even { grid-template-columns: 1fr; } }
 td.wrap { white-space: normal; max-width: 320px; }
+.player-dialog { width: min(960px, calc(100% - 16px)); }
+#player { width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; }
+.publish-urls { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: baseline; margin: 8px 0; }
+.publish-urls code { word-break: break-all; background: var(--panel-2); padding: 3px 6px; border-radius: 5px; }
+.camera-icon { background: none; border: none; }
+pre.notes { max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 12px/1.45 var(--mono);
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 8px 0 0; }
+details summary { cursor: pointer; color: var(--muted); margin-top: 10px; }
 textarea {
   font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
   border-radius: 7px; padding: 7px 10px; resize: vertical;

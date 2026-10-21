@@ -32,6 +32,7 @@
       <button data-tab="certs">Certificates</button>
       <button data-tab="packages">Data Packages</button>
       <button data-tab="missions">Missions</button>
+      <button data-tab="video">Video</button>
       <button data-tab="send">Send</button>
       <button data-tab="connect">Connect</button>
     </nav>
@@ -206,6 +207,60 @@
           <tbody></tbody>
         </table></div>
       </div>
+    </section>
+
+    <section id="tab-video" class="tab" hidden>
+      <div class="card" id="video-server"></div>
+      <div class="card" id="mediamtx-card" hidden>
+        <div class="card-head"><h2>MediaMTX</h2><span id="mediamtx-state"></span></div>
+        <dl class="kv" id="mediamtx-info"></dl>
+        <p id="mediamtx-update-status" class="muted"></p>
+        <div class="inline-form" id="mediamtx-actions">
+          <button type="button" class="small" id="mediamtx-check">Check for updates</button>
+          <button type="button" class="small primary" id="mediamtx-update" hidden></button>
+          <button type="button" class="small" id="mediamtx-rollback" hidden></button>
+          <button type="button" class="small" id="mediamtx-restart">Restart</button>
+        </div>
+        <details id="mediamtx-notes" hidden><summary>Release notes</summary><pre class="notes"></pre></details>
+        <details><summary>MediaMTX log</summary><pre class="notes" id="mediamtx-log"></pre></details>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Feeds</h2><button class="primary small" id="video-add">+ Add feed</button></div>
+        <p class="muted">Devices find these in ATAK's and WinTAK's Video Player (<em>import from server</em>), limited to their groups. Feeds with a position also appear as camera markers on devices and on the map.</p>
+        <div class="table-wrap"><table id="video-table">
+          <thead><tr><th>Name</th><th>Status</th><th>Groups</th><th>Position</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <dialog id="feed-dialog" class="card dialog">
+        <form method="dialog" id="feed-form" class="stack wide">
+          <h2 id="feed-dialog-title">Add feed</h2>
+          <label>Name <input name="alias" required maxlength="100" placeholder="e.g. Gate camera, Drone 1"></label>
+          <div class="inline-form">
+            <label class="check"><input type="radio" name="kind" value="path" checked> Stream on this server</label>
+            <label class="check"><input type="radio" name="kind" value="url"> External URL</label>
+          </div>
+          <label id="feed-path-label">Stream name <input name="path" placeholder="e.g. drone1"></label>
+          <label id="feed-url-label" hidden>URL <input name="url" placeholder="rtsp://camera.local:554/live"></label>
+          <div>
+            <div class="muted picker-label">Who can watch (none selected = __ANON__)</div>
+            <div id="feed-groups" class="group-picker"></div>
+          </div>
+          <div class="inline-form">
+            <label>Latitude <input name="lat" type="number" step="any" min="-90" max="90" placeholder="optional"></label>
+            <label>Longitude <input name="lon" type="number" step="any" min="-180" max="180" placeholder="optional"></label>
+          </div>
+          <div><button type="button" class="small" id="feed-map-center">Use the map's center</button></div>
+          <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
+        </form>
+      </dialog>
+      <dialog id="player-dialog" class="card dialog player-dialog">
+        <form method="dialog" class="stack wide">
+          <div class="card-head"><h2 id="player-title">Video</h2><button class="small ghost" value="close" title="Close">✕</button></div>
+          <video id="player" controls autoplay muted playsinline></video>
+          <p class="muted" id="player-status"></p>
+        </form>
+      </dialog>
     </section>
 
     <section id="tab-send" class="tab" hidden>

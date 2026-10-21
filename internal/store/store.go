@@ -5,6 +5,8 @@
 package store
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -151,6 +153,24 @@ type db struct {
 	MapSources []MapSource `json:"map_sources"`
 
 	History HistorySettings `json:"history"`
+
+	VideoFeeds  map[string]*VideoFeed `json:"video_feeds"` // by uid
+	VideoSecret string                `json:"video_secret"`
+}
+
+// VideoFeed is a registered video stream. Path names a stream on the
+// server's MediaMTX (its URL is built per viewer); otherwise URL points at
+// an external source.
+type VideoFeed struct {
+	UID       string    `json:"uid"`
+	Alias     string    `json:"alias"`
+	URL       string    `json:"url,omitempty"`
+	Path      string    `json:"path,omitempty"`
+	Groups    []string  `json:"groups"`
+	Lat       *float64  `json:"lat,omitempty"`
+	Lon       *float64  `json:"lon,omitempty"`
+	Created   time.Time `json:"created"`
+	CreatedBy string    `json:"created_by"`
 }
 
 // HistorySettings controls position history recording (off by default).
@@ -242,7 +262,7 @@ type Store struct {
 // Open loads the store at path, creating an empty one if needed.
 func Open(path string) (*Store, error) {
 	s := &Store{path: path, db: db{Users: map[string]*User{}, Certs: map[string]*Cert{}, Packages: map[string]*Package{}, Groups: map[string]*Group{},
-		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, NextSeq: 1}}
+		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, NextSeq: 1}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, s.save()
@@ -270,6 +290,9 @@ func Open(path string) (*Store, error) {
 	}
 	if s.db.Requests == nil {
 		s.db.Requests = map[string]*SignupRequest{}
+	}
+	if s.db.VideoFeeds == nil {
+		s.db.VideoFeeds = map[string]*VideoFeed{}
 	}
 	// Groups used to exist only as names on users; give them records.
 	for _, u := range s.db.Users {
@@ -475,6 +498,73 @@ func (s *Store) SetServerContact(c ServerContact) error {
 	defer s.mu.Unlock()
 	s.db.ServerContact = c
 	return s.save()
+}
+
+// VideoFeeds returns copies of the registered feeds, sorted by alias.
+func (s *Store) VideoFeeds() []VideoFeed {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]VideoFeed, 0, len(s.db.VideoFeeds))
+	for _, f := range s.db.VideoFeeds {
+		c := *f
+		c.Groups = slices.Clone(f.Groups)
+		out = append(out, c)
+	}
+	slices.SortFunc(out, func(a, b VideoFeed) int { return strings.Compare(strings.ToLower(a.Alias), strings.ToLower(b.Alias)) })
+	return out
+}
+
+func (s *Store) VideoFeed(uid string) (VideoFeed, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	f, ok := s.db.VideoFeeds[uid]
+	if !ok {
+		return VideoFeed{}, false
+	}
+	c := *f
+	c.Groups = slices.Clone(f.Groups)
+	return c, true
+}
+
+// PutVideoFeed adds or replaces a feed (by UID).
+func (s *Store) PutVideoFeed(f VideoFeed) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.db.VideoFeeds) >= 1000 {
+		if _, exists := s.db.VideoFeeds[f.UID]; !exists {
+			return errors.New("too many video feeds")
+		}
+	}
+	f.Groups = slices.Clone(f.Groups)
+	s.db.VideoFeeds[f.UID] = &f
+	return s.save()
+}
+
+func (s *Store) DeleteVideoFeed(uid string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.db.VideoFeeds[uid]; !ok {
+		return ErrNotFound
+	}
+	delete(s.db.VideoFeeds, uid)
+	return s.save()
+}
+
+// VideoSecret returns the key for video access tokens, creating it once.
+func (s *Store) VideoSecret() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db.VideoSecret == "" {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return "", err
+		}
+		s.db.VideoSecret = hex.EncodeToString(b)
+		if err := s.save(); err != nil {
+			return "", err
+		}
+	}
+	return s.db.VideoSecret, nil
 }
 
 func (s *Store) HistorySettings() HistorySettings {

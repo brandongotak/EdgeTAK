@@ -19,6 +19,7 @@ import (
 
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/history"
+	"github.com/brandongotak/EdgeTAK/internal/mediamtx"
 	"github.com/brandongotak/EdgeTAK/internal/mission"
 	"github.com/brandongotak/EdgeTAK/internal/pki"
 	"github.com/brandongotak/EdgeTAK/internal/publiccert"
@@ -37,6 +38,7 @@ type Server struct {
 	Missions   *mission.Service
 	Public     *publiccert.Provider // nil unless a public certificate is configured
 	History    *history.Recorder
+	MediaMTX   *mediamtx.Manager // nil unless EdgeTAK runs MediaMTX itself
 	Log        *slog.Logger
 	PackageDir string
 	NodeID     string
@@ -48,6 +50,7 @@ type Server struct {
 
 	history       sendHistory  // admin "send to devices" log
 	signupLimiter *rateLimiter // public sign-up attempts per address
+	video         videoState
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -97,6 +100,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.registerRoutes(mux)
 	s.mapRoutes(mux)
 	s.historyRoutes(mux)
+	s.videoRoutes(mux)
 
 	files := http.StripPrefix("/admin/", http.FileServerFS(staticSub()))
 	mux.HandleFunc("GET /admin/", func(w http.ResponseWriter, r *http.Request) {

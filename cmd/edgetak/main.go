@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"syscall"
@@ -35,6 +36,7 @@ func main() {
 	resetPassword := flag.String("reset-password", "", "set a new random password for `user`, print it and exit")
 	initOnly := flag.Bool("init", false, "create the data directory, config, CA and admin account, then exit")
 	enableLE := flag.String("enable-letsencrypt", "", "use a Let's Encrypt certificate on the enrollment port, registered to `email`; needs public_host to be a domain pointing here and port 80 reachable")
+	enableVideo := flag.Bool("enable-video", false, "connect EdgeTAK to a MediaMTX media server on this machine (the installer's --video sets it up)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
 
@@ -76,6 +78,24 @@ func main() {
 			fatal(err)
 		}
 		fmt.Printf("Let's Encrypt enabled for %s on %v (restart EdgeTAK to apply)\n", cfg.PublicHost, cfg.PublicCert.Listeners)
+		return
+	}
+	if *enableVideo {
+		cfg.Video = cfg.Video.Normalized()
+		cfg.Video.Enabled = true
+		if cfg.Video.MediaMTXBinary == "" {
+			exe := "mediamtx"
+			if runtime.GOOS == "windows" {
+				exe += ".exe"
+			}
+			if abs, err := filepath.Abs(filepath.Join(*dataDir, "mediamtx", exe)); err == nil {
+				cfg.Video.MediaMTXBinary = abs
+			}
+		}
+		if err := config.Save(*cfgPath, cfg); err != nil {
+			fatal(err)
+		}
+		fmt.Printf("Video enabled: MediaMTX on RTSP %d, RTMP %d, SRT %d (restart EdgeTAK to apply)\n", cfg.Video.RTSPPort, cfg.Video.RTMPPort, cfg.Video.SRTPort)
 		return
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: parseLevel(cfg.LogLevel)}))

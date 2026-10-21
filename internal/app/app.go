@@ -20,6 +20,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/cot"
 	"github.com/brandongotak/EdgeTAK/internal/history"
+	"github.com/brandongotak/EdgeTAK/internal/mediamtx"
 	"github.com/brandongotak/EdgeTAK/internal/mission"
 	"github.com/brandongotak/EdgeTAK/internal/pki"
 	"github.com/brandongotak/EdgeTAK/internal/publiccert"
@@ -255,14 +256,41 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		a.Addrs["acme"] = acmeLn.Addr().String()
 		a.Public.Warm(ctx)
 	}
+	// MediaMTX authenticates every publish and read through EdgeTAK.
+	var videoLn net.Listener
+	if a.Cfg.Video.Enabled {
+		addr := a.Cfg.Video.Normalized().AuthAddr
+		if videoLn, err = a.Listen("tcp", addr); err != nil {
+			for _, b := range binds {
+				b.ln.Close()
+			}
+			if acmeLn != nil {
+				acmeLn.Close()
+			}
+			return nil, fmt.Errorf("video auth listener %s: %w", addr, err)
+		}
+		a.Addrs["video_auth"] = videoLn.Addr().String()
+	}
 	ws.Addrs = a.Addrs
-	ws.Start(ctx) // server contact and Inbox
+	if vc := a.Cfg.Video.Normalized(); vc.Enabled && vc.MediaMTXBinary != "" {
+		conf := vc.MediaMTXConfig
+		if conf == "" {
+			conf = filepath.Join(a.DataDir, "mediamtx.yml")
+		}
+		ws.MediaMTX = &mediamtx.Manager{Binary: vc.MediaMTXBinary, Config: conf, APIAddr: vc.APIAddr,
+			Log: a.Log.With("component", "mediamtx"), APIAuth: ws.MediaMTXAPIAuth}
+	}
+	ws.Start(ctx) // server contact, Inbox and video (writes mediamtx.yml)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() { defer wg.Done(); a.Missions.FlushLoop(ctx.Done()) }()
 	wg.Add(1)
 	go func() { defer wg.Done(); a.History.Run(ctx) }()
+	if ws.MediaMTX != nil {
+		wg.Add(1)
+		go func() { defer wg.Done(); ws.MediaMTX.Run(ctx) }()
+	}
 	errLog := slog.NewLogLogger(a.Log.Handler(), slog.LevelDebug)
 	var servers []*http.Server
 	for _, b := range binds {
@@ -298,6 +326,20 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 			defer wg.Done()
 			if err := srv.Serve(acmeLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				a.Log.Error("Let's Encrypt challenge listener stopped", "err", err)
+			}
+		}()
+	}
+
+	if videoLn != nil {
+		mux := http.NewServeMux()
+		mux.Handle("POST /mediamtx/auth", ws.MediaMTXAuthHandler())
+		srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second, ErrorLog: errLog}
+		servers = append(servers, srv)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := srv.Serve(videoLn); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				a.Log.Error("video auth listener stopped", "err", err)
 			}
 		}()
 	}

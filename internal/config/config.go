@@ -48,6 +48,54 @@ type Config struct {
 	// PublicCert serves a publicly trusted certificate (e.g. Let's Encrypt)
 	// on selected listeners instead of the EdgeTAK CA's server certificate.
 	PublicCert PublicCert `json:"public_cert"`
+
+	// Video connects EdgeTAK to a MediaMTX media server (installer --video).
+	Video Video `json:"video"`
+}
+
+// Video configures the MediaMTX companion. EdgeTAK writes MediaMTX's config
+// file, answers its authentication callbacks, lists its live streams as
+// feeds and relays its HLS output to the admin console.
+type Video struct {
+	Enabled bool `json:"enabled"`
+	// MediaMTXBinary is the MediaMTX executable EdgeTAK runs, restarts and
+	// updates ("" = MediaMTX is run some other way, e.g. its own service).
+	MediaMTXBinary string `json:"mediamtx_binary"`
+	// MediaMTXConfig is where EdgeTAK writes mediamtx.yml ("" = <data>/mediamtx.yml).
+	MediaMTXConfig string `json:"mediamtx_config"`
+	// AuthAddr is the loopback listener for MediaMTX's auth callbacks.
+	AuthAddr string `json:"auth_addr"`
+	APIAddr  string `json:"api_addr"` // MediaMTX control API (loopback)
+	HLSAddr  string `json:"hls_addr"` // MediaMTX HLS server (loopback; relayed by EdgeTAK)
+	// BindHost limits MediaMTX's stream ports to one address ("" = all).
+	BindHost string `json:"bind_host"`
+	// Ports MediaMTX accepts streams on, advertised to clients.
+	RTSPPort int `json:"rtsp_port"`
+	RTMPPort int `json:"rtmp_port"`
+	SRTPort  int `json:"srt_port"`
+}
+
+// Normalized fills defaults for unset video settings.
+func (v Video) Normalized() Video {
+	if v.AuthAddr == "" {
+		v.AuthAddr = "127.0.0.1:8099"
+	}
+	if v.APIAddr == "" {
+		v.APIAddr = "127.0.0.1:9997"
+	}
+	if v.HLSAddr == "" {
+		v.HLSAddr = "127.0.0.1:8888"
+	}
+	if v.RTSPPort == 0 {
+		v.RTSPPort = 8554
+	}
+	if v.RTMPPort == 0 {
+		v.RTMPPort = 1935
+	}
+	if v.SRTPort == 0 {
+		v.SRTPort = 8890
+	}
+	return v
 }
 
 // PublicCert configures a publicly trusted server certificate. Like

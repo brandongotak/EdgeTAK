@@ -31,6 +31,7 @@ const (
 func (s *Server) Start(ctx context.Context) {
 	s.Router.AddHook(s.inboxHook)
 	s.Router.SetPresence(s.presenceEvent)
+	s.videoStart(ctx)
 	go func() {
 		t := time.NewTicker(presenceRefresh)
 		defer t.Stop()
