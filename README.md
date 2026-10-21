@@ -58,6 +58,13 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   routes, polygons, rectangles and circles, and any KML, KMZ or GeoJSON in
   it, as its own overlay. The console's libraries are built in, so it works
   without internet access; only online base maps need it.
+- **Position history** (off by default): turn on recording under the map's
+  **History** button and choose how long to keep it (6 hours to 30 days).
+  Positions are thinned (a point when a device moves 5 m, or once a minute)
+  and kept in `history/` in the data directory. The **Trails** overlay
+  shows each device's path in its team colour over the last 15 minutes to
+  everything kept, and **Replay this period** plays it back with a time
+  slider, play/pause and speeds from 1× to 1200×.
 - **Web admin console**: connected clients, users, groups,
   certificates, data packages, missions, and connection packages for each
   client.

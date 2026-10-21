@@ -149,6 +149,14 @@ type db struct {
 	Requests     map[string]*SignupRequest `json:"requests"` // by id
 
 	MapSources []MapSource `json:"map_sources"`
+
+	History HistorySettings `json:"history"`
+}
+
+// HistorySettings controls position history recording (off by default).
+type HistorySettings struct {
+	Enabled        bool `json:"enabled"`
+	RetentionHours int  `json:"retention_hours"` // 0 = default (24)
 }
 
 // MapSource is a custom tile layer for the console map. URL is a template
@@ -466,6 +474,23 @@ func (s *Store) SetServerContact(c ServerContact) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.ServerContact = c
+	return s.save()
+}
+
+func (s *Store) HistorySettings() HistorySettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	h := s.db.History
+	if h.RetentionHours <= 0 {
+		h.RetentionHours = 24
+	}
+	return h
+}
+
+func (s *Store) SetHistorySettings(h HistorySettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.History = h
 	return s.save()
 }
 

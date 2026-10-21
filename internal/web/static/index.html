@@ -308,12 +308,57 @@
       <select id="basemap" aria-label="Base map"></select>
       <button class="small" id="map-fit" title="Zoom to all devices">Fit all</button>
       <button class="small" id="map-sources-open">Map sources</button>
+      <button class="small" id="history-open" title="Position history and trails">History</button>
       <span class="spacer"></span>
       <button class="small ghost" id="map-close" title="Hide the map">✕</button>
     </div>
     <div id="map"><p class="muted map-off">Map unavailable (the map library could not be loaded).</p></div>
+    <div id="replay-bar" class="replay-bar" hidden>
+      <button type="button" class="small primary" id="replay-play" title="Play / pause">▶</button>
+      <input type="range" id="replay-slider" min="0" max="1" step="1000" aria-label="Replay time">
+      <select id="replay-speed" aria-label="Replay speed">
+        <option value="1">1×</option><option value="10">10×</option><option value="60" selected>60×</option>
+        <option value="300">300×</option><option value="1200">1200×</option>
+      </select>
+      <span id="replay-time" class="mono replay-time"></span>
+      <button type="button" class="small ghost" id="replay-close" title="Close replay and return to live">✕</button>
+    </div>
   </aside>
   </div>
+
+  <dialog id="history-dialog" class="card dialog">
+    <form method="dialog" class="stack wide" id="history-form">
+      <h2>Position history</h2>
+      <fieldset class="stack wide plain">
+        <legend class="muted">Recording on this server</legend>
+        <label class="check"><input type="checkbox" id="history-enabled"> Record where devices go</label>
+        <label>Keep history for
+          <select id="history-retention">
+            <option value="6">6 hours</option><option value="12">12 hours</option><option value="24">24 hours</option>
+            <option value="72">3 days</option><option value="168">7 days</option><option value="720">30 days</option>
+          </select>
+        </label>
+        <p class="muted" id="history-stats"></p>
+        <div class="inline-form">
+          <button type="button" class="primary" id="history-save">Save</button>
+          <span class="spacer"></span>
+          <button type="button" class="danger" id="history-clear">Delete all history</button>
+        </div>
+      </fieldset>
+      <fieldset class="stack wide plain">
+        <legend class="muted">Trails on this map</legend>
+        <label class="check"><input type="checkbox" id="trails-show"> Show trails</label>
+        <label>Show the last
+          <select id="trails-window">
+            <option value="15">15 minutes</option><option value="60">hour</option><option value="360">6 hours</option>
+            <option value="1440">24 hours</option><option value="43200">everything kept</option>
+          </select>
+        </label>
+        <div><button type="button" id="replay-open">▶ Replay this period</button></div>
+      </fieldset>
+      <div class="inline-form"><span class="spacer"></span><button class="primary" value="close">Done</button></div>
+    </form>
+  </dialog>
 
   <dialog id="map-sources-dialog" class="card dialog">
     <form method="dialog" class="stack wide" id="map-sources-form">

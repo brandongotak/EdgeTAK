@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/brandongotak/EdgeTAK/internal/config"
+	"github.com/brandongotak/EdgeTAK/internal/history"
 	"github.com/brandongotak/EdgeTAK/internal/mission"
 	"github.com/brandongotak/EdgeTAK/internal/pki"
 	"github.com/brandongotak/EdgeTAK/internal/publiccert"
@@ -35,6 +36,7 @@ type Server struct {
 	Router     *router.Router
 	Missions   *mission.Service
 	Public     *publiccert.Provider // nil unless a public certificate is configured
+	History    *history.Recorder
 	Log        *slog.Logger
 	PackageDir string
 	NodeID     string
@@ -94,6 +96,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.sendRoutes(mux)
 	s.registerRoutes(mux)
 	s.mapRoutes(mux)
+	s.historyRoutes(mux)
 
 	files := http.StripPrefix("/admin/", http.FileServerFS(staticSub()))
 	mux.HandleFunc("GET /admin/", func(w http.ResponseWriter, r *http.Request) {

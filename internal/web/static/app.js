@@ -295,6 +295,8 @@ let rebuildingLayers = false;
 let devicesLayer = null;
 let contactLayer = null;
 let labelsLayer = null;
+let trailsLayer = null;
+let trailsTimer = null;
 let mapSources = [];
 let mapTimer = null;
 let latestClients = [];
@@ -344,6 +346,17 @@ function initMap() {
   labelsLayer = L.layerGroup();
   labelsLayer.on('add', () => el.classList.remove('no-labels'));
   labelsLayer.on('remove', () => el.classList.add('no-labels'));
+  trailsLayer = L.layerGroup();
+  trailsLayer.on('add', () => {
+    $('#trails-show').checked = true;
+    guard(loadTrails)();
+    clearInterval(trailsTimer);
+    trailsTimer = setInterval(() => { if (mapVisible()) loadTrails().catch(() => {}); }, 10000);
+  });
+  trailsLayer.on('remove', () => {
+    $('#trails-show').checked = false;
+    clearInterval(trailsTimer);
+  });
   map.on('moveend', () => {
     const c = map.getCenter();
     prefs.set('map.view', { lat: c.lat, lon: c.lng, zoom: map.getZoom() });
@@ -378,7 +391,7 @@ function buildLayers() {
 
   baseLayers = {};
   for (const [name, def] of BASEMAPS) baseLayers[name] = buildBase(def);
-  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer };
+  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer };
   for (const p of packageLayers.values()) overlayLayers[p.name] = p.layer;
   for (const s of mapSources) {
     const layer = tileLayer(s.url, {
@@ -428,8 +441,8 @@ function updateMap(clients) {
       `<br><span class="muted">${esc(c.username || 'anonymous')} · ${esc([c.platform, c.device].filter(Boolean).join(' '))}</span>`;
     let m = markers.get(key);
     if (!m) {
-      m = L.circleMarker([c.lat, c.lon], { radius: 8, weight: 2, color: '#000', fillOpacity: 0.9 }).addTo(devicesLayer);
-      m.bindTooltip(esc(c.callsign), { permanent: true, direction: 'right', offset: [8, 0] });
+      m = L.circleMarker([c.lat, c.lon], { radius: 8, weight: 2, color: '#000', fillOpacity: 0.9, className: 'live-device' }).addTo(devicesLayer);
+      m.bindTooltip(esc(c.callsign), { permanent: true, direction: 'right', offset: [8, 0], className: 'live-device' });
       m.bindPopup('');
       markers.set(key, m);
     }
@@ -534,6 +547,201 @@ $('#map-source-file').addEventListener('change', guard(async (e) => {
   renderMapSources();
   toast(`Imported ${files.length} map source${files.length === 1 ? '' : 's'}`);
 }));
+
+// ---- position history (trails) ----
+//
+// Recording is a server setting; showing trails is this viewer's choice
+// (the Trails overlay), over a time window they pick.
+
+const trailWindow = () => Number(prefs.get('trails.window', 60));
+
+async function loadTrails() {
+  if (!map || !map.hasLayer(trailsLayer)) return;
+  const tracks = await api('GET', `api/history?minutes=${trailWindow()}`);
+  trailsLayer.clearLayers();
+  for (const t of tracks) {
+    const pts = t.points.map((p) => [p.lat, p.lon]);
+    if (!pts.length) continue;
+    const color = TEAM_COLORS[t.team] || '#4cc38a';
+    const first = new Date(t.points[0].t), last = new Date(t.points.at(-1).t);
+    let metres = 0;
+    for (let i = 1; i < pts.length; i++) metres += map.distance(pts[i - 1], pts[i]);
+    const info = `<strong>${esc(t.callsign || t.uid)}</strong><br>${esc(first.toLocaleTimeString())} – ${esc(last.toLocaleTimeString())}` +
+      `<br>${metres >= 1000 ? (metres / 1000).toFixed(2) + ' km' : Math.round(metres) + ' m'} · ${t.points.length} points`;
+    // A dark casing keeps light team colours (White, Yellow) visible on any base map.
+    L.polyline(pts, { color: '#000', weight: 6, opacity: 0.45, interactive: false, className: 'trail-el' }).addTo(trailsLayer);
+    L.polyline(pts, { color, weight: 3, opacity: 0.95, className: 'trail-el' }).bindPopup(info)
+      .bindTooltip(esc(t.callsign || t.uid), { sticky: true, className: 'trail-el' }).addTo(trailsLayer);
+    for (const p of t.points.filter((_, i) => i % Math.max(1, Math.ceil(t.points.length / 60)) === 0)) {
+      L.circleMarker([p.lat, p.lon], { radius: 2.5, weight: 1, color: '#000', fillColor: color, fillOpacity: 1, className: 'trail-el' })
+        .bindTooltip(esc(new Date(p.t).toLocaleString()), { direction: 'top', className: 'trail-el' }).addTo(trailsLayer);
+    }
+  }
+}
+
+async function loadHistorySettings() {
+  const st = await api('GET', 'api/history/settings');
+  $('#history-enabled').checked = st.enabled;
+  $('#history-retention').value = String(st.retention_hours);
+  if (!$('#history-retention').value) $('#history-retention').value = '24';
+  $('#history-stats').textContent = st.enabled
+    ? `Recording. Stored: ${st.tracks || 0} device(s), ${st.points || 0} points, ${bytes(st.bytes || 0)}.`
+    : `Recording is off.${st.points ? ` Stored from before: ${st.tracks} device(s), ${st.points} points.` : ''}`;
+}
+
+$('#history-open').addEventListener('click', guard(async () => {
+  initMap();
+  $('#trails-show').checked = !!(map && map.hasLayer(trailsLayer));
+  $('#trails-window').value = String(trailWindow());
+  await loadHistorySettings();
+  $('#history-dialog').showModal();
+}));
+
+$('#history-save').addEventListener('click', guard(async () => {
+  await api('PUT', 'api/history/settings', { enabled: $('#history-enabled').checked, retention_hours: Number($('#history-retention').value) });
+  await loadHistorySettings();
+  toast($('#history-enabled').checked ? 'Position history is being recorded' : 'Position history recording is off');
+}));
+
+$('#history-clear').addEventListener('click', guard(async () => {
+  if (!confirm('Delete all recorded position history? This cannot be undone.')) return;
+  await api('DELETE', 'api/history');
+  await loadHistorySettings();
+  trailsLayer?.clearLayers();
+  toast('History deleted');
+}));
+
+$('#trails-show').addEventListener('change', (e) => {
+  if (!map) return;
+  if (e.target.checked) trailsLayer.addTo(map); else map.removeLayer(trailsLayer);
+});
+
+$('#trails-window').addEventListener('change', (e) => {
+  prefs.set('trails.window', Number(e.target.value));
+  guard(loadTrails)();
+});
+
+// ---- replay ----
+//
+// Scrubs through recorded history: each device moves along its trail
+// (interpolated between points) and draws its path up to the replay time.
+
+const REPLAY_TICK = 100; // ms between frames while playing
+const REPLAY_GAP = 5 * 60 * 1000; // don't interpolate across gaps longer than this
+const REPLAY_STALE = 2 * 60 * 1000; // fade devices whose last report is older
+
+let replay = null;
+
+$('#replay-open').addEventListener('click', guard(async () => {
+  $('#history-dialog').close();
+  await openReplay();
+}));
+
+async function openReplay() {
+  initMap();
+  if (!map) throw new Error('The map library could not be loaded');
+  closeReplay();
+  const tracks = (await api('GET', `api/history?minutes=${trailWindow()}`)).filter((t) => t.points.length);
+  if (!tracks.length) throw new Error('No recorded history in this time window. Turn on recording in History first.');
+  setMapVisible(true, false);
+  map.invalidateSize();
+  fittedOnce = true;
+
+  const layer = L.layerGroup().addTo(map);
+  const items = tracks.map((t) => {
+    const color = TEAM_COLORS[t.team] || '#4cc38a';
+    const casing = L.polyline([], { color: '#000', weight: 6, opacity: 0.45, interactive: false }).addTo(layer);
+    const line = L.polyline([], { color, weight: 3, opacity: 0.95, interactive: false }).addTo(layer);
+    const marker = L.circleMarker([t.points[0].lat, t.points[0].lon], { radius: 8, weight: 2, color: '#000', fillColor: color, fillOpacity: 0.9 })
+      .bindTooltip(esc(t.callsign || t.uid), { permanent: true, direction: 'right', offset: [8, 0] });
+    return { t, casing, line, marker, layer };
+  });
+  const start = Math.min(...tracks.map((t) => t.points[0].t));
+  const end = Math.max(...tracks.map((t) => t.points.at(-1).t));
+  replay = { items, layer, start, end, time: start, timer: null };
+
+  const slider = $('#replay-slider');
+  slider.min = start;
+  slider.max = end;
+  slider.value = start;
+  $('#map').classList.add('replaying');
+  $('#replay-bar').hidden = false;
+  map.invalidateSize();
+  map.fitBounds(L.latLngBounds(tracks.flatMap((t) => t.points.map((p) => [p.lat, p.lon]))).pad(0.15), { maxZoom: 17 });
+  setReplayTime(start);
+  playReplay();
+}
+
+// replayPosition finds where a track is at time t: the index of the last
+// point at or before t and the (interpolated) position, or null before the
+// track starts.
+function replayPosition(points, t) {
+  let lo = 0, hi = points.length - 1, i = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (points[mid].t <= t) { i = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  if (i < 0) return null;
+  const p = points[i], n = points[i + 1];
+  if (!n || n.t - p.t > REPLAY_GAP) return { i, ll: [p.lat, p.lon], stale: t - p.t > REPLAY_STALE };
+  const f = (t - p.t) / (n.t - p.t);
+  return { i, ll: [p.lat + (n.lat - p.lat) * f, p.lon + (n.lon - p.lon) * f], stale: false };
+}
+
+function setReplayTime(t) {
+  if (!replay) return;
+  replay.time = Math.min(Math.max(t, replay.start), replay.end);
+  $('#replay-slider').value = replay.time;
+  $('#replay-time').textContent = new Date(replay.time).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  for (const it of replay.items) {
+    const pos = replayPosition(it.t.points, replay.time);
+    if (!pos) {
+      it.marker.remove();
+      it.line.setLatLngs([]);
+      it.casing.setLatLngs([]);
+      continue;
+    }
+    const path = it.t.points.slice(0, pos.i + 1).map((p) => [p.lat, p.lon]);
+    path.push(pos.ll);
+    it.line.setLatLngs(path);
+    it.casing.setLatLngs(path);
+    it.marker.setLatLng(pos.ll).setStyle({ fillOpacity: pos.stale ? 0.35 : 0.9, opacity: pos.stale ? 0.4 : 1 });
+    if (!it.layer.hasLayer(it.marker)) it.marker.addTo(it.layer);
+  }
+}
+
+function playReplay() {
+  if (!replay) return;
+  if (replay.time >= replay.end) setReplayTime(replay.start); // play again from the start
+  clearInterval(replay.timer);
+  replay.timer = setInterval(() => {
+    const next = replay.time + Number($('#replay-speed').value) * REPLAY_TICK;
+    setReplayTime(next);
+    if (next >= replay.end) pauseReplay();
+  }, REPLAY_TICK);
+  $('#replay-play').textContent = '❚❚';
+}
+
+function pauseReplay() {
+  if (!replay) return;
+  clearInterval(replay.timer);
+  replay.timer = null;
+  $('#replay-play').textContent = '▶';
+}
+
+function closeReplay() {
+  if (!replay) return;
+  pauseReplay();
+  replay.layer.remove();
+  replay = null;
+  $('#map').classList.remove('replaying');
+  $('#replay-bar').hidden = true;
+  map?.invalidateSize();
+}
+
+$('#replay-play').addEventListener('click', () => (replay?.timer ? pauseReplay() : playReplay()));
+$('#replay-slider').addEventListener('input', (e) => setReplayTime(Number(e.target.value)));
+$('#replay-close').addEventListener('click', closeReplay);
 
 // ---- data packages on the map ----
 //

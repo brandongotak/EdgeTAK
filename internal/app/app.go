@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/brandongotak/EdgeTAK/internal/config"
+	"github.com/brandongotak/EdgeTAK/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/history"
 	"github.com/brandongotak/EdgeTAK/internal/mission"
 	"github.com/brandongotak/EdgeTAK/internal/pki"
 	"github.com/brandongotak/EdgeTAK/internal/publiccert"
@@ -39,6 +41,7 @@ type App struct {
 	Router   *router.Router
 	Missions *mission.Service
 	Public   *publiccert.Provider // nil unless public_cert is configured
+	History  *history.Recorder
 
 	// Addrs holds the bound address of each listener after Start.
 	Addrs map[string]string
@@ -87,10 +90,35 @@ func New(cfg config.Config, dataDir, version string, log *slog.Logger) (*App, er
 		return nil, fmt.Errorf("open missions: %w", err)
 	}
 	a.Missions.PackageDir = filepath.Join(dataDir, "packages")
+	if a.History, err = history.Open(filepath.Join(dataDir, "history"), log); err != nil {
+		return nil, fmt.Errorf("open history: %w", err)
+	}
+	hs := a.Store.HistorySettings()
+	a.History.Configure(hs.Enabled, time.Duration(hs.RetentionHours)*time.Hour)
+	a.Router.AddHook(a.recordHistory)
 	if a.Public, err = publiccert.New(cfg.PublicCert.Normalized(a.Cfg.PublicHost), dataDir, &a.CA.ServerCert, log); err != nil {
 		return nil, err
 	}
 	return a, nil
+}
+
+// recordHistory saves each device's own position reports (not markers it
+// shares) for breadcrumb trails. It never drops events.
+func (a *App) recordHistory(src *router.Client, ev *cot.Event) bool {
+	if src == nil || !strings.HasPrefix(ev.Type, "a-") || !a.History.Enabled() {
+		return true
+	}
+	if uid, callsign := src.Identity(); uid != "" && uid == ev.UID {
+		team, speed, course := "", 0.0, 0.0
+		if g := ev.Detail.Group; g != nil {
+			team = g.Name
+		}
+		if t := ev.Detail.Track; t != nil {
+			speed, course = t.Speed, t.Course
+		}
+		a.History.Record(uid, callsign, team, time.Now(), ev.Lat, ev.Lon, speed, course)
+	}
+	return true
 }
 
 // checkPublicHost warns when public_host is neither one of this machine's
@@ -164,7 +192,7 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		ServerUID:   "EdgeTAK-" + a.nodeID, Version: "EdgeTAK " + a.Version,
 	}
 	ws := &web.Server{
-		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, Log: a.Log,
+		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, History: a.History, Log: a.Log,
 		PackageDir: filepath.Join(a.DataDir, "packages"), NodeID: a.nodeID, Version: a.Version, Started: time.Now(),
 	}
 
@@ -233,6 +261,8 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() { defer wg.Done(); a.Missions.FlushLoop(ctx.Done()) }()
+	wg.Add(1)
+	go func() { defer wg.Done(); a.History.Run(ctx) }()
 	errLog := slog.NewLogLogger(a.Log.Handler(), slog.LevelDebug)
 	var servers []*http.Server
 	for _, b := range binds {
