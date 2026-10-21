@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/brandongotak/EdgeTAK/internal/chatlog"
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/health"
 	"github.com/brandongotak/EdgeTAK/internal/history"
@@ -39,6 +40,7 @@ type Server struct {
 	Missions   *mission.Service
 	Public     *publiccert.Provider // nil unless a public certificate is configured
 	History    *history.Recorder
+	Chat       *chatlog.Log
 	MediaMTX   *mediamtx.Manager // nil unless EdgeTAK runs MediaMTX itself
 	Health     *health.Sampler
 	Log        *slog.Logger
@@ -110,6 +112,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.healthRoutes(mux)
 	s.retentionRoutes(mux)
 	s.certStatusRoutes(mux)
+	s.chatRoutes(mux)
 
 	files := http.StripPrefix("/admin/", http.FileServerFS(staticSub()))
 	mux.HandleFunc("GET /admin/", func(w http.ResponseWriter, r *http.Request) {

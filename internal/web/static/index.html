@@ -45,7 +45,9 @@
       <button data-tab="missions">Missions</button>
       <button data-tab="video">Video</button>
       <button data-tab="send">Send</button>
+      <button data-tab="chat">Chat log</button>
       <button data-tab="connect">Connect</button>
+      <button data-tab="settings">Settings</button>
     </nav>
     <div class="who"><button id="install-app" class="ghost" hidden title="Install the console as an app">Install app</button> <button id="map-toggle" class="ghost" aria-pressed="false" title="Show or hide the map">Map</button> <span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
   </header>
@@ -68,6 +70,16 @@
         </div>
         <details id="update-notes" hidden><summary>Release notes</summary><pre class="notes"></pre></details>
       </div>
+      <div class="card">
+        <div class="card-head"><h2>Connected clients</h2><span class="muted" id="clients-updated"></span></div>
+        <div class="table-wrap"><table id="clients-table">
+          <thead><tr><th>Callsign</th><th>User</th><th>Team / Role</th><th>Transport</th><th>Format</th><th>Remote</th><th>Position</th><th>Battery</th><th>Device</th><th>Msgs in/out</th><th>Connected</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section id="tab-settings" class="tab" hidden>
       <div class="card" id="retention-card">
         <div class="card-head"><h2>Data retention</h2><span class="muted" id="retention-last"></span></div>
         <p class="muted">How long to keep each kind of data, in days (0 = keep forever). Rules run every hour. The right column shows what a rule would remove right now.</p>
@@ -78,13 +90,6 @@
             <button type="button" id="retention-run" title="Apply the saved rules now">Run now</button>
           </div>
         </form>
-      </div>
-      <div class="card">
-        <div class="card-head"><h2>Connected clients</h2><span class="muted" id="clients-updated"></span></div>
-        <div class="table-wrap"><table id="clients-table">
-          <thead><tr><th>Callsign</th><th>User</th><th>Team / Role</th><th>Transport</th><th>Format</th><th>Remote</th><th>Position</th><th>Battery</th><th>Device</th><th>Msgs in/out</th><th>Connected</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table></div>
       </div>
     </section>
 
@@ -460,6 +465,42 @@
           <thead><tr><th>Time</th><th>What</th><th>To</th><th>Devices</th><th>By</th></tr></thead>
           <tbody></tbody>
         </table></div>
+      </div>
+    </section>
+
+    <section id="tab-chat" class="tab" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Chat log</h2>
+          <div class="inline-form">
+            <label class="check"><input type="checkbox" id="chat-enabled"> Record chat</label>
+            <a class="button small" id="chat-export-csv" href="#" download>Export CSV</a>
+            <a class="button small" id="chat-export-json" href="#" download>Export JSON</a>
+            <button type="button" class="small danger" id="chat-clear">Clear log</button>
+          </div>
+        </div>
+        <p class="muted" id="chat-about">GeoChat messages devices send through EdgeTAK (All Chat Rooms, team and group chats, and one-to-one messages), and those sent from Send. Messages devices exchange directly, without the server, can't be recorded. Set how long to keep them under Settings → Data retention.</p>
+        <div class="issue info" id="chat-off" hidden><span class="status-icon info" aria-hidden="true">●</span> <span>Recording is off. Turn on <strong>Record chat</strong> to log messages from now on; earlier messages can't be recovered.</span></div>
+        <form id="chat-filter" class="chat-filter" autocomplete="off">
+          <input type="search" name="q" placeholder="Search text, callsigns, conversations" aria-label="Search">
+          <select name="room" aria-label="Conversation"><option value="">All conversations</option></select>
+          <select name="from" aria-label="Sender"><option value="">Anyone</option></select>
+          <select name="range" aria-label="Time range">
+            <option value="1">Last hour</option>
+            <option value="24">Last 24 hours</option>
+            <option value="168">Last 7 days</option>
+            <option value="720">Last 30 days</option>
+            <option value="0" selected>All time</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <span class="chat-custom" hidden>
+            <input type="datetime-local" name="since" aria-label="From">
+            <input type="datetime-local" name="until" aria-label="Until">
+          </span>
+        </form>
+        <p class="muted" id="chat-count"></p>
+        <div id="chat-list" class="chat-list"></div>
+        <p><button type="button" id="chat-more" hidden>Show older messages</button></p>
       </div>
     </section>
 

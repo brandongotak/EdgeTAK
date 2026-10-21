@@ -39,7 +39,7 @@ button:hover, .button:hover { border-color: var(--muted); }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
 button.ghost, .button.ghost { background: transparent; }
 button.danger { color: var(--danger); background: transparent; }
-button.small { padding: 3px 9px; font-size: 12px; }
+button.small, .button.small { padding: 3px 9px; font-size: 12px; }
 input, select {
   font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
   border-radius: 7px; padding: 7px 10px; min-width: 0;
@@ -235,6 +235,29 @@ td.wrap { white-space: normal; max-width: 320px; }
 .issue { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: var(--panel); }
 .issue.critical { border-color: var(--danger); }
 .issue.warning { border-color: var(--warn); }
+.chat-filter { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.chat-filter input[type=search] { flex: 1 1 240px; }
+.chat-filter select { flex: 0 1 220px; min-width: 0; }
+.chat-custom { display: contents; }
+.chat-custom[hidden] { display: none; }
+.chat-list { border-top: 1px solid var(--line); }
+.chat-day { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; padding: 10px 0 4px; border-bottom: 1px solid var(--line); }
+.chat-msg { display: flex; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.chat-msg time { flex: 0 0 auto; min-width: 84px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 2px; }
+.chat-body { min-width: 0; flex: 1; }
+.chat-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.chat-text { margin-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-empty { padding: 16px 0; }
+button.linkish { background: none; border: none; padding: 0; color: inherit; font: inherit; cursor: pointer; }
+button.linkish:hover strong { text-decoration: underline; }
+button.pill.chat-room { cursor: pointer; background: transparent; color: var(--text); }
+button.pill.chat-room.direct { border-style: dashed; }
+.chat-list mark { background: color-mix(in srgb, var(--warn) 35%, transparent); color: inherit; border-radius: 2px; }
+.issue.info { margin: 8px 0; }
+@media (max-width: 700px) {
+  .chat-msg { flex-direction: column; gap: 2px; }
+  .chat-filter select, .chat-filter input { flex: 1 1 100%; }
+}
 .cert-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0 4px; }
 #cert-tiles .stat.alert { border-color: var(--warn); }
 #cert-warn-form label { flex-direction: row; align-items: center; gap: 6px; }
@@ -272,7 +295,7 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   /* 16px inputs stop iOS from zooming in on focus. */
   input, select, textarea { font-size: 16px; }
   button, .button { min-height: 38px; }
-  button.small { min-height: 32px; padding: 5px 10px; }
+  button.small, .button.small { min-height: 32px; padding: 5px 10px; }
 
   .topbar { gap: 8px 12px; padding: 8px 12px; }
   .topbar .brand { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -288,7 +311,7 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .kv { grid-template-columns: 1fr; gap: 2px; }
   .kv dd { margin-bottom: 8px; }
   .inline-form > * { flex: 1 1 100%; }
-  .inline-form > button, .inline-form > .spacer { flex: 0 0 auto; }
+  .inline-form > button, .inline-form > .button, .inline-form > .spacer { flex: 0 0 auto; }
   .card-head { flex-wrap: wrap; }
 
   /* Tables become one card per row; app.js labels each cell from its header. */

@@ -112,6 +112,10 @@ func (s *Server) applyRetention(r store.RetentionSettings, dry bool) retentionRe
 		n, err := s.Store.PruneCerts(now.Add(-days(r.CertsDays)), dry)
 		note("certs", n, err)
 	}
+	if r.ChatDays > 0 && s.Chat != nil {
+		n, err := s.Chat.Prune(now.Add(-days(r.ChatDays)), dry)
+		note("chat", n, err)
+	}
 	if !dry {
 		total := 0
 		for _, n := range res.Removed {
@@ -170,5 +174,5 @@ func (s *Server) retentionRoutes(mux *http.ServeMux) {
 func clampRetention(r store.RetentionSettings) store.RetentionSettings {
 	c := func(n int) int { return max(0, min(n, 3650)) }
 	return store.RetentionSettings{PackagesDays: c(r.PackagesDays), MissionsIdleDays: c(r.MissionsIdleDays), InboxDays: c(r.InboxDays),
-		RequestsDays: c(r.RequestsDays), InvitesDays: c(r.InvitesDays), CertsDays: c(r.CertsDays)}
+		RequestsDays: c(r.RequestsDays), InvitesDays: c(r.InvitesDays), CertsDays: c(r.CertsDays), ChatDays: c(r.ChatDays)}
 }

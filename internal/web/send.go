@@ -129,7 +129,7 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request, id *identit
 			jsonError(w, http.StatusBadRequest, "direct messages need the server contact: turn it on under Server contact")
 			return
 		}
-		delivered, skipped := s.sendDirect(targets, req.Text)
+		delivered, skipped := s.sendDirect(targets, req.Text, id.Username)
 		s.history.add(sendRecord{Time: time.Now().UTC(), Admin: id.Username, Kind: "direct", Summary: truncate(req.Text, 80),
 			To: describeTarget(req.To), Delivered: delivered})
 		s.Log.Info("admin sent direct message", "admin", id.Username, "to", describeTarget(req.To), "devices", delivered, "skipped", skipped)
@@ -140,6 +140,7 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request, id *identit
 	for _, c := range targets {
 		c.Send(ev)
 	}
+	s.logConsoleChat(ev, id.Username)
 	s.history.add(sendRecord{Time: time.Now().UTC(), Admin: id.Username, Kind: "message", Summary: from + ": " + truncate(req.Text, 80),
 		To: describeTarget(req.To), Delivered: len(targets)})
 	s.Log.Info("admin sent message", "admin", id.Username, "to", describeTarget(req.To), "devices", len(targets))

@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/brandongotak/EdgeTAK/internal/chatlog"
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/cot"
 	"github.com/brandongotak/EdgeTAK/internal/health"
@@ -44,6 +45,7 @@ type App struct {
 	Missions *mission.Service
 	Public   *publiccert.Provider // nil unless public_cert is configured
 	History  *history.Recorder
+	Chat     *chatlog.Log
 
 	// Addrs holds the bound address of each listener after Start.
 	Addrs map[string]string
@@ -98,6 +100,10 @@ func New(cfg config.Config, dataDir, version string, log *slog.Logger) (*App, er
 	hs := a.Store.HistorySettings()
 	a.History.Configure(hs.Enabled, time.Duration(hs.RetentionHours)*time.Hour)
 	a.Router.AddHook(a.recordHistory)
+	if a.Chat, err = chatlog.Open(filepath.Join(dataDir, "chat"), log); err != nil {
+		return nil, fmt.Errorf("open chat log: %w", err)
+	}
+	a.Chat.SetEnabled(a.Store.ChatLogSettings().Enabled)
 	if a.Public, err = publiccert.New(cfg.PublicCert.Normalized(a.Cfg.PublicHost), dataDir, &a.CA.ServerCert, log); err != nil {
 		return nil, err
 	}
@@ -194,7 +200,7 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		ServerUID:   "EdgeTAK-" + a.nodeID, Version: "EdgeTAK " + a.Version,
 	}
 	ws := &web.Server{
-		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, History: a.History, Log: a.Log,
+		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, History: a.History, Chat: a.Chat, Log: a.Log,
 		PackageDir: filepath.Join(a.DataDir, "packages"), NodeID: a.nodeID, Version: a.Version, Started: time.Now(),
 	}
 
@@ -301,6 +307,8 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	go func() { defer wg.Done(); a.Missions.FlushLoop(ctx.Done()) }()
 	wg.Add(1)
 	go func() { defer wg.Done(); a.History.Run(ctx) }()
+	wg.Add(1)
+	go func() { defer wg.Done(); <-ctx.Done(); a.Chat.Close() }()
 	wg.Add(1)
 	go func() { defer wg.Done(); ws.Health.Run(ctx) }()
 	if ws.MediaMTX != nil {

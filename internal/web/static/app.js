@@ -162,21 +162,34 @@ const loaders = {
   video: loadVideo,
   send: loadSend,
   connect: loadConnect,
+  chat: loadChat,
+  settings: () => loadRetention(),
 };
 
 let currentTab = '';
+
+// The tab bar scrolls when the window is narrow; keep the selected tab in
+// view, also when the bar itself narrows (the Install app button appears).
+function showActiveTab() {
+  const t = $('#tabs'), b = t.querySelector('button.active');
+  if (!b) return;
+  const bar = t.getBoundingClientRect(), r = b.getBoundingClientRect();
+  if (r.left < bar.left) t.scrollLeft -= bar.left - r.left;
+  else if (r.right > bar.right) t.scrollLeft += r.right - bar.right;
+}
+new ResizeObserver(showActiveTab).observe($('#tabs'));
 
 function selectTab(name) {
   if (!loaders[name]) name = 'dashboard';
   currentTab = name;
   history.replaceState(null, '', '#' + name);
   for (const b of $('#tabs').children) b.classList.toggle('active', b.dataset.tab === name);
+  showActiveTab();
   for (const s of document.querySelectorAll('.tab')) s.hidden = s.id !== 'tab-' + name;
   clearInterval(pollTimer);
   guard(loaders[name])();
   if (name === 'dashboard') {
     loadSelfUpdate().catch(() => {});
-    loadRetention().catch(() => {});
     pollTimer = setInterval(guard(loadDashboard), 3000);
   } else if (name === 'health') {
     pollTimer = setInterval(() => loadHealth().catch(() => {}), 10000);
@@ -184,6 +197,8 @@ function selectTab(name) {
     pollTimer = setInterval(() => loadVideo().catch(() => {}), 5000); // live streams come and go
   } else if (name === 'send') {
     pollTimer = setInterval(guard(loadSendLive), 5000); // Inbox updates
+  } else if (name === 'chat') {
+    pollTimer = setInterval(() => loadChat().catch(() => {}), 5000); // new messages
   }
 }
 $('#tabs').addEventListener('click', (e) => {
@@ -563,6 +578,7 @@ const RETENTION_RULES = [
   ['requests_days', 'requests', 'Pending sign-up requests', 'rejected when they have waited this long', 'request'],
   ['invites_days', 'invites', 'Old invites', 'used up, expired or revoked', 'invite'],
   ['certs_days', 'certs', 'Expired certificate records', 'after the certificate expired; valid ones are always kept', 'record'],
+  ['chat_days', 'chat', 'Chat log', 'messages recorded on the Chat log tab', 'message'],
 ];
 let retentionTimer = null;
 
@@ -2043,6 +2059,141 @@ $('#certs-table').addEventListener('click', guard(async (e) => {
   await api('POST', `api/certs/${serial}/revoke`);
   toast('Certificate revoked');
   loadCerts();
+}));
+
+// ---------- chat log ----------
+
+const CHAT_KIND = { all: 'All', team: 'Team', group: 'Group', direct: 'Direct' };
+const roomLabel = (kind, room) => (kind === 'all' ? room : `${CHAT_KIND[kind] || kind}: ${room}`);
+let chatLimit = 200;
+let chatFilterTimer = null;
+let chatStatus = null;
+let chatRendered = ''; // what the list shows, to skip redrawing it unchanged
+
+// Query string for the current filters (shared by the list and exports).
+function chatParams() {
+  const f = $('#chat-filter');
+  const p = new URLSearchParams();
+  for (const k of ['q', 'room', 'from']) if (f[k].value.trim()) p.set(k, f[k].value.trim());
+  const range = f.range.value;
+  if (range === 'custom') {
+    if (f.since.value) p.set('since', new Date(f.since.value).toISOString());
+    if (f.until.value) p.set('until', new Date(f.until.value).toISOString());
+  } else if (Number(range) > 0) {
+    p.set('since', new Date(Date.now() - Number(range) * 3600e3).toISOString());
+  }
+  return p;
+}
+
+function highlight(text, q) {
+  if (!q) return esc(text);
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  let out = '', last = 0;
+  for (const m of text.matchAll(re)) {
+    out += esc(text.slice(last, m.index)) + '<mark>' + esc(m[0]) + '</mark>';
+    last = m.index + m[0].length;
+  }
+  return out + esc(text.slice(last));
+}
+
+function fillSelect(sel, items, first) {
+  if (document.activeElement === sel) return; // refreshing would close an open list
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">${esc(first)}</option>` + items.join('');
+  sel.value = [...sel.options].some((o) => o.value === cur) ? cur : '';
+}
+
+async function loadChat() {
+  const [st, rooms] = await Promise.all([api('GET', 'api/chat/settings'), api('GET', 'api/chat/rooms')]);
+  chatStatus = st;
+  $('#chat-enabled').checked = st.enabled;
+  $('#chat-off').hidden = st.enabled;
+  const f = $('#chat-filter');
+  fillSelect(f.room, rooms.rooms.map((r) => `<option value="${esc(r.room_id)}">${esc(roomLabel(r.kind, r.room))} (${r.messages})</option>`), 'All conversations');
+  fillSelect(f.from, rooms.senders.map((s) => `<option value="${esc(s.uid)}">${esc(s.callsign || s.uid)} (${s.messages})</option>`), 'Anyone');
+  await loadChatMessages();
+}
+
+async function loadChatMessages() {
+  const p = chatParams();
+  const q = p.get('q') || '';
+  p.set('limit', chatLimit);
+  const res = await api('GET', 'api/chat?' + p);
+  const key = p.get('q') + p.get('room') + p.get('from') + p.get('limit') + chatStatus?.bytes + JSON.stringify(res); // not "since": it moves with the clock
+  if (key === chatRendered) return; // unchanged: keep selections and scroll as they are
+  chatRendered = key;
+  const st = chatStatus || {};
+  const total = res.total;
+  $('#chat-count').textContent = total ? `${plural(total, 'message')}${res.messages.length < total ? `, newest ${res.messages.length} shown` : ''}`
+    + (st.bytes != null ? ` · ${fmtSize(st.bytes)} on disk` : '') : '';
+  $('#chat-more').hidden = res.messages.length >= total;
+  let day = '';
+  const rows = [];
+  for (const m of res.messages) {
+    const d = new Date(m.time);
+    const dayText = d.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+    if (dayText !== day) { day = dayText; rows.push(`<div class="chat-day">${esc(dayText)}</div>`); }
+    rows.push(`<div class="chat-msg">
+      <time datetime="${esc(m.time)}" title="${esc(d.toLocaleString())}">${esc(d.toLocaleTimeString())}</time>
+      <div class="chat-body">
+        <div class="chat-meta">
+          <button type="button" class="linkish" data-chat-from="${esc(m.from_uid)}" title="Only messages from ${esc(m.from_callsign || m.from_uid)}"><strong>${highlight(m.from_callsign || m.from_uid, q)}</strong></button>
+          ${m.username ? `<span class="muted">${highlight(m.username, q)}${m.console ? ' (console)' : ''}</span>` : ''}
+          <span class="muted">→</span>
+          <button type="button" class="pill chat-room ${esc(m.kind)}" data-chat-room="${esc(m.room_id)}" title="Only this conversation">${m.kind === 'all' ? '' : esc(CHAT_KIND[m.kind] || m.kind) + ': '}${highlight(m.room, q)}</button>
+        </div>
+        <div class="chat-text">${highlight(m.text, q) || '<span class="muted">(empty)</span>'}</div>
+      </div>
+    </div>`);
+  }
+  $('#chat-list').innerHTML = rows.join('') || `<p class="muted chat-empty">${total === 0 && !p.get('q') && !p.get('room') && !p.get('from') ? 'No messages recorded yet.' : 'No messages match.'}</p>`;
+  for (const fmt of ['csv', 'json']) {
+    const exp = chatParams();
+    exp.set('format', fmt);
+    $(`#chat-export-${fmt}`).href = 'api/chat/export?' + exp;
+  }
+}
+
+$('#chat-filter').addEventListener('input', (e) => {
+  const f = e.currentTarget;
+  $('.chat-custom').hidden = f.range.value !== 'custom';
+  chatLimit = 200;
+  clearTimeout(chatFilterTimer);
+  chatFilterTimer = setTimeout(guard(() => loadChatMessages()), e.target.name === 'q' ? 300 : 0);
+});
+$('#chat-filter').addEventListener('submit', (e) => e.preventDefault());
+
+$('#chat-list').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-chat-room], [data-chat-from]');
+  if (!b) return;
+  const f = $('#chat-filter');
+  if (b.dataset.chatRoom != null) f.room.value = b.dataset.chatRoom;
+  if (b.dataset.chatFrom != null) f.from.value = b.dataset.chatFrom;
+  chatLimit = 200;
+  guard(() => loadChatMessages())();
+});
+
+$('#chat-more').addEventListener('click', guard(async () => {
+  chatLimit = Math.min(chatLimit * 2, 5000);
+  await loadChatMessages();
+}));
+
+$('#chat-enabled').addEventListener('change', guard(async (e) => {
+  const on = e.target.checked;
+  if (on && !confirm('Record chat messages? Admins can then read every GeoChat message sent through this server, including one-to-one messages. Let your users know.')) {
+    e.target.checked = false;
+    return;
+  }
+  await api('PUT', 'api/chat/settings', { enabled: on });
+  toast(on ? 'Chat recording on' : 'Chat recording off');
+  loadChat();
+}));
+
+$('#chat-clear').addEventListener('click', guard(async () => {
+  if (!confirm('Delete every recorded chat message? This cannot be undone. Export first if you need a copy.')) return;
+  await api('DELETE', 'api/chat');
+  toast('Chat log cleared');
+  loadChat();
 }));
 
 // ---------- packages ----------

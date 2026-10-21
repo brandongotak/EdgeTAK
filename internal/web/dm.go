@@ -30,6 +30,7 @@ const (
 // Start registers the Inbox hook and the server contact. Call once.
 func (s *Server) Start(ctx context.Context) {
 	s.Router.AddHook(s.inboxHook)
+	s.Router.AddHook(s.chatHook)
 	s.Router.SetPresence(s.presenceEvent)
 	s.videoStart(ctx)
 	s.retentionStart(ctx)
@@ -93,7 +94,7 @@ func (s *Server) directEvent(toUID, toCallsign, from, text string) *cot.Event {
 }
 
 // sendDirect sends text privately to each target that has identified itself.
-func (s *Server) sendDirect(targets []*router.Client, text string) (delivered, skipped int) {
+func (s *Server) sendDirect(targets []*router.Client, text, admin string) (delivered, skipped int) {
 	sc := s.Store.ServerContact()
 	presence, from := s.presenceEvent(), s.contactCallsign(sc)
 	for _, c := range targets {
@@ -105,7 +106,9 @@ func (s *Server) sendDirect(targets []*router.Client, text string) (delivered, s
 		if presence != nil {
 			c.Send(presence) // make sure the sender is a known contact first
 		}
-		c.Send(s.directEvent(uid, firstNonEmpty(cs, uid), from, text))
+		ev := s.directEvent(uid, firstNonEmpty(cs, uid), from, text)
+		c.Send(ev)
+		s.logConsoleChat(ev, admin)
 		delivered++
 	}
 	return delivered, skipped
@@ -217,7 +220,7 @@ func (s *Server) replyDirect(w http.ResponseWriter, r *http.Request, id *identit
 		jsonError(w, http.StatusNotFound, "that device is not connected")
 		return
 	}
-	delivered, _ := s.sendDirect(target, strings.TrimSpace(req.Text))
+	delivered, _ := s.sendDirect(target, strings.TrimSpace(req.Text), id.Username)
 	_, cs := target[0].Identity()
 	s.history.add(sendRecord{Time: time.Now().UTC(), Admin: id.Username, Kind: "direct", Summary: truncate(strings.TrimSpace(req.Text), 80),
 		To: "reply to " + cs, Delivered: delivered})

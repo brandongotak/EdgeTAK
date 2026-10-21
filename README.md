@@ -76,6 +76,11 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   messages. A device table lists each device's battery (with history and
   drain rate), last report, GPS fix and connection, worst problems first.
   System figures need Linux; elsewhere only EdgeTAK's own are shown.
+- **Chat log** (optional, off by default): records GeoChat messages sent
+  through the server (All Chat Rooms, team and group chats, one-to-one
+  messages and the console's own), with search, filters by conversation,
+  sender and time, and CSV or JSON export for after-action reviews. How long
+  messages are kept is a data retention rule.
 - **Certificate status**: when the CA, the server certificate, the public
   certificate and every device certificate expire, with how each one renews.
   Device certificates are flagged a set number of days before they expire
@@ -84,7 +89,7 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   the Health tab and in the system log.
 - **Data retention**: how long to keep data packages, idle missions, Inbox
   messages, pending sign-ups, old invites and expired certificate records
-  (Dashboard). Rules run hourly, show what they would remove before you save,
+  (Settings tab). Rules run hourly, show what they would remove before you save,
   and never remove files a mission uses or records of certificates that are
   still valid.
 - **Install as an app**: the console installs on phones and desktops

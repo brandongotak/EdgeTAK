@@ -170,6 +170,8 @@ type db struct {
 	Retention RetentionSettings `json:"retention"`
 
 	CertWarnDays int `json:"cert_warn_days"` // flag certificates this long before they expire (0 = default)
+
+	ChatLog ChatLogSettings `json:"chat_log"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -181,6 +183,12 @@ type RetentionSettings struct {
 	RequestsDays     int `json:"requests_days"`      // pending sign-up requests (auto-rejected)
 	InvitesDays      int `json:"invites_days"`       // used-up, expired or revoked invites
 	CertsDays        int `json:"certs_days"`         // records of certificates expired this long ago
+	ChatDays         int `json:"chat_days"`          // chat log messages
+}
+
+// ChatLogSettings controls recording of GeoChat messages (off by default).
+type ChatLogSettings struct {
+	Enabled bool `json:"enabled"`
 }
 
 // VideoSettings controls publishing to the server's media server without
@@ -550,6 +558,19 @@ func (s *Store) SetRetentionSettings(r RetentionSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.Retention = r
+	return s.save()
+}
+
+func (s *Store) ChatLogSettings() ChatLogSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.ChatLog
+}
+
+func (s *Store) SetChatLogSettings(c ChatLogSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.ChatLog = c
 	return s.save()
 }
 
