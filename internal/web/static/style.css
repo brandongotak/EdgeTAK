@@ -60,6 +60,7 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .tabs { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
 .tabs button { background: transparent; border-color: transparent; color: var(--muted); white-space: nowrap; }
 .tabs button.active { color: var(--text); background: var(--panel-2); border-color: var(--line); }
+.tab-badge { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 999px; background: var(--warn); color: #111; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
 .tabs button.has-update::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--warn); vertical-align: middle; }
 .who { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 #map-toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
@@ -134,7 +135,8 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
 th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
 tbody tr:hover { background: var(--panel-2); }
-td.actions { text-align: right; display: flex; gap: 6px; justify-content: flex-end; }
+td.actions { text-align: right; white-space: nowrap; }
+td.actions > * + * { margin-left: 6px; }
 .empty td { color: var(--muted); text-align: center; padding: 20px; }
 .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); margin-right: 4px; }
 .pill.ok { color: var(--accent); border-color: currentColor; }
@@ -233,6 +235,12 @@ td.wrap { white-space: normal; max-width: 320px; }
 .issue { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: var(--panel); }
 .issue.critical { border-color: var(--danger); }
 .issue.warning { border-color: var(--warn); }
+.cert-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0 4px; }
+#cert-tiles .stat.alert { border-color: var(--warn); }
+#cert-warn-form label { flex-direction: row; align-items: center; gap: 6px; }
+.days-input { width: 72px; }
+td.renewal { min-width: 260px; white-space: normal; }
+tr.dim td { opacity: .6; }
 .status-icon { font-weight: 700; }
 .status-icon.critical { color: var(--danger); }
 .status-icon.warning { color: var(--warn); }
@@ -294,6 +302,7 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   td:empty { display: none; }
   td.actions { justify-content: flex-start; flex-wrap: wrap; padding-top: 8px; }
   td.actions::before { display: none; }
+  td.actions > * + * { margin-left: 0; }
   td.wrap { max-width: none; }
   .empty td { display: block; padding: 12px 0; }
   .empty td::before { display: none; }

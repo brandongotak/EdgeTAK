@@ -53,6 +53,7 @@
   <div id="workspace" class="workspace">
   <main>
     <section id="tab-dashboard" class="tab">
+      <div id="dash-issues"></div>
       <div class="stats" id="stats"></div>
       <div class="card">
         <h2>Server</h2>
@@ -266,10 +267,36 @@
     </section>
 
     <section id="tab-certs" class="tab" hidden>
+      <div id="cert-issues"></div>
       <div class="card">
-        <div class="card-head"><h2>Issued client certificates</h2><a class="button ghost" href="api/ca.pem">Download CA (PEM)</a></div>
+        <div class="card-head"><h2>Server certificates</h2><a class="button ghost" href="api/ca.pem">Download CA (PEM)</a></div>
+        <div class="table-wrap"><table id="server-certs-table">
+          <thead><tr><th>Certificate</th><th>Used for</th><th>Expires</th><th>Status</th><th>Renewal</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>Device certificates</h2>
+          <form id="cert-warn-form" class="inline-form">
+            <label>Warn <input type="number" name="warn_days" min="1" max="365" required class="days-input"> days before expiry</label>
+            <button class="small" type="submit">Save</button>
+          </form>
+        </div>
+        <div class="stats" id="cert-tiles"></div>
+        <div class="cert-filter">
+          <div class="segmented" role="group" aria-label="Show" id="cert-filter">
+            <button type="button" data-filter="all" class="active">All</button>
+            <button type="button" data-filter="attention">Needs attention</button>
+            <button type="button" data-filter="expiring">Expiring</button>
+            <button type="button" data-filter="expired">Expired</button>
+            <button type="button" data-filter="revoked">Revoked</button>
+          </div>
+          <label class="check"><input type="checkbox" id="cert-hide-replaced"> Hide replaced</label>
+        </div>
+        <p class="muted">A certificate is <em>replaced</em> when the same user and device enrolled again since. To renew an expiring one, enroll the device again: in ATAK, edit the server connection and sign in again, or import a new connection package from Connect.</p>
         <div class="table-wrap"><table id="certs-table">
-          <thead><tr><th>Common name</th><th>Client UID</th><th>Serial</th><th>Issued</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Common name</th><th>Client UID</th><th>Serial</th><th>Issued</th><th>Expires</th><th>Status</th><th>In use</th><th></th></tr></thead>
           <tbody></tbody>
         </table></div>
       </div>

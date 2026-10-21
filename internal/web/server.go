@@ -109,6 +109,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.twoFactorRoutes(mux)
 	s.healthRoutes(mux)
 	s.retentionRoutes(mux)
+	s.certStatusRoutes(mux)
 
 	files := http.StripPrefix("/admin/", http.FileServerFS(staticSub()))
 	mux.HandleFunc("GET /admin/", func(w http.ResponseWriter, r *http.Request) {

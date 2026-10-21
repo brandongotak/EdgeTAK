@@ -168,6 +168,8 @@ type db struct {
 	VideoSettings VideoSettings         `json:"video_settings"`
 
 	Retention RetentionSettings `json:"retention"`
+
+	CertWarnDays int `json:"cert_warn_days"` // flag certificates this long before they expire (0 = default)
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -548,6 +550,27 @@ func (s *Store) SetRetentionSettings(r RetentionSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.Retention = r
+	return s.save()
+}
+
+// DefaultCertWarnDays is how long before expiry certificates are flagged
+// unless an admin sets otherwise.
+const DefaultCertWarnDays = 30
+
+// CertWarnDays is how many days before expiry a certificate is flagged.
+func (s *Store) CertWarnDays() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.db.CertWarnDays <= 0 {
+		return DefaultCertWarnDays
+	}
+	return s.db.CertWarnDays
+}
+
+func (s *Store) SetCertWarnDays(n int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.CertWarnDays = n
 	return s.save()
 }
 

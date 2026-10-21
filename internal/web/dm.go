@@ -33,6 +33,7 @@ func (s *Server) Start(ctx context.Context) {
 	s.Router.SetPresence(s.presenceEvent)
 	s.videoStart(ctx)
 	s.retentionStart(ctx)
+	s.certWatchStart(ctx)
 	go func() {
 		t := time.NewTicker(presenceRefresh)
 		defer t.Stop()

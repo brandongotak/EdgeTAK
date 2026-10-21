@@ -225,6 +225,7 @@ async function loadDashboard() {
     ['Memory', `${st.memory_mb} MB`],
   ];
   $('#stats').innerHTML = tiles.map(([k, v]) => `<div class="stat"><div class="v">${esc(v)}</div><div class="k">${esc(k)}</div></div>`).join('');
+  if (Date.now() - certCheckedAt > 60000) dashCertIssues().catch(() => {}); // the dashboard polls every 3 s; certificates change slowly
 
   const l = st.listeners;
   const info = [
@@ -1927,23 +1928,114 @@ $('#groups-table').addEventListener('click', guard(async (e) => {
 
 // ---------- certificates ----------
 
+let certStatus = null;
+let certCheckedAt = 0;
+
+// Certificate warnings at the top of the Dashboard, with a way to the details.
+async function dashCertIssues() {
+  certCheckedAt = Date.now();
+  const st = await api('GET', 'api/certs/status');
+  certBadge(st);
+  const issues = st.issues.filter((i) => i.level !== 'info');
+  $('#dash-issues').innerHTML = issues.length ? issueList(issues) + '<p><button type="button" class="small" data-goto="certs">Open Certificates</button></p>' : '';
+}
+
+$('#dash-issues').addEventListener('click', (e) => {
+  if (e.target.dataset.goto) selectTab(e.target.dataset.goto);
+});
+
+const CERT_PILL = { valid: 'ok', expiring: 'warn', expired: 'bad', revoked: 'bad', pending: '' };
+
+function daysLeftText(d) {
+  if (d < 0) return `expired ${plural(-d, 'day')} ago`;
+  if (d === 0) return 'expires today';
+  return `${plural(d, 'day')} left`;
+}
+
+// The server certificate can cover a dozen addresses; show a few, the rest on hover.
+function hostList(hosts) {
+  if (!hosts?.length) return '';
+  const more = hosts.length > 4 ? ` <span title="${esc(hosts.slice(4).join('\n'))}">+${hosts.length - 4} more</span>` : '';
+  return `<div class="muted mono">${esc(hosts.slice(0, 4).join(', '))}${more}</div>`;
+}
+
+const issueList = (issues) => issues.map((i) => `<div class="issue ${i.level}">${statusBadge(i.level)} <span>${esc(i.text)}</span></div>`).join('');
+
+// The Certificates tab shows how many certificates need attention.
+function certBadge(st) {
+  const n = st.report.summary.attention || 0;
+  const serious = st.issues.some((i) => i.level !== 'info');
+  const tab = $('#tabs [data-tab="certs"]');
+  let b = tab.querySelector('.tab-badge');
+  if (!serious) { b?.remove(); return; }
+  if (!b) { b = document.createElement('span'); b.className = 'tab-badge'; tab.append(b); }
+  const server = st.report.server.filter((c) => c.state === 'expiring' || c.state === 'expired').length;
+  b.textContent = n + server;
+  b.title = 'Certificates that need attention';
+}
+
 async function loadCerts() {
-  const certs = await api('GET', 'api/certs');
-  const now = Date.now();
+  certStatus = await api('GET', 'api/certs/status');
+  const rep = certStatus.report;
+  certBadge(certStatus);
+  $('#cert-issues').innerHTML = issueList(certStatus.issues);
+  const form = $('#cert-warn-form');
+  if (document.activeElement !== form.warn_days) form.warn_days.value = rep.warn_days;
+
+  // Cells with several parts get one wrapper so phone layouts (one flex row per cell) keep them together.
+  $('#server-certs-table tbody').innerHTML = rep.server.map((c) => `<tr>
+      <td><div><strong>${esc(c.name)}</strong>${c.subject ? `<div class="muted">${esc(c.subject)}</div>` : ''}${hostList(c.hosts)}</div></td>
+      <td>${esc(c.kind === 'ca' ? c.ports : c.ports ? 'ports ' + c.ports : '—')}</td>
+      <td>${c.expires ? esc(new Date(c.expires).toLocaleDateString()) : '—'}</td>
+      <td><div><span class="pill ${CERT_PILL[c.state]}">${esc(c.state)}</span>${c.expires ? `<div class="muted">${esc(daysLeftText(c.days_left))}</div>` : '<div class="muted">waiting for Let\'s Encrypt</div>'}</div></td>
+      <td class="renewal"><div>${c.auto_renew ? '<span class="pill ok">automatic</span> ' : '<span class="pill">manual</span> '}<span class="muted">${esc(c.renewal)}</span></div></td>
+    </tr>`).join('');
+
+  const s = rep.summary;
+  const tiles = [['Needs attention', s.attention || 0, 'attention'], ['Valid', s.valid || 0, 'valid'], [`Expiring (${rep.warn_days} days)`, s.expiring || 0, 'expiring'],
+    ['Expired', s.expired || 0, 'expired'], ['Revoked', s.revoked || 0, 'revoked'], ['Replaced', s.replaced || 0, '']];
+  $('#cert-tiles').innerHTML = tiles.map(([k, v, f]) => `<div class="stat${f === 'attention' && v ? ' alert' : ''}"><div class="v">${v}</div><div class="k">${esc(k)}</div></div>`).join('');
+  renderCertTable();
+}
+
+function renderCertTable() {
+  if (!certStatus) return;
+  const filter = prefs.get('certs.filter', 'all');
+  const hideReplaced = prefs.get('certs.hideReplaced', false);
+  for (const b of $('#cert-filter').children) b.classList.toggle('active', b.dataset.filter === filter);
+  $('#cert-hide-replaced').checked = hideReplaced;
+  const certs = certStatus.report.certs.filter((c) => (filter === 'all' || (filter === 'attention' ? c.attention : c.state === filter))
+    && !(hideReplaced && c.replaced && !c.in_use?.length));
   $('#certs-table tbody').innerHTML = certs.map((c) => {
-    const expired = new Date(c.expires).getTime() < now;
-    const state = c.revoked ? '<span class="pill bad">revoked</span>' : expired ? '<span class="pill warn">expired</span>' : '<span class="pill ok">valid</span>';
-    return `<tr>
+    const notes = [c.replaced ? '<span class="pill" title="The same user and device enrolled again since">replaced</span>' : '',
+      c.attention ? `<span class="status-icon ${c.state === 'expired' ? 'critical' : 'warning'}" title="Needs attention">${STATUS[c.state === 'expired' ? 'critical' : 'warning'][0]}</span>` : ''].join(' ');
+    return `<tr class="${c.replaced && !c.attention ? 'dim' : ''}">
       <td><strong>${esc(c.common_name)}</strong></td>
       <td class="mono">${esc(c.client_uid || '—')}</td>
       <td class="mono" title="${esc(c.serial)}">${esc(c.serial.slice(0, 12))}…</td>
       <td>${esc(date(c.issued))}</td>
-      <td>${esc(date(c.expires))}</td>
-      <td>${state}</td>
+      <td><div>${esc(new Date(c.expires).toLocaleDateString())}${c.revoked ? '' : `<div class="muted">${esc(daysLeftText(c.days_left))}</div>`}</div></td>
+      <td><div><span class="pill ${CERT_PILL[c.state]}">${esc(c.state)}</span> ${notes}</div></td>
+      <td>${c.in_use?.length ? `<div><span class="pill ok">connected</span> ${esc(c.in_use.join(', '))}</div>` : '<span class="muted">—</span>'}</td>
       <td class="actions">${c.revoked ? '' : `<button class="small danger" data-revoke="${esc(c.serial)}">Revoke</button>`}</td>
     </tr>`;
-  }).join('') || emptyRow(7, 'No certificates issued yet');
+  }).join('') || emptyRow(8, certStatus.report.certs.length ? 'No certificates match' : 'No certificates issued yet');
 }
+
+$('#cert-filter').addEventListener('click', (e) => {
+  const f = e.target.closest('button')?.dataset.filter;
+  if (!f) return;
+  prefs.set('certs.filter', f);
+  renderCertTable();
+});
+$('#cert-hide-replaced').addEventListener('change', (e) => { prefs.set('certs.hideReplaced', e.target.checked); renderCertTable(); });
+
+$('#cert-warn-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  await api('PUT', 'api/certs/settings', { warn_days: Number(e.target.warn_days.value) });
+  toast('Warning period saved');
+  loadCerts();
+}));
 
 $('#certs-table').addEventListener('click', guard(async (e) => {
   const serial = e.target.dataset.revoke;

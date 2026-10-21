@@ -76,6 +76,12 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   messages. A device table lists each device's battery (with history and
   drain rate), last report, GPS fix and connection, worst problems first.
   System figures need Linux; elsewhere only EdgeTAK's own are shown.
+- **Certificate status**: when the CA, the server certificate, the public
+  certificate and every device certificate expire, with how each one renews.
+  Device certificates are flagged a set number of days before they expire
+  (30 by default), marked when a newer enrollment replaced them, and show
+  which device is connected with each one. Warnings appear on the Dashboard,
+  the Health tab and in the system log.
 - **Data retention**: how long to keep data packages, idle missions, Inbox
   messages, pending sign-ups, old invites and expired certificate records
   (Dashboard). Rules run hourly, show what they would remove before you save,

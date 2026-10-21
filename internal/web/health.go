@@ -45,7 +45,7 @@ func (s *Server) healthRoutes(mux *http.ServeMux) {
 
 // serverIssues are warnings about the server itself.
 func (s *Server) serverIssues() []issue {
-	out := []issue{}
+	out := s.certIssues(s.certReport())
 	if s.Health == nil {
 		return out
 	}
