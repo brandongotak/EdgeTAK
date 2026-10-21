@@ -89,6 +89,7 @@ main { padding: 16px; max-width: 1400px; margin: 0 auto; display: flex; flex-dir
 .leaflet-container { background: var(--panel-2); font: inherit; }
 .map-off { padding: 16px; text-align: center; }
 .no-labels .leaflet-tooltip { display: none; }
+.pin-icon { background: none; border: none; }
 .leaflet-control-layers, .leaflet-bar a { background: var(--panel); color: var(--text); border-color: var(--line); }
 .leaflet-control-layers { border: 1px solid var(--line) !important; }
 .leaflet-control-layers-separator { border-top-color: var(--line); }

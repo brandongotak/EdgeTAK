@@ -571,6 +571,7 @@ async function showPackage(hash, { quiet = false } = {}) {
   const meta = packagesByHash[hash];
   const fileName = meta?.name || r.headers.get('content-disposition')?.match(/filename="?([^";]+)"?/)?.[1] || hash.slice(0, 12);
   const layer = L.featureGroup();
+  await loadMilsymbol().catch(() => {}); // without it, units are drawn as coloured dots
   const count = await drawFile(layer, fileName, new Uint8Array(await r.arrayBuffer()));
   if (!count) {
     if (!quiet) toast(`${fileName} has nothing to show on a map`, true);
@@ -667,15 +668,73 @@ function drawCoT(layer, ev) {
       (verts.length > 2 && verts[0][0] === verts.at(-1)[0] && verts[0][1] === verts.at(-1)[1]) || /^u-d-f/.test(type) && fill;
     item = closed ? L.polygon(verts, style) : L.polyline(verts, type.startsWith('b-m-r') ? { ...style, dashArray: '8 6' } : style);
   } else if (Number.isFinite(lat) && Number.isFinite(lon) && !(lat === 0 && lon === 0)) {
-    const color = argb(detail?.querySelector('color')?.getAttribute('argb'), null)?.color || cotAffiliationColor(type);
-    item = L.circleMarker([lat, lon], { radius: 7, weight: 2, color: '#000', fillColor: color, fillOpacity: 0.9 });
+    item = cotPointMarker([lat, lon], type, detail);
   }
   if (!item) return 0;
   item.bindPopup(popup);
-  if (item instanceof L.CircleMarker && !(item instanceof L.Circle)) item.bindTooltip(esc(title), { permanent: true, direction: 'right', offset: [8, 0] });
-  else item.bindTooltip(esc(title), { sticky: true });
+  if (item instanceof L.Marker || (item instanceof L.CircleMarker && !(item instanceof L.Circle))) {
+    item.bindTooltip(esc(title), { permanent: true, direction: 'right', offset: item instanceof L.Marker ? [0, 0] : [8, 0] });
+  } else {
+    item.bindTooltip(esc(title), { sticky: true });
+  }
   item.addTo(layer);
   return 1;
+}
+
+// cotPointMarker draws a point the way ATAK does: MIL-STD-2525 symbols for
+// a-* types, coloured dots for spot map markers, and a pin in the marker's
+// colour for everything else (waypoints, custom icon sets we don't have).
+function cotPointMarker(ll, type, detail) {
+  const iconset = detail?.querySelector('usericon')?.getAttribute('iconsetpath') || '';
+  const color = argb(detail?.querySelector('color')?.getAttribute('argb'), null)?.color;
+  const spot = type.startsWith('b-m-p-s-m') || iconset.startsWith('COT_MAPPING_SPOTMAP');
+  const sidc = !spot && (iconset === '' || iconset.startsWith('COT_MAPPING_2525')) ? cotToSIDC(type) : null;
+  if (sidc && window.ms) {
+    try {
+      const sym = new ms.Symbol(sidc, { size: 22 });
+      if (sym.isValid()) {
+        const { width, height } = sym.getSize();
+        const a = sym.getAnchor();
+        return L.marker(ll, { icon: L.icon({
+          iconUrl: sym.asCanvas().toDataURL(), iconSize: [width, height], iconAnchor: [a.x, a.y],
+          tooltipAnchor: [width - a.x + 2, height / 2 - a.y], popupAnchor: [0, -a.y],
+        }) });
+      }
+    } catch { /* fall through to a plain marker */ }
+  }
+  if (spot) return L.circleMarker(ll, { radius: 7, weight: 2, color: '#000', fillColor: color || '#ffffff', fillOpacity: 0.95 });
+  if (sidc) return L.circleMarker(ll, { radius: 7, weight: 2, color: '#000', fillColor: cotAffiliationColor(type), fillOpacity: 0.9 });
+  return L.marker(ll, { icon: pinIcon(color && color !== '#ffffff' ? color : '#ffd24c') });
+}
+
+// cotToSIDC maps a CoT atom type (a-f-G-U-C-I) to a 2525B symbol code
+// (SFGPUCI--------).
+function cotToSIDC(type) {
+  const p = type.split('-');
+  if (p[0] !== 'a' || p.length < 3) return null;
+  const aff = { f: 'F', h: 'H', u: 'U', n: 'N', a: 'A', s: 'S', j: 'J', k: 'K', p: 'P', o: 'U', x: 'U' }[p[1]] || 'U';
+  const dim = 'PAGSUF'.includes(p[2]) ? p[2] : 'G';
+  const fn = p.slice(3).join('').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return 'S' + aff + dim + 'P' + (fn + '------').slice(0, 6) + '-----';
+}
+
+function pinIcon(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="30" viewBox="0 0 22 30"><path d="M11 29S2 17.5 2 11a9 9 0 0 1 18 0c0 6.5-9 18-9 18z" fill="${color}" stroke="#000" stroke-width="1.5"/><circle cx="11" cy="11" r="3.5" fill="#000" fill-opacity=".5"/></svg>`;
+  return L.divIcon({ className: 'pin-icon', html: svg, iconSize: [22, 30], iconAnchor: [11, 29], tooltipAnchor: [10, -18], popupAnchor: [0, -26] });
+}
+
+// The 2525 symbol library is large, so it loads the first time a package is shown.
+let milsymbolLoading = null;
+function loadMilsymbol() {
+  if (window.ms) return Promise.resolve();
+  milsymbolLoading ||= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/milsymbol@2.2.0/dist/milsymbol.js';
+    s.onload = resolve;
+    s.onerror = () => { milsymbolLoading = null; reject(new Error('symbol library unavailable')); };
+    document.head.appendChild(s);
+  });
+  return milsymbolLoading;
 }
 
 // MIL-STD-2525 affiliation colours for points without their own colour.
