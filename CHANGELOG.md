@@ -10,6 +10,24 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.16.0 (2026-10-22)
+
+### Added
+- **Plugins from tak.gov** (Data → Plugins): link a tak.gov account and add
+  its plugins to the update server in one click.
+  - **Linking** uses tak.gov's device sign-in: the console shows a code,
+    you confirm it at tak.gov. EdgeTAK keeps only the refresh token (never
+    the password); **Unlink** forgets it and signs it out at tak.gov.
+  - **Browse** the plugins tak.gov lists for a product and ATAK version
+    (defaulting to the newest version this server has plugins for), with
+    their icons; ones already on the server are marked.
+  - **Add** downloads the APK, checks it against tak.gov's hash, and adds
+    it like an upload; tak.gov's icon is used when the APK has none.
+
+### Fixed
+- On phones, the plugin list's name column no longer splits the name,
+  package and description into narrow columns.
+
 ## v0.15.0 (2026-10-22)
 
 ### Added

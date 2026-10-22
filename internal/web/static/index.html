@@ -643,6 +643,32 @@
           <tbody></tbody>
         </table></div>
       </div>
+      <div class="card" id="takgov-card">
+        <div class="card-head"><h2>Plugins from tak.gov</h2><span id="takgov-status"></span></div>
+        <div id="takgov-unlinked" hidden>
+          <p class="muted">Link a tak.gov account to browse the plugins tak.gov publishes for each ATAK version and add them to this update server in one click. You sign in at tak.gov; EdgeTAK never sees your password and keeps only a sign-in token, which you can unlink at any time.</p>
+          <div class="inline-form"><button class="primary" id="takgov-link">Link tak.gov account</button></div>
+        </div>
+        <div id="takgov-pending" class="stack" hidden>
+          <p>Open tak.gov, sign in and confirm this code:</p>
+          <div class="inline-form"><span class="code-big mono" id="takgov-code"></span> <a class="button primary" id="takgov-open" target="_blank" rel="noopener">Open tak.gov</a> <button class="ghost" id="takgov-cancel">Cancel</button></div>
+          <p class="muted" id="takgov-wait">Waiting for you to sign in…</p>
+        </div>
+        <div id="takgov-linked" hidden>
+          <form id="takgov-form" class="inline-form">
+            <label>Product <input name="product" list="takgov-products" required class="days-input" style="width:9em"></label>
+            <datalist id="takgov-products"><option value="ATAK-CIV"><option value="ATAK-MIL"><option value="ATAK-GOV"></datalist>
+            <label>ATAK version <input name="version" required pattern="[0-9]+(\.[0-9]+)*" placeholder="5.6.0" class="days-input" style="width:6em"></label>
+            <button class="primary" type="submit">Show plugins</button>
+            <input type="search" id="takgov-filter" placeholder="Filter" hidden>
+            <button class="ghost" type="button" id="takgov-unlink">Unlink</button>
+          </form>
+          <div class="table-wrap"><table id="takgov-table" hidden>
+            <thead><tr><th></th><th>Name</th><th>Version</th><th>Size</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+      </div>
     </section>
 
     <section id="tab-maps" class="tab" hidden>

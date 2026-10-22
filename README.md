@@ -121,7 +121,8 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   install and update them from ATAK's **Plugins** screen. Names, versions,
   icons and the ATAK version each plugin is built for are read from the
   APK; each device is offered the builds its ATAK version runs. Device profiles
-  point ATAK at it. See [Plugins](#plugins).
+  point ATAK at it. Link a tak.gov account to add tak.gov's plugins in one
+  click. See [Plugins](#plugins).
 - **Device profiles** (Groups tab): settings and files sent to the TAK
   devices of a group's members, or of every user, as on the official server.
   - **Contents:** ATAK settings (entered as key, type and value), `.pref`
@@ -552,6 +553,26 @@ EdgeTAK draws itself. Gradients are not drawn, and an icon EdgeTAK cannot
 draw shows as a plain placeholder. **Change icon** uploads your own (PNG,
 JPEG or WebP); a newer build without a readable icon keeps the icon of the
 build it replaces.
+
+#### Plugins from tak.gov
+
+Link a tak.gov account to add the plugins tak.gov publishes without
+downloading and uploading them by hand:
+
+1. **Link tak.gov account** shows a code. **Open tak.gov**, sign in and
+   confirm the code; the console notices within a few seconds. EdgeTAK never
+   sees the password: it keeps only tak.gov's sign-in (refresh) token, which
+   tak.gov replaces each time it is used.
+2. Pick the **product** (ATAK-CIV, or another your account can see) and
+   **ATAK version**, and **Show plugins**. Plugins already on this server
+   are marked.
+3. **Add** downloads the plugin from tak.gov, checks it against the hash
+   tak.gov lists, and adds it to the update server like an upload.
+
+**Unlink** forgets the token (and signs it out at tak.gov); plugins already
+added stay. The server needs to reach `tak.gov` and `auth.tak.gov` over
+HTTPS. If the account is unused for long enough that tak.gov ends the
+sign-in, the console asks to link again.
 
 ### Federation
 

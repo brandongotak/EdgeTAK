@@ -144,7 +144,7 @@ const loaders = {
   signups: loadSignups,
   certs: loadCerts,
   packages: loadPackages,
-  plugins: loadApps,
+  plugins: () => Promise.all([loadApps(), loadTakGov()]),
   maps: () => Promise.all([loadDrawings(), loadOfflineMaps()]),
   missions: loadMissions,
   video: loadVideo,
@@ -2530,7 +2530,7 @@ function renderApps(r) {
     const flavor = a.plugin_api ? a.plugin_api.split('.').pop() : '';
     return `<tr>
     <td><img class="app-icon" src="api/apps/${esc(a.sha256)}/icon" alt=""></td>
-    <td><strong>${esc(a.name)}</strong><div class="muted mono">${esc(a.package)}</div>${a.description && a.description !== a.name ? `<div class="muted">${esc(a.description.length > 120 ? a.description.slice(0, 120) + "…" : a.description)}</div>` : ''}</td>
+    <td><div><strong>${esc(a.name)}</strong><div class="muted mono">${esc(a.package)}</div>${a.description && a.description !== a.name ? `<div class="muted">${esc(a.description.length > 120 ? a.description.slice(0, 120) + "…" : a.description)}</div>` : ''}</div></td>
     <td>${esc(a.version || String(a.version_code))}</td>
     <td>${a.plugin_api ? `<span class="pill" title="Built for ATAK ${esc(a.atak_version)}; runs on it and later versions">ATAK ${esc(a.atak_version)}+${flavor && flavor !== a.atak_version ? ' ' + esc(flavor) : ''}</span>` : '<span class="pill">App</span>'}</td>
     <td>${a.min_sdk ? esc(ANDROID[a.min_sdk] ? ANDROID[a.min_sdk] + '+' : 'API ' + a.min_sdk) : ''}</td>
@@ -2596,6 +2596,116 @@ $('#apk-table').addEventListener('click', guard(async (e) => {
   const id = e.target.dataset.delApp;
   if (!id || !confirm(`Delete ${e.target.dataset.name}? Devices can no longer install or update it from here.`)) return;
   renderApps(await api('DELETE', `api/apps/${encodeURIComponent(id)}`));
+}));
+
+// ---------- tak.gov plugins ----------
+
+let takgov = {};
+let takgovPlugins = [];
+let takgovTimer = null;
+
+function renderTakGov(v) {
+  takgov = v;
+  const pending = !v.linked && v.pending;
+  $('#takgov-unlinked').hidden = v.linked || !!pending;
+  $('#takgov-pending').hidden = !pending;
+  $('#takgov-linked').hidden = !v.linked;
+  $('#takgov-status').innerHTML = v.linked
+    ? `<span class="pill ok" title="Linked ${esc(date(v.linked_at))}${v.linked_by ? ' by ' + esc(v.linked_by) : ''}">linked${v.account ? ': ' + esc(v.account) : ''}</span>`
+    : '<span class="pill">not linked</span>';
+  if (pending) {
+    $('#takgov-code').textContent = v.pending.user_code;
+    $('#takgov-open').href = v.pending.verification_uri_complete || v.pending.verification_uri;
+  }
+  const f = $('#takgov-form');
+  if (!f.product.value) f.product.value = v.product;
+  if (!f.version.value) f.version.value = v.product_version;
+  clearTimeout(takgovTimer);
+  if (pending) takgovTimer = setTimeout(pollTakGov, (v.pending.interval || 5) * 1000);
+}
+
+async function loadTakGov() {
+  renderTakGov(await api('GET', 'api/takgov'));
+  if (takgov.linked && !takgovPlugins.length && $('#takgov-table').hidden) showTakGovPlugins().catch(() => {});
+}
+
+async function pollTakGov() {
+  if (!takgov.pending || $('#tab-plugins').hidden) return;
+  let v;
+  try {
+    v = await api('POST', 'api/takgov/poll');
+  } catch (ex) {
+    $('#takgov-wait').textContent = ex.message;
+    renderTakGov({ ...takgov, pending: null });
+    return;
+  }
+  renderTakGov(v);
+  if (v.state === 'linked') {
+    toast(`Linked to tak.gov${v.account ? ' as ' + v.account : ''}`);
+    showTakGovPlugins().catch((ex) => toast(ex.message));
+  } else if (v.state === 'expired' || v.state === 'denied') {
+    toast(v.state === 'denied' ? 'Sign-in was declined at tak.gov' : 'The code expired; link again');
+  }
+}
+
+function renderTakGovPlugins() {
+  const q = $('#takgov-filter').value.trim().toLowerCase();
+  const list = takgovPlugins.filter((p) => !q || `${p.display_name} ${p.package_name} ${p.description}`.toLowerCase().includes(q));
+  $('#takgov-table').hidden = false;
+  $('#takgov-filter').hidden = !takgovPlugins.length;
+  $('#takgov-table tbody').innerHTML = list.map((p, i) => `<tr>
+    <td>${p.icon_url ? `<img class="app-icon" loading="lazy" src="api/takgov/icon?url=${encodeURIComponent(p.icon_url)}" alt="" onerror="this.style.visibility='hidden'">` : ''}</td>
+    <td><div><strong>${esc(p.display_name || p.package_name)}</strong><div class="muted mono">${esc(p.package_name)}</div>${p.description ? `<div class="muted">${esc(p.description.length > 160 ? p.description.slice(0, 160) + '…' : p.description)}</div>` : ''}</div></td>
+    <td>${esc(p.version)}</td>
+    <td>${p.apk_size_bytes ? bytes(p.apk_size_bytes) : ''}</td>
+    <td class="actions">${p.installed ? '<span class="pill ok">on this server</span>' : `<button class="small primary" data-takgov-install="${takgovPlugins.indexOf(p)}">Add</button>`}</td></tr>`).join('')
+    || emptyRow(5, takgovPlugins.length ? 'No plugin matches' : 'tak.gov lists no plugins for this product and version');
+}
+
+async function showTakGovPlugins() {
+  const f = $('#takgov-form');
+  const r = await api('GET', `api/takgov/plugins?product=${encodeURIComponent(f.product.value.trim())}&product_version=${encodeURIComponent(f.version.value.trim())}`);
+  takgovPlugins = r.plugins;
+  renderTakGovPlugins();
+}
+
+$('#takgov-link').addEventListener('click', guard(async () => {
+  $('#takgov-wait').textContent = 'Waiting for you to sign in…';
+  renderTakGov(await api('POST', 'api/takgov/link'));
+}));
+$('#takgov-cancel').addEventListener('click', () => {
+  clearTimeout(takgovTimer);
+  renderTakGov({ ...takgov, pending: null });
+});
+$('#takgov-unlink').addEventListener('click', guard(async () => {
+  if (!confirm('Unlink the tak.gov account? Plugins already added stay on this server.')) return;
+  renderTakGov(await api('DELETE', 'api/takgov'));
+  takgovPlugins = [];
+  $('#takgov-table').hidden = true;
+  $('#takgov-filter').hidden = true;
+}));
+$('#takgov-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  await showTakGovPlugins();
+}));
+$('#takgov-filter').addEventListener('input', renderTakGovPlugins);
+$('#takgov-table').addEventListener('click', guard(async (e) => {
+  const btn = e.target.closest('[data-takgov-install]');
+  if (!btn) return;
+  const p = takgovPlugins[Number(btn.dataset.takgovInstall)];
+  btn.disabled = true;
+  btn.textContent = 'Adding…';
+  try {
+    const r = await api('POST', 'api/takgov/install', { apk_url: p.apk_url, apk_hash: p.apk_hash, icon_url: p.icon_url, name: p.display_name });
+    renderApps(r);
+    p.installed = true;
+    renderTakGovPlugins();
+    toast(`Added ${r.added.join(', ')}`);
+  } catch (ex) {
+    btn.disabled = false;
+    btn.textContent = 'Add';
+    throw ex;
+  }
 }));
 
 $('#package-form').addEventListener('submit', guard(async (e) => {

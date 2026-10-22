@@ -216,6 +216,8 @@ type db struct {
 	LDAP LDAPSettings `json:"ldap"`
 
 	Events map[string]*Event `json:"events"` // by id
+
+	TakGov TakGovLink `json:"takgov"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -1821,6 +1823,32 @@ func (s *Store) UpsertDirectoryUser(name, dn string, groups []string, admin *boo
 	}
 	s.ensureGroupsLocked(groups)
 	return cloneUser(u), s.save()
+}
+
+// ---- tak.gov ----
+
+// TakGovLink is the tak.gov account EdgeTAK is linked to, for downloading
+// plugins: its refresh token (secret; tak.gov replaces it at each use).
+type TakGovLink struct {
+	RefreshToken string    `json:"refresh_token,omitempty"`
+	Account      string    `json:"account,omitempty"` // the account's name or email, for display
+	Linked       time.Time `json:"linked,omitzero"`
+	LinkedBy     string    `json:"linked_by,omitempty"`
+	Product      string    `json:"product,omitempty"`         // last browsed, e.g. ATAK-CIV
+	Version      string    `json:"product_version,omitempty"` // e.g. 5.6.0
+}
+
+func (s *Store) TakGov() TakGovLink {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.TakGov
+}
+
+func (s *Store) UpdateTakGov(fn func(t *TakGovLink)) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fn(&s.db.TakGov)
+	return s.save()
 }
 
 // ---- events ----

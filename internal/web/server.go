@@ -63,6 +63,10 @@ type Server struct {
 	// Addrs maps listener names (tcp, tls, https, enroll, http) to their
 	// bound addresses. It is set before serving starts and not modified.
 	Addrs map[string]string
+	// TakGovAuthURL, TakGovAPIURL and TakGovClient reach tak.gov (tests
+	// point them at a fake one).
+	TakGovAuthURL, TakGovAPIURL string
+	TakGovClient                *http.Client
 
 	history       sendHistory  // admin "send to devices" log
 	signupLimiter *rateLimiter // public sign-up attempts per address
@@ -73,6 +77,7 @@ type Server struct {
 	lost          lostState
 	fences        geofenceState
 	ldap          ldapState
+	takgov        takGovState
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -133,6 +138,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.emergencyRoutes(mux)
 	s.profileRoutes(mux)
 	s.appRoutes(mux)
+	s.takGovRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)
