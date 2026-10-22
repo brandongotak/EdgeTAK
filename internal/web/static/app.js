@@ -1316,12 +1316,67 @@ async function loadHistorySettings() {
     : `Recording is off.${st.points ? ` Stored from before: ${st.tracks} device(s), ${st.points} points.` : ''}`;
 }
 
+// ---- history export ----
+
+function exportRange() {
+  // The inputs hold minutes: To includes its whole minute.
+  const since = new Date($('#export-since').value), until = new Date(new Date($('#export-until').value).getTime() + 59999);
+  if (isNaN(since) || isNaN(until) || until <= since) throw new Error('Choose a time range: From before To');
+  return { since: since.toISOString(), until: until.toISOString() };
+}
+
+const exportUIDs = () => checkedIn('#export-devices');
+
+async function loadExportDevices() {
+  let range;
+  try { range = exportRange(); } catch { $('#export-devices').innerHTML = ''; return; }
+  const tracks = await api('GET', `api/history?since=${encodeURIComponent(range.since)}&until=${encodeURIComponent(range.until)}`);
+  $('#export-summary').textContent = tracks.length ? `${plural(tracks.length, 'device')} with positions in this time range` : 'No recorded positions in this time range';
+  $('#export-devices').innerHTML = tracks.map((t) => `<label class="chip" title="${esc(t.uid)} · ${plural(t.points.length, 'position')}">
+    <input type="checkbox" value="${esc(t.uid)}" checked>${esc(t.callsign || t.uid)}</label>`).join('');
+  for (const b of ['#export-kml', '#export-gpx', '#export-overlay']) $(b).disabled = !tracks.length;
+}
+
+function exportDownload(format) {
+  const { since, until } = exportRange();
+  const uids = exportUIDs();
+  if (!uids.length) throw new Error('Choose at least one device');
+  const q = new URLSearchParams({ format, since, until });
+  // Every device ticked: export them all (devices recorded since are included).
+  if (uids.length !== $('#export-devices').querySelectorAll('input').length) for (const u of uids) q.append('uid', u);
+  const a = Object.assign(document.createElement('a'), { href: `api/history/export?${q}` });
+  document.body.append(a);
+  a.click();
+  a.remove();
+}
+
+$('#export-kml').addEventListener('click', guard(() => exportDownload('kml')));
+$('#export-gpx').addEventListener('click', guard(() => exportDownload('gpx')));
+$('#export-since').addEventListener('change', guard(loadExportDevices));
+$('#export-until').addEventListener('change', guard(loadExportDevices));
+
+$('#export-overlay').addEventListener('click', guard(async () => {
+  const range = exportRange();
+  const uids = exportUIDs();
+  if (!uids.length) throw new Error('Choose at least one device');
+  const name = prompt('Name the overlay', '');
+  if (name === null) return;
+  const r = await api('POST', 'api/history/overlay', { ...range, uids, name });
+  $('#history-dialog').close();
+  selectTab('overlays');
+  toast(`${r.name} added to Overlays. It isn't sent yet: choose its groups with Edit, then Resume sending.`);
+}));
+
 $('#history-open').addEventListener('click', guard(async () => {
   initMap();
   $('#trails-show').checked = !!(map && map.hasLayer(trailsLayer));
   $('#trails-window').value = String(trailWindow());
   await loadHistorySettings();
+  // Export defaults to the trails window shown on the map.
+  $('#export-until').value = localInput(new Date());
+  $('#export-since').value = localInput(new Date(Date.now() - Math.min(trailWindow(), 43200) * 60000));
   $('#history-dialog').showModal();
+  loadExportDevices().catch(() => {});
 }));
 
 $('#history-save').addEventListener('click', guard(async () => {
@@ -3231,7 +3286,8 @@ async function loadMissions() {
       `<span class="pill">${esc(ROLE_LABELS[m.default_role] || m.default_role)}</span>`,
     ].join('');
     return `<tr>
-      <td><strong>${esc(m.name)}</strong>${m.description ? `<div class="muted">${esc(m.description)}</div>` : ''}</td>
+      <td><div><strong>${esc(m.name)}</strong>${m.description ? `<div class="muted">${esc(m.description)}</div>` : ''}
+        ${m.items || m.files ? `<div><button class="small" data-map-mission="${esc(m.name)}">${missionShown(m.name) ? 'Hide on map' : 'Show on map'}</button></div>` : ''}</div></td>
       <td>${esc(m.creator || '—')}<div class="muted mono">${esc(m.creator_uid)}</div></td>
       <td>${groupPills(m.groups)}</td>
       <td>${access}</td>
@@ -3247,7 +3303,71 @@ async function loadMissions() {
   }).join('') || emptyRow(10, 'No missions yet. Create one from Data Sync in ATAK.');
 }
 
+// ---- missions on the map ----
+//
+// A mission's map items (its latest CoT) and the files in it the map can
+// read (KML, KMZ, GeoJSON, CoT, data packages) drawn as one layer.
+
+const missionLayers = new Map(); // name -> { label, layer }
+const MAP_FILE = /\.(kml|kmz|zip|geojson|json|cot|xml)$/i;
+
+const missionShown = (name) => {
+  const m = missionLayers.get(name);
+  return !!(m && map?.hasLayer(m.layer));
+};
+
+function hideMission(name) {
+  const m = missionLayers.get(name);
+  if (!m) return;
+  map?.removeLayer(m.layer);
+  layersControl?.removeLayer(m.layer);
+  delete overlayLayers[m.label];
+  missionLayers.delete(name);
+}
+
+async function showMission(name) {
+  initMap();
+  if (!map) throw new Error('The map library could not be loaded');
+  hideMission(name); // drawn fresh: missions change
+  const path = `/Marti/api/missions/${encodeURIComponent(name)}`;
+  const layer = L.featureGroup();
+  await loadMilsymbol().catch(() => {});
+  let count = 0, skipped = 0;
+  const cot = await fetch(`${path}/cot`);
+  if (!cot.ok) throw new Error(`Could not read the mission (${cot.status})`);
+  count += await drawFile(layer, 'mission.xml', new Uint8Array(await cot.arrayBuffer()));
+  const info = await fetch(path).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  for (const c of info?.data?.[0]?.contents || []) {
+    const f = c.data || {};
+    if (!MAP_FILE.test(f.name || '')) continue;
+    try {
+      const r = await fetch(`/Marti/sync/content?hash=${encodeURIComponent(f.hash)}`);
+      if (r.ok) count += await drawFile(layer, f.name, new Uint8Array(await r.arrayBuffer()));
+    } catch {
+      skipped++;
+    }
+  }
+  if (!count) {
+    toast(`${name} has nothing to show on a map${skipped ? ` (${plural(skipped, 'file')} couldn't be read)` : ''}`, true);
+    return;
+  }
+  const label = `Mission: ${name}`;
+  missionLayers.set(name, { label, layer });
+  overlayLayers[label] = layer;
+  layersControl.addOverlay(layer, label);
+  layer.addTo(map);
+  fitLayer(layer);
+  toast(`${name}: ${plural(count, 'item')} on the map`);
+}
+
 $('#missions-table').addEventListener('click', guard(async (e) => {
+  const show = e.target.dataset.mapMission;
+  if (show) {
+    if (missionShown(show)) hideMission(show);
+    else await showMission(show);
+    loadMissions();
+    return;
+  }
   const name = e.target.dataset.delMission;
   if (!name || !confirm(`Delete mission "${name}"? Subscribers are notified and its change history is lost. Files stay on the Data Packages tab.`)) return;
   await api('DELETE', `api/missions/${encodeURIComponent(name)}`);

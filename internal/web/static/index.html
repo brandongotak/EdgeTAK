@@ -1042,6 +1042,20 @@
         </label>
         <div><button type="button" id="replay-open">▶ Replay this period</button></div>
       </fieldset>
+      <fieldset class="stack wide plain">
+        <legend class="muted">Export trails</legend>
+        <div class="inline-form">
+          <label>From <input type="datetime-local" id="export-since"></label>
+          <label>To <input type="datetime-local" id="export-until"></label>
+        </div>
+        <div class="muted picker-label" id="export-summary">Devices with positions in this time range</div>
+        <div id="export-devices" class="group-picker"></div>
+        <div class="inline-form">
+          <button type="button" id="export-kml">Download KML</button>
+          <button type="button" id="export-gpx">Download GPX</button>
+          <button type="button" id="export-overlay" title="Make an overlay of these trails, to send to devices from the Overlays page">Add as overlay</button>
+        </div>
+      </fieldset>
       <div class="inline-form"><span class="spacer"></span><button class="primary" value="close">Done</button></div>
     </form>
   </dialog>

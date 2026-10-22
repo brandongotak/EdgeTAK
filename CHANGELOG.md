@@ -10,6 +10,24 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.18.0 (2026-10-22)
+
+### Added
+- **History export** (map → History → Export trails): download the chosen
+  devices' trails for a time range as **KML** (Google Earth, ATAK) or
+  **GPX** (GIS and GPS tools). Trails are split where a device went quiet
+  for more than 5 minutes, coloured by team, with start and end points.
+- **Add as overlay** turns those trails into an overlay on the Overlays
+  page, to send to the groups you choose (it isn't sent until you resume
+  it).
+- **Missions on the map** (Data → Missions → Show on map): a Data Sync
+  mission's map items and the files in it the map can read (KML, KMZ,
+  GeoJSON, CoT, data packages) drawn as one layer on the console map, drawn
+  fresh each time so it shows the mission as it is now.
+
+### Fixed
+- Stopped overlays no longer count connected devices as waiting for them.
+
 ## v0.17.0 (2026-10-22)
 
 ### Added

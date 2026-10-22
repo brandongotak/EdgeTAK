@@ -39,7 +39,9 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   uploader's groups.
 - **Data Sync (missions)**: subscriptions and roles, map items and files, the
   change feed, logs, invitations and export. Changes are pushed live to
-  subscribers.
+  subscribers. **Show on map** (Missions tab) draws a mission's map items
+  and the files in it the map can read (KML, KMZ, GeoJSON, CoT, data
+  packages) as one layer on the console map.
 - **Send to devices**: from the admin console, send a chat message or offer
   a data package (including settings `.pref` packages) to everyone, chosen
   groups or chosen devices, with a history of what was sent.
@@ -73,7 +75,10 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   and kept in `history/` in the data directory. The **Trails** overlay
   shows each device's path in its team colour over the last 15 minutes to
   everything kept, and **Replay this period** plays it back with a time
-  slider, play/pause and speeds from 1× to 1200×.
+  slider, play/pause and speeds from 1× to 1200×. **Export trails** downloads
+  the chosen devices' trails for a time range as KML (Google Earth, ATAK) or
+  GPX (GIS and GPS tools), split where a device went quiet for over 5
+  minutes, or adds them as an overlay to send to devices.
 - **Video**: feeds for ATAK's and WinTAK's Video Player, limited by group,
   with camera markers on devices. The installer and the Docker image include
   the MediaMTX media server (on by default): cameras, drones and ATAK publish over RTSP, RTMP or
@@ -547,6 +552,9 @@ routes, points) to devices without passing data packages around by hand:
    and it replaces the old one. **Edit** changes the name and groups; newly
    included devices get it straight away. **Send again** re-offers it to
    every connected device that should have it; **Stop sending** pauses it.
+
+**Add as overlay** in the map's **History** dialog makes an overlay of
+recorded trails; it isn't sent until you choose its groups and resume it.
 
 **Show on map** draws it on the console map. ATAK has no way to be told to
 remove an overlay, so **Delete** only stops EdgeTAK sending it; people

@@ -129,7 +129,7 @@ func (s *Server) overlayViews() []overlayView {
 			}
 		}
 		for _, c := range clients {
-			if uid, _ := c.Identity(); uid != "" && overlayVisible(o, c) && o.Delivered[uid] != o.Version {
+			if uid, _ := c.Identity(); uid != "" && !o.Paused && overlayVisible(o, c) && o.Delivered[uid] != o.Version {
 				v.Waiting++
 			}
 		}
