@@ -49,7 +49,7 @@ func TestServerHealthAlerts(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	a.Web.CheckHealthAlerts(now)                    // first seen down
+	a.Web.CheckHealthAlerts(now)                      // first seen down
 	a.Web.CheckHealthAlerts(now.Add(2 * time.Minute)) // not yet 5 minutes
 	mu.Lock()
 	early := len(titles)

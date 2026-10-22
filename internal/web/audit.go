@@ -105,6 +105,7 @@ var auditActions = map[string]string{
 	"POST /admin/api/video/mediamtx/update":              "Updated MediaMTX",
 	"POST /admin/api/webhooks":                           "Added webhook",
 	"PUT /admin/api/apps/{id}/icon":                      "Changed plugin icon",
+	"PUT /admin/api/apps/{id}/kind":                      "Changed whether an APK is an app or a plugin",
 	"PUT /admin/api/apps/settings":                       "Changed update server settings",
 	"PUT /admin/api/backup/settings":                     "Changed backup settings",
 	"PUT /admin/api/certs/settings":                      "Changed certificate settings",

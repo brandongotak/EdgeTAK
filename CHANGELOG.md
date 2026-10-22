@@ -10,6 +10,15 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.20.2 (2026-10-22)
+
+### Fixed
+- **Plugins**: an app whose APK declares ATAK's plugin API (common for apps
+  built from ATAK's plugin template) was offered to ATAK as a plugin. Each
+  APK now has **Treat as app** / **Treat as plugin**, which overrides the
+  detection; apps are offered to every ATAK version. The list says
+  "Plugin" or "App" and when you set it.
+
 ## v0.20.1 (2026-10-22)
 
 ### Changed

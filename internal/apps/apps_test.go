@@ -131,3 +131,28 @@ func TestIndex(t *testing.T) {
 		t.Errorf("infz = %v", names)
 	}
 }
+
+// TestAppKind covers the admin's choice: an APK declaring a plugin API but
+// set to "app" is listed as an app (no plugin API, offered to every ATAK
+// version), and an app set to "plugin" as a plugin.
+func TestAppKind(t *testing.T) {
+	list := []store.App{
+		{SHA256: "a", Package: "com.example.companion", Name: "Companion", Version: "1.0", VersionCode: 1, PluginAPI: "com.atakmap.app@5.6.0.CIV", Kind: "app"},
+		{SHA256: "b", Package: "com.example.tool", Name: "Tool", Version: "2.0", VersionCode: 2, Kind: "plugin"},
+		{SHA256: "c", Package: "com.example.plug", Name: "Plug", Version: "3.0", VersionCode: 3, PluginAPI: "com.atakmap.app@5.6.0.CIV"},
+	}
+	if got := Select(list, "5.4.0"); len(got) != 2 || got[0].Package != "com.example.companion" || got[1].Package != "com.example.tool" {
+		t.Errorf("ATAK 5.4 is offered %+v", got) // the 5.6 plugin isn't; the app is
+	}
+	rows := strings.Split(strings.TrimSpace(string(ProductInf(list))), "\n")
+	col := func(row string) []string { return strings.Split(row, ",") }
+	if c := col(rows[0]); c[1] != "app" || c[11] != "" {
+		t.Errorf("app row = %v", c)
+	}
+	if c := col(rows[1]); c[1] != "plugin" {
+		t.Errorf("forced plugin row = %v", c)
+	}
+	if c := col(rows[2]); c[1] != "plugin" || c[11] != "com.atakmap.app@5.6.0.CIV" {
+		t.Errorf("plugin row = %v", c)
+	}
+}

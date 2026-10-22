@@ -84,6 +84,31 @@ func (s *Server) appRoutes(mux *http.ServeMux) {
 		w.Write(s.appIcon(a))
 	}))
 	mux.HandleFunc("PUT /admin/api/apps/{id}/icon", s.admin(s.changeAppIcon))
+	// Offer an APK to ATAK as an app or a plugin ("" = as the APK says).
+	mux.HandleFunc("PUT /admin/api/apps/{id}/kind", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
+		var req struct {
+			Kind string `json:"kind"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req); err != nil || (req.Kind != "" && req.Kind != "app" && req.Kind != "plugin") {
+			jsonError(w, http.StatusBadRequest, "choose app or plugin")
+			return
+		}
+		a, ok := s.app(r.PathValue("id"))
+		if !ok {
+			jsonError(w, http.StatusNotFound, "no such APK")
+			return
+		}
+		// Choosing what the APK already says clears the override.
+		if (req.Kind == "plugin") == (a.PluginAPI != "") {
+			req.Kind = ""
+		}
+		if err := s.Store.SetAppKind(a.SHA256, req.Kind); err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		s.Log.Info("ATAK app type changed", "admin", id.Username, "package", a.Package, "kind", firstNonEmpty(req.Kind, "detected"))
+		writeJSON(w, http.StatusOK, s.appsView(r))
+	}))
 	mux.HandleFunc("GET /admin/api/apps/{id}/apk", s.admin(func(w http.ResponseWriter, r *http.Request, _ *identity) {
 		a, ok := s.app(r.PathValue("id"))
 		if !ok {
@@ -130,12 +155,13 @@ func (s *Server) appIcon(a store.App) []byte {
 type appView struct {
 	store.App
 	ATAKVersion string `json:"atak_version,omitempty"`
+	IsPlugin    bool   `json:"is_plugin"` // what ATAK is told
 }
 
 func (s *Server) appsView(r *http.Request) map[string]any {
 	list := []appView{}
 	for _, a := range s.Store.Apps() {
-		list = append(list, appView{App: a, ATAKVersion: apps.ATAKVersion(a.PluginAPI)})
+		list = append(list, appView{App: a, ATAKVersion: apps.ATAKVersion(a.PluginAPI), IsPlugin: a.IsPlugin()})
 	}
 	host := s.Cfg.PublicHost
 	if host == "" {

@@ -583,6 +583,12 @@ The **Plugins** tab is an update server for ATAK, like the one ATAK's
    them over the device's own connection (its certificate, or a username and
    password, which ATAK asks for).
 
+An APK is offered as a **plugin** when its manifest declares ATAK's plugin
+API, and as an **app** otherwise. Some standalone apps declare it anyway
+(apps built from ATAK's plugin template), so ATAK lists them as plugins:
+**Treat as app** (or **Treat as plugin**) on the Plugins page overrides
+the detection, and ATAK picks it up the next time it refreshes the list.
+
 ATAK loads plugins built for its own version or an older one (from 4.10),
 never for a newer one, and asks for its own version's list first. Each
 device is offered, per plugin, the build for the nearest ATAK version at or

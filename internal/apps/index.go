@@ -56,7 +56,7 @@ func ATAKVersion(pluginAPI string) string {
 func Select(all []store.App, version string) []store.App {
 	best := map[string]store.App{}
 	for _, a := range all {
-		if version != "" && a.PluginAPI != "" && !Loads(version, ATAKVersion(a.PluginAPI)) {
+		if version != "" && a.IsPlugin() && a.PluginAPI != "" && !Loads(version, ATAKVersion(a.PluginAPI)) {
 			continue
 		}
 		if b, ok := best[a.Package]; !ok || better(a, b, version) {
@@ -133,9 +133,9 @@ func field(s string) string {
 func ProductInf(list []store.App) []byte {
 	var b strings.Builder
 	for _, a := range list {
-		typ := "app"
-		if a.PluginAPI != "" {
-			typ = "plugin"
+		typ, api := "app", ""
+		if a.IsPlugin() {
+			typ, api = "plugin", a.PluginAPI
 		}
 		desc := a.Description
 		if strings.TrimSpace(desc) == "" {
@@ -146,7 +146,7 @@ func ProductInf(list []store.App) []byte {
 			version = strconv.FormatInt(a.VersionCode, 10)
 		}
 		cols := []string{"Android", typ, field(a.Package), field(a.Name), field(version), strconv.FormatInt(a.VersionCode, 10),
-			APKPath(a), IconPath(a), field(desc), a.SHA256, strconv.Itoa(a.MinSDK), field(a.PluginAPI), strconv.FormatInt(a.Size, 10)}
+			APKPath(a), IconPath(a), field(desc), a.SHA256, strconv.Itoa(a.MinSDK), field(api), strconv.FormatInt(a.Size, 10)}
 		b.WriteString(strings.Join(cols, ",") + "\n")
 	}
 	return []byte(b.String())

@@ -1597,12 +1597,35 @@ type App struct {
 	VersionCode int64     `json:"version_code"`
 	MinSDK      int       `json:"min_sdk"`
 	PluginAPI   string    `json:"plugin_api,omitempty"` // e.g. com.atakmap.app@5.4.0.CIV; empty for apps
+	Kind        string    `json:"kind,omitempty"`       // admin's choice: "app" or "plugin"; empty = by PluginAPI
 	Description string    `json:"description"`
 	Size        int64     `json:"size"`
 	HasIcon     bool      `json:"has_icon"`
 	FileName    string    `json:"file_name"` // as uploaded
 	Uploader    string    `json:"uploader"`
 	Uploaded    time.Time `json:"uploaded"`
+}
+
+// IsPlugin reports whether ATAK is told the APK is a plugin: as the admin
+// chose, else when it declares a plugin API.
+func (a App) IsPlugin() bool {
+	if a.Kind != "" {
+		return a.Kind == "plugin"
+	}
+	return a.PluginAPI != ""
+}
+
+// SetAppKind sets whether an APK is offered as an app or a plugin ("" =
+// detect from the APK).
+func (s *Store) SetAppKind(id, kind string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.db.Apps[id]
+	if !ok {
+		return ErrNotFound
+	}
+	a.Kind = kind
+	return s.save()
 }
 
 // UpdateServerSettings: whether devices are pointed at EdgeTAK's update
