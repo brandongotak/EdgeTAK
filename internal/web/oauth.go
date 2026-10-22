@@ -131,7 +131,7 @@ func (s *Server) oauthToken(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusBadRequest, "unsupported_grant_type", "use grant_type=password")
 		return
 	}
-	u, ok := s.Store.Authenticate(r.Form.Get("username"), r.Form.Get("password"))
+	u, ok := s.authenticate(r.Form.Get("username"), r.Form.Get("password"))
 	if !ok {
 		s.Log.Warn("oauth login failed", "user", r.Form.Get("username"), "remote", r.RemoteAddr)
 		oauthError(w, http.StatusBadRequest, "invalid_grant", "Bad credentials")

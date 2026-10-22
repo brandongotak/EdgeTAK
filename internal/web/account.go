@@ -107,7 +107,7 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusTooManyRequests, "too many failed sign-ins; wait a few minutes")
 		return
 	}
-	u, ok := s.Store.Authenticate(req.Username, req.Password)
+	u, ok := s.authenticate(req.Username, req.Password)
 	if !ok {
 		time.Sleep(500 * time.Millisecond)
 		s.Log.Warn("sign-in failed", "user", req.Username, "remote", r.RemoteAddr)
@@ -190,7 +190,7 @@ func (s *Server) accountMe(w http.ResponseWriter, r *http.Request, u *store.User
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"username": u.Username, "admin": u.Admin, "two_factor": u.TwoFactor(), "groups_in": in, "groups_out": out,
+		"username": u.Username, "admin": u.Admin, "two_factor": u.TwoFactor(), "groups_in": in, "groups_out": out, "directory": u.Source == "ldap",
 		"devices": devices, "certs": certs, "warn_days": rep.WarnDays,
 	})
 }
@@ -204,7 +204,11 @@ func (s *Server) accountPassword(w http.ResponseWriter, r *http.Request, u *stor
 		jsonError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	if _, ok := s.Store.Authenticate(u.Username, req.Current); !ok {
+	if u.Source == "ldap" {
+		jsonError(w, http.StatusBadRequest, "you sign in with your organization's directory password; change it there")
+		return
+	}
+	if _, ok := s.authenticate(u.Username, req.Current); !ok {
 		time.Sleep(500 * time.Millisecond)
 		jsonError(w, http.StatusForbidden, "your current password is wrong")
 		return

@@ -784,7 +784,7 @@ func (s *Server) checkVideoPassword(user, pass string) (*store.User, bool) {
 			return u, true
 		}
 	}
-	u, ok := s.Store.Authenticate(user, pass)
+	u, ok := s.authenticate(user, pass)
 	if !ok {
 		return nil, false
 	}

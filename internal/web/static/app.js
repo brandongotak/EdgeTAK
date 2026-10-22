@@ -125,7 +125,7 @@ $('#logout').addEventListener('click', async () => {
 const loaders = {
   dashboard: loadDashboard,
   health: loadHealth,
-  users: loadUsers,
+  users: () => Promise.all([loadUsers(), loadLDAP()]),
   groups: () => Promise.all([loadGroups(), loadProfiles()]),
   signups: loadSignups,
   certs: loadCerts,
@@ -1767,14 +1767,14 @@ async function loadUsers() {
   usersByName = Object.fromEntries(users.map((u) => [u.username, u]));
   renderNewUserPicker();
   $('#users-table tbody').innerHTML = users.map((u) => `<tr>
-    <td><strong>${esc(u.username)}</strong></td>
+    <td><strong>${esc(u.username)}</strong>${u.source === 'ldap' ? ` <span class="pill" title="Signs in with the directory password; groups come from the directory">directory</span>` : ''}${u.directory_missing ? ' <span class="pill warn" title="Not found in the directory at the last sync. Its certificates still work: revoke them if the person left.">not in directory</span>' : ''}</td>
     <td>${userGroupPills(u)}</td>
     <td>${u.admin ? '<span class="pill ok">admin</span>' : 'user'}${u.two_factor ? ' <span class="pill ok" title="Two-factor login is on">2FA</span>' : ''}</td>
     <td>${u.online ? `<span class="pill ok">${u.online} online</span>` : '<span class="muted">offline</span>'}</td>
     <td>${esc(date(u.created))}</td>
     <td class="actions">
       <button class="small" data-act="groups" data-user="${esc(u.username)}">Groups</button>
-      <button class="small" data-act="password" data-user="${esc(u.username)}">Password</button>
+      ${u.source === 'ldap' ? '' : `<button class="small" data-act="password" data-user="${esc(u.username)}">Password</button>`}
       <button class="small" data-act="admin" data-user="${esc(u.username)}" data-admin="${u.admin}">${u.admin ? 'Revoke admin' : 'Make admin'}</button>
       ${u.two_factor && u.username !== $('#me').textContent ? `<button class="small" data-act="reset2fa" data-user="${esc(u.username)}" title="For a lost phone">Reset 2FA</button>` : ''}
       <button class="small" data-act="package" data-user="${esc(u.username)}" title="Connection data package for this user">Package</button>
@@ -4152,6 +4152,80 @@ $('#drawing-list').addEventListener('click', guard(async (e) => {
   if (drawDel && confirm(`Delete ${d.name}? It is removed from devices' maps too.`)) {
     renderDrawings(await api('DELETE', `api/drawings/${encodeURIComponent(d.id)}`));
   }
+}));
+
+// ---------- directory sign-in (LDAP / Active Directory) ----------
+
+function ldapForm() {
+  const f = $('#ldap-form');
+  return {
+    enabled: f.enabled.checked, url: f.url.value, start_tls: f.start_tls.checked, skip_verify: f.skip_verify.checked, ca_pem: f.ca_pem.value,
+    bind_dn: f.bind_dn.value, bind_password: f.bind_password.value, base_dn: f.base_dn.value, user_filter: f.user_filter.value,
+    group_base_dn: f.group_base_dn.value, groups: f.groups.value.split(',').map((g) => g.trim()).filter(Boolean),
+    admin_group: f.admin_group.value, required_group: f.required_group.value,
+  };
+}
+
+function renderLDAP(r) {
+  const f = $('#ldap-form'), s = r.settings;
+  f.enabled.checked = s.enabled;
+  f.url.value = s.url || '';
+  f.start_tls.checked = !!s.start_tls;
+  f.skip_verify.checked = !!s.skip_verify;
+  f.ca_pem.value = s.ca_pem || '';
+  f.bind_dn.value = s.bind_dn || '';
+  f.bind_password.value = '';
+  f.bind_password.placeholder = r.has_bind_password ? 'unchanged' : '';
+  f.base_dn.value = s.base_dn || '';
+  f.user_filter.value = s.user_filter || '';
+  f.user_filter.placeholder = r.default_filter;
+  f.group_base_dn.value = s.group_base_dn || '';
+  f.groups.value = s.groups.join(', ');
+  f.admin_group.value = s.admin_group || '';
+  f.required_group.value = s.required_group || '';
+  $('#ldap-fields').hidden = !s.enabled;
+  $('#ldap-sync').hidden = !s.enabled;
+  $('#ldap-state').innerHTML = s.enabled ? `<span class="pill ok">on</span> <span class="muted">${plural(r.users, 'directory user')}</span>` : '<span class="pill">off</span>';
+}
+
+async function loadLDAP() {
+  renderLDAP(await api('GET', 'api/ldap'));
+}
+
+$('#ldap-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  renderLDAP(await api('PUT', 'api/ldap', ldapForm()));
+  toast('Directory sign-in saved');
+}));
+
+// The settings show once directory sign-in is ticked.
+$('#ldap-form').enabled.addEventListener('change', (e) => { $('#ldap-fields').hidden = !e.target.checked; });
+
+$('#ldap-test').addEventListener('click', async () => {
+  const f = $('#ldap-form'), out = $('#ldap-test-result');
+  out.className = 'muted';
+  out.textContent = 'Testing…';
+  try {
+    const r = await api('POST', 'api/ldap/test', { settings: ldapForm(), username: f.test_user.value, password: f.test_password.value });
+    f.test_password.value = '';
+    if (!r.user) {
+      out.textContent = 'Connected, and the search account signed in. Enter a user to test a sign-in.';
+      return;
+    }
+    const u = r.user;
+    out.innerHTML = `${u.allowed ? '✔ Signed in' : '✖ Password right, but not in the required group'} as <span class="mono">${esc(u.dn)}</span>. `
+      + `Directory groups: ${u.all_groups?.length ? esc(u.all_groups.join(', ')) : 'none'}. `
+      + `EdgeTAK groups: ${u.groups?.length ? esc(u.groups.join(', ')) : 'none (the anonymous group)'}. ${u.admin ? 'Admin.' : ''}`;
+  } catch (ex) {
+    out.className = 'error';
+    out.textContent = ex.message;
+  }
+});
+
+$('#ldap-sync').addEventListener('click', guard(async () => {
+  renderLDAP(await api('POST', 'api/ldap/sync'));
+  loadUsers();
+  toast('Directory users synced');
 }));
 
 // ---------- lost contact ----------

@@ -367,6 +367,43 @@
           <tbody></tbody>
         </table></div>
       </div>
+      <div class="card" id="ldap-card">
+        <div class="card-head"><h2>Directory sign-in (LDAP / Active Directory)</h2><span id="ldap-state"></span></div>
+        <p class="muted">People sign in with their directory username and password everywhere: the console, the account page, and ATAK, iTAK and WinTAK enrollment. Their directory groups become EdgeTAK groups, updated at each sign-in and every 30 minutes. Local accounts, yours included, keep working, also when the directory is down. A local account with the same name as a directory user wins.</p>
+        <form id="ldap-form" class="stack wide" autocomplete="off">
+          <label class="check"><input type="checkbox" name="enabled"> Allow directory sign-in</label>
+          <div id="ldap-fields" class="stack wide" hidden>
+          <div class="inline-form">
+            <label>Server <input name="url" placeholder="ldaps://dc1.example.com:636 or ldap://ldap.example.com:389"></label>
+            <label class="check"><input type="checkbox" name="start_tls"> StartTLS (ldap:// upgraded to TLS)</label>
+          </div>
+          <label>Directory CA certificate (PEM, if not from a public CA) <textarea name="ca_pem" rows="2" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
+          <label class="check"><input type="checkbox" name="skip_verify"> Don't check the server's certificate (testing only)</label>
+          <div class="inline-form">
+            <label>Search account (bind DN) <input name="bind_dn" placeholder="CN=edgetak,OU=Service,DC=example,DC=com"></label>
+            <label>Its password <input type="password" name="bind_password" autocomplete="new-password"></label>
+          </div>
+          <div class="inline-form">
+            <label>Users are under (base DN) <input name="base_dn" placeholder="DC=example,DC=com"></label>
+            <label>Groups are under <span class="muted">(only if users have no memberOf)</span> <input name="group_base_dn" placeholder="OU=Groups,DC=example,DC=com"></label>
+          </div>
+          <label>User filter <span class="muted">({username} is what was typed; empty = uid, sAMAccountName or userPrincipalName)</span> <input name="user_filter" class="mono"></label>
+          <label>Use only these directory groups <span class="muted">(comma separated; empty = all)</span> <input name="groups" placeholder="TAK-Cyan, TAK-Red"></label>
+          <div class="inline-form">
+            <label>Admins are members of <input name="admin_group" placeholder="TAK-Admins"></label>
+            <label>Only members of this group may sign in <input name="required_group" placeholder="TAK-Users"></label>
+          </div>
+          <h3>Test</h3>
+          <div class="inline-form">
+            <label>Username <input name="test_user" autocomplete="off"></label>
+            <label>Password <input type="password" name="test_password" autocomplete="new-password"></label>
+            <button type="button" class="small" id="ldap-test">Test these settings</button>
+          </div>
+          <p class="muted" id="ldap-test-result">Tests the settings above before saving; without a username it only checks the connection and the search account.</p>
+          </div>
+          <div class="inline-form"><button class="primary" type="submit">Save</button> <button type="button" id="ldap-sync" title="Read every directory user's groups now">Sync users now</button></div>
+        </form>
+      </div>
     </section>
 
     <section id="tab-groups" class="tab" hidden>

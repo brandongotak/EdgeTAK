@@ -72,6 +72,7 @@ type Server struct {
 	account       accountState
 	lost          lostState
 	fences        geofenceState
+	ldap          ldapState
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -137,6 +138,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.lostContactRoutes(mux)
 	s.geofenceRoutes(mux)
 	s.drawingRoutes(mux)
+	s.ldapRoutes(mux)
 	s.federationRoutes(mux)
 	s.accountRoutes(mux)
 
@@ -274,7 +276,7 @@ func (s *Server) identify(r *http.Request) *identity {
 		return id
 	}
 	if name, pw, ok := r.BasicAuth(); ok {
-		u, ok := s.Store.Authenticate(name, pw)
+		u, ok := s.authenticate(name, pw)
 		if !ok {
 			return nil
 		}

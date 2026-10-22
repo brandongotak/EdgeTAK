@@ -94,6 +94,8 @@ function render() {
   const chips = (gs) => gs.length ? gs.map((g) => `<span class="pill">${esc(g)}</span>`).join(' ') : '<span class="muted">none</span>';
   $('#groups-in').innerHTML = chips(me.groups_in);
   $('#groups-out').innerHTML = chips(me.groups_out);
+  // Directory users change their password in the directory.
+  $('#password-card').hidden = !!me.directory;
 
   $('#devices').innerHTML = me.devices.length ? me.devices.map((d) => `<div class="account-item">
       <div><strong>${esc(d.callsign || '(no position report yet)')}</strong> <span class="pill ${d.transport === 'tls' ? 'ok' : 'warn'}">${esc(d.transport.toUpperCase())}</span>

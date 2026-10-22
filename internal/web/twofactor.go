@@ -185,7 +185,7 @@ func (s *Server) twoFactorRecovery(w http.ResponseWriter, r *http.Request, usern
 func (s *Server) reauth(w http.ResponseWriter, r *http.Request, username string) bool {
 	var req struct{ Password, Code string }
 	json.NewDecoder(http.MaxBytesReader(w, r.Body, 2048)).Decode(&req)
-	if _, ok := s.Store.Authenticate(username, req.Password); !ok {
+	if _, ok := s.authenticate(username, req.Password); !ok {
 		time.Sleep(500 * time.Millisecond)
 		jsonError(w, http.StatusUnauthorized, "wrong password")
 		return false

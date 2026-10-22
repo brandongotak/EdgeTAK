@@ -92,6 +92,10 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   between servers, in either direction, with certificate or token sign-in,
   approval of servers that connect, and per-federate group sharing. See
   [Federation](#federation).
+- **Directory sign-in** (Users tab): LDAP or Active Directory users sign in
+  with their directory password everywhere (console, account page, ATAK /
+  iTAK / WinTAK enrollment), with directory groups as EdgeTAK groups. See
+  [Directory sign-in](#directory-sign-in-ldap--active-directory).
 - **Drawings** (Maps tab): draw markers (friendly, hostile, neutral,
   unknown, or a colored spot), routes, areas and circles on the console map
   and they appear on devices' maps like items a teammate placed, for every
@@ -441,6 +445,36 @@ External cameras or media servers can be added with their own URL (`rtsp://`,
 cannot play them. Bandwidth is the main limit: every viewer receives a full
 copy of the stream, about 2 to 4 Mbit/s for 1080p.
 
+### Directory sign-in (LDAP / Active Directory)
+
+On the **Users** tab, **Directory sign-in** lets people sign in with their
+directory account: the console, the account page, and TAK app enrollment
+all accept their directory username and password.
+
+- **Settings:** the server (`ldaps://dc1.example.com:636`, or `ldap://` with
+  StartTLS), the directory's CA certificate if it isn't from a public CA, a
+  search account (bind DN and password; leave empty for anonymous search),
+  where users are (base DN) and, if needed, a user filter (by default
+  `uid`, `sAMAccountName` or `userPrincipalName` matches what was typed).
+- **Groups:** a user's `memberOf` groups (Active Directory, OpenLDAP with
+  memberOf), or the groups under **Groups are under** that list them as a
+  member. Their names become EdgeTAK groups; **Use only these directory
+  groups** keeps out the rest (Domain Users and the like). **Admins are
+  members of** makes directory admins EdgeTAK admins; **Only members of
+  this group may sign in** limits who can sign in.
+- **Test these settings** checks the connection, the search account and a
+  user's sign-in before saving, and shows the groups found.
+- A directory user gets an EdgeTAK record on first sign-in (marked
+  *directory* on the Users tab), holding their certificates; groups are
+  refreshed at each sign-in and every 30 minutes (needs the search
+  account), so devices that only use their certificate follow directory
+  changes. Users no longer found are marked *not in directory*; their
+  certificates keep working until revoked.
+- Directory users change their password in the directory. Local accounts,
+  the admin included, keep working alongside, also when the directory is
+  unreachable; a local account wins over a directory user with the same
+  name.
+
 ### Offline maps
 
 The **Maps** tab serves maps from MBTiles files, so the console and ATAK have
@@ -775,6 +809,7 @@ licenses, all compatible with the AGPL:
 | [grpc-go](https://pkg.go.dev/google.golang.org/grpc), genproto | federation | Apache-2.0 |
 | [go-pkcs12](https://pkg.go.dev/software.sslmate.com/src/go-pkcs12) | client certificates | BSD-3-Clause |
 | [androidbinary](https://github.com/shogo82148/androidbinary) | reading APKs (Plugins) | MIT |
+| [go-ldap](https://github.com/go-ldap/ldap) | directory sign-in | MIT |
 | [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) | reading MBTiles maps | BSD-3-Clause |
 | [golang.org/x/image](https://pkg.go.dev/golang.org/x/image) | WebP plugin icons | BSD-3-Clause |
 | [Leaflet](https://leafletjs.com/) 1.9.4 | console map | BSD-2-Clause |

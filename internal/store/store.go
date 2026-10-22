@@ -35,6 +35,12 @@ type User struct {
 	Admin    bool      `json:"admin"`
 	Created  time.Time `json:"created"`
 
+	// Directory users (LDAP / Active Directory) sign in with their directory
+	// password and get their groups from it; they have no local password.
+	Source       string `json:"source,omitempty"` // "" (local) or "ldap"
+	DirectoryDN  string `json:"directory_dn,omitempty"`
+	DirectoryOff bool   `json:"directory_missing,omitempty"` // not found at the last sync
+
 	// Two-factor login for the admin console (authenticator app codes).
 	TOTPSecret   string   `json:"totp_secret,omitempty"`
 	TOTPPending  string   `json:"totp_pending,omitempty"` // being set up, not yet confirmed
@@ -196,6 +202,8 @@ type db struct {
 	Geofences map[string]*Geofence `json:"geofences"` // by id
 
 	Drawings map[string]*Drawing `json:"drawings"` // by id
+
+	LDAP LDAPSettings `json:"ldap"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -1720,6 +1728,71 @@ func (s *Store) DeleteGeofence(id string) (Geofence, error) {
 	}
 	delete(s.db.Geofences, id)
 	return cloneGeofence(g), s.save()
+}
+
+// ---- directory sign-in (LDAP / Active Directory) ----
+
+// LDAPSettings: users without a local account sign in against a directory.
+// The user is found with UserFilter ({username} replaced) under BaseDN,
+// using the BindDN account (or anonymously), then its own password is
+// checked by binding as it. Its groups are its memberOf values and, when
+// GroupBaseDN is set, the groups found there listing it as a member; their
+// common names become EdgeTAK groups (only those in Groups, when set).
+type LDAPSettings struct {
+	Enabled       bool     `json:"enabled"`
+	URL           string   `json:"url"` // ldap://host:389 or ldaps://host:636
+	StartTLS      bool     `json:"start_tls,omitempty"`
+	SkipVerify    bool     `json:"skip_verify,omitempty"` // don't check the server's certificate
+	CAPEM         string   `json:"ca_pem,omitempty"`      // the directory's CA, if not a public one
+	BindDN        string   `json:"bind_dn"`
+	BindPassword  string   `json:"bind_password,omitempty"` // secret
+	BaseDN        string   `json:"base_dn"`
+	UserFilter    string   `json:"user_filter"`
+	GroupBaseDN   string   `json:"group_base_dn,omitempty"`
+	Groups        []string `json:"groups"`                   // directory groups used (none = all)
+	AdminGroup    string   `json:"admin_group,omitempty"`    // members are EdgeTAK admins
+	RequiredGroup string   `json:"required_group,omitempty"` // only members may sign in
+}
+
+func (s *Store) LDAP() LDAPSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	l := s.db.LDAP
+	l.Groups = slices.Clone(l.Groups)
+	if l.Groups == nil {
+		l.Groups = []string{}
+	}
+	return l
+}
+
+func (s *Store) SetLDAP(l LDAPSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.LDAP = l
+	return s.save()
+}
+
+// UpsertDirectoryUser creates or updates a directory user after a
+// successful directory sign-in or sync: its DN, groups and, when admin is
+// non-nil, whether it is an admin.
+func (s *Store) UpsertDirectoryUser(name, dn string, groups []string, admin *bool) (*User, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.db.Users[name]
+	if ok && u.Source != "ldap" {
+		return nil, ErrExists // a local account with that name
+	}
+	if !ok {
+		u = &User{Username: name, Source: "ldap", Created: time.Now().UTC()}
+		s.db.Users[name] = u
+	}
+	u.DirectoryDN, u.DirectoryOff = dn, false
+	u.Groups = slices.Clone(groups)
+	if admin != nil {
+		u.Admin = *admin
+	}
+	s.ensureGroupsLocked(groups)
+	return cloneUser(u), s.save()
 }
 
 // ---- drawings ----

@@ -40,6 +40,7 @@ func (s *Server) Start(ctx context.Context) {
 	s.lostStart(ctx)
 	s.geofenceStart()
 	s.drawingsStart()
+	s.ldapSyncStart(ctx)
 	s.certWatchStart(ctx)
 	go func() {
 		t := time.NewTicker(presenceRefresh)

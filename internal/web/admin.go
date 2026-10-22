@@ -175,6 +175,8 @@ type userView struct {
 	Created   time.Time `json:"created"`
 	Online    int       `json:"online"`
 	TwoFactor bool      `json:"two_factor"`
+	Source    string    `json:"source,omitempty"`            // "ldap" for directory users
+	Missing   bool      `json:"directory_missing,omitempty"` // not found at the last directory sync
 }
 
 func newUserView(u *store.User, online int) userView {
@@ -184,7 +186,7 @@ func newUserView(u *store.User, online int) userView {
 		}
 		return l
 	}
-	return userView{u.Username, nn(u.Groups), nn(u.GroupsIn), nn(u.GroupsOut), nn(u.Inactive), u.Admin, u.Created, online, u.TwoFactor()}
+	return userView{u.Username, nn(u.Groups), nn(u.GroupsIn), nn(u.GroupsOut), nn(u.Inactive), u.Admin, u.Created, online, u.TwoFactor(), u.Source, u.DirectoryOff}
 }
 
 // applyUserGroups pushes a user's current memberships to their live connections.
@@ -268,6 +270,10 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request, id *identity
 	}
 	var hash string
 	if req.Password != nil {
+		if old, ok := s.Store.User(name); ok && old.Source == "ldap" {
+			jsonError(w, http.StatusBadRequest, "this user signs in with their directory password; change it in the directory")
+			return
+		}
 		if len(*req.Password) < 8 {
 			jsonError(w, http.StatusBadRequest, "password must be at least 8 characters")
 			return

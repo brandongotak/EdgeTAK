@@ -10,6 +10,22 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.13.0 (2026-10-22)
+
+### Added
+- **Directory sign-in (LDAP / Active Directory)** on the Users tab. People
+  sign in with their directory username and password everywhere: the
+  console, the account page, and ATAK, iTAK and WinTAK enrollment.
+  - **Groups** come from the directory (`memberOf`, or a group search) and
+    become EdgeTAK groups, refreshed at each sign-in and every 30 minutes;
+    optionally only chosen directory groups are used.
+  - **Admins** and **who may sign in** can follow directory groups.
+  - **Test these settings** checks the connection, the search account and a
+    user's sign-in before saving, and shows the groups found.
+  - LDAPS and StartTLS, with the directory's own CA.
+  - Local accounts, the admin included, keep working alongside, also when
+    the directory is down.
+
 ## v0.12.0 (2026-10-22)
 
 ### Added
