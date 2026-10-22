@@ -29,6 +29,9 @@ type Server struct {
 	// it (clean): turning the connection off, quitting ATAK or shutting the
 	// phone down. A stream that times out or is reset was lost.
 	Ended func(c *router.Client, clean bool)
+	// Refuse reports whether to drop a connection from remote at once (the
+	// login protection deny list).
+	Refuse func(remote string) bool
 }
 
 // Serve accepts connections on ln until ctx is done. Pass a tls.Listener for
@@ -55,6 +58,10 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener, transport string) e
 func (s *Server) handle(ctx context.Context, conn net.Conn, transport string) {
 	defer conn.Close()
 	remote := conn.RemoteAddr().String()
+	if s.Refuse != nil && s.Refuse(remote) {
+		s.Log.Debug("connection refused (deny list)", "remote", remote)
+		return
+	}
 	if tc, ok := conn.(*net.TCPConn); ok {
 		tc.SetKeepAlive(true)
 		tc.SetKeepAlivePeriod(30 * time.Second)

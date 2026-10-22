@@ -131,8 +131,12 @@ func (s *Server) oauthToken(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusBadRequest, "unsupported_grant_type", "use grant_type=password")
 		return
 	}
-	u, ok := s.authenticate(r.Form.Get("username"), r.Form.Get("password"))
-	if !ok {
+	u, err := s.passwordSignIn(r, r.Form.Get("username"), r.Form.Get("password"))
+	if errors.Is(err, errBlocked) {
+		oauthError(w, http.StatusBadRequest, "invalid_grant", "Too many failed sign-ins from this address; try again later")
+		return
+	}
+	if err != nil {
 		s.Log.Warn("oauth login failed", "user", r.Form.Get("username"), "remote", r.RemoteAddr)
 		oauthError(w, http.StatusBadRequest, "invalid_grant", "Bad credentials")
 		return

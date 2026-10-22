@@ -156,7 +156,7 @@ const loaders = {
   simulator: loadSim,
   webhooks: loadWebhooks,
   audit: () => loadAudit(),
-  settings: () => Promise.all([loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadBackups()]),
+  settings: () => Promise.all([loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
 };
 
 let currentTab = '';
@@ -4724,6 +4724,61 @@ $('#overlay-edit').addEventListener('submit', guard(async (e) => {
   toast('Overlay saved');
 }));
 
+// ---------- login protection ----------
+
+let guardMe = '';
+
+function renderLoginGuard(v) {
+  const f = $('#guard-form');
+  if (!f.contains(document.activeElement)) {
+    f.on.checked = !v.off;
+    f.max.value = v.max_failures;
+    f.window.value = v.window_minutes;
+    f.block.value = v.block_minutes;
+    f.allow.value = v.allow.join('\n');
+    f.deny.value = v.deny.join('\n');
+  }
+  if (v.your_address) guardMe = v.your_address;
+  $('#guard-state').innerHTML = v.off ? '<span class="pill warn">off</span>' : v.blocked.length ? `<span class="pill warn">${v.blocked.length} blocked</span>` : '<span class="pill ok">on</span>';
+  $('#guard-me').innerHTML = guardMe ? `You are connecting from <code>${esc(guardMe)}</code>. <button type="button" class="small" id="guard-allow-me">Never block it</button>
+    <button type="button" class="small" id="guard-allow-lan">Never block private networks</button>` : '';
+  $('#guard-blocked tbody').innerHTML = v.blocked.map((b) => `<tr>
+    <td class="mono">${esc(b.address)}</td><td>${b.failures}</td><td>${esc(b.last_user)}</td>
+    <td>${esc(new Date(b.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}<div class="muted">blocked ${esc(ago(b.since))}</div></td>
+    <td class="actions"><button class="small" data-unblock="${esc(b.address)}">Unblock</button></td></tr>`).join('') || emptyRow(5, 'No address is blocked');
+  $('#guard-recent tbody').innerHTML = v.recent.map((r) => `<tr>
+    <td class="mono">${esc(r.address)}</td><td>${r.failures}</td><td>${esc(r.last_user)}</td><td>${esc(ago(r.last))}</td></tr>`).join('') || emptyRow(4, 'None in the last few minutes');
+}
+
+async function loadLoginGuard() {
+  renderLoginGuard(await api('GET', 'api/login-protection'));
+}
+
+const guardLines = (t) => t.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
+
+$('#guard-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  renderLoginGuard(await api('PUT', 'api/login-protection', { off: !f.on.checked, max_failures: Number(f.max.value) || 0,
+    window_minutes: Number(f.window.value) || 0, block_minutes: Number(f.block.value) || 0, allow: guardLines(f.allow.value), deny: guardLines(f.deny.value) }));
+  toast('Login protection saved');
+}));
+
+$('#guard-card').addEventListener('click', guard(async (e) => {
+  const f = $('#guard-form');
+  const add = (entries) => {
+    const have = guardLines(f.allow.value);
+    f.allow.value = [...have, ...entries.filter((x) => !have.includes(x))].join('\n');
+    toast('Added; press Save to keep it');
+  };
+  if (e.target.id === 'guard-allow-me') add([guardMe]);
+  if (e.target.id === 'guard-allow-lan') add(['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', 'fc00::/7']);
+  if (e.target.dataset.unblock) {
+    renderLoginGuard(await api('DELETE', `api/login-protection/blocked/${encodeURIComponent(e.target.dataset.unblock)}`));
+    toast(`${e.target.dataset.unblock} unblocked`);
+  }
+}));
+
 // ---------- audit log ----------
 
 const AUDIT_PAGE = 100;
@@ -4773,7 +4828,7 @@ $('#audit-more').addEventListener('click', guard(() => loadAudit(true)));
 let webhooks = [];
 let editingHook = null;
 const HOOK_FORMATS = { discord: 'Discord', slack: 'Slack', teams: 'Teams', ntfy: 'ntfy', json: 'JSON' };
-const HOOK_EVENTS = { emergency: 'Emergencies', geofence: 'Geofence', lost_contact: 'Lost contact', ended: 'Ended', signup: 'Sign-ups', admin: 'Admin changes', server: 'Server health' };
+const HOOK_EVENTS = { emergency: 'Emergencies', geofence: 'Geofence', lost_contact: 'Lost contact', ended: 'Ended', signup: 'Sign-ups', admin: 'Admin changes', server: 'Server health', security: 'Blocked sign-ins' };
 // Setup steps for each service, shown on the page and in the dialog.
 const HOOK_GUIDE = {
   discord: {

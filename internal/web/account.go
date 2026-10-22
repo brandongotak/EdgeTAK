@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -107,8 +108,12 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusTooManyRequests, "too many failed sign-ins; wait a few minutes")
 		return
 	}
-	u, ok := s.authenticate(req.Username, req.Password)
-	if !ok {
+	u, err := s.passwordSignIn(r, req.Username, req.Password)
+	if errors.Is(err, errBlocked) {
+		jsonError(w, http.StatusTooManyRequests, "too many failed sign-ins from this address; try again later")
+		return
+	}
+	if err != nil {
 		time.Sleep(500 * time.Millisecond)
 		s.Log.Warn("sign-in failed", "user", req.Username, "remote", r.RemoteAddr)
 		s.auditEvent(r, truncate(req.Username, 64), "Sign-in failed", "", true)
@@ -116,6 +121,9 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if u.TwoFactor() && !s.secondFactor(w, r, u.Username, req.Code) {
+		if req.Code != "" {
+			s.signInFailed(r, u.Username) // a wrong code counts like a wrong password
+		}
 		return
 	}
 	s.account.limiter.refund(ip)

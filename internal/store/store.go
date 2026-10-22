@@ -225,6 +225,8 @@ type db struct {
 	Webhooks []Webhook `json:"webhooks,omitempty"`
 
 	Schedules []Schedule `json:"schedules,omitempty"`
+
+	LoginProtection LoginProtection `json:"login_protection"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -2009,6 +2011,50 @@ func (s *Store) DeleteDrawing(id string) (Drawing, error) {
 	}
 	delete(s.db.Drawings, id)
 	return cloneDrawing(d), s.save()
+}
+
+// ---- login protection ----
+
+// LoginProtection blocks an address for BlockMinutes after MaxFailures
+// failed password sign-ins within WindowMinutes (0 = the defaults), except
+// addresses in Allow. Addresses in Deny are refused outright. Entries are
+// IP addresses or CIDR ranges.
+type LoginProtection struct {
+	Off           bool     `json:"off,omitempty"`
+	MaxFailures   int      `json:"max_failures,omitempty"`
+	WindowMinutes int      `json:"window_minutes,omitempty"`
+	BlockMinutes  int      `json:"block_minutes,omitempty"`
+	Allow         []string `json:"allow,omitempty"`
+	Deny          []string `json:"deny,omitempty"`
+}
+
+// WithDefaults fills in the defaults: 10 failures in 15 minutes blocks for 30.
+func (l LoginProtection) WithDefaults() LoginProtection {
+	if l.MaxFailures <= 0 {
+		l.MaxFailures = 10
+	}
+	if l.WindowMinutes <= 0 {
+		l.WindowMinutes = 15
+	}
+	if l.BlockMinutes <= 0 {
+		l.BlockMinutes = 30
+	}
+	return l
+}
+
+func (s *Store) LoginProtection() LoginProtection {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	l := s.db.LoginProtection
+	l.Allow, l.Deny = slices.Clone(l.Allow), slices.Clone(l.Deny)
+	return l
+}
+
+func (s *Store) SetLoginProtection(l LoginProtection) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.LoginProtection = l
+	return s.save()
 }
 
 // ---- scheduled sends ----

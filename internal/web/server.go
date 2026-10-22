@@ -90,6 +90,7 @@ type Server struct {
 	sim           simState
 	hooks         webhookState
 	healthWatch   healthWatch
+	guard         loginGuard
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -156,6 +157,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.webhookRoutes(mux)
 	s.auditRoutes(mux)
 	s.scheduleRoutes(mux)
+	s.loginGuardRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)
@@ -178,6 +180,10 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 		defer func() { s.logRequest(r, rec, time.Since(start)) }()
 
 		rec.Header().Set("X-Content-Type-Options", "nosniff")
+		if s.AddressRefused(r.RemoteAddr) {
+			http.Error(rec, "refused", http.StatusForbidden)
+			return
+		}
 		if !tlsListener && isAdminPath(r.URL.Path) && !isLoopback(r.RemoteAddr) {
 			http.Error(rec, "the admin console is only available over HTTPS (port 8443) or from localhost", http.StatusForbidden)
 			return
@@ -300,8 +306,8 @@ func (s *Server) identify(r *http.Request) *identity {
 		return id
 	}
 	if name, pw, ok := r.BasicAuth(); ok {
-		u, ok := s.authenticate(name, pw)
-		if !ok {
+		u, err := s.passwordSignIn(r, name, pw)
+		if err != nil {
 			return nil
 		}
 		return s.fromUser(u)

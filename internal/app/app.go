@@ -227,6 +227,7 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		DataDir: a.DataDir, ConfigPath: a.ConfigPath, Restart: a.Restart, Maps: &maps.Library{Dir: filepath.Join(a.DataDir, "maps")},
 	}
 	st.Ended = ws.ClientEnded
+	st.Refuse = ws.AddressRefused
 	a.Web = ws
 	if err := ws.Maps.Scan(); err != nil {
 		a.Log.Warn("offline maps", "err", err)

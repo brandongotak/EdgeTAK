@@ -35,6 +35,7 @@ var auditActions = map[string]string{
 	"DELETE /admin/api/groups/{name}":                    "Deleted group",
 	"DELETE /admin/api/groups/{name}/members/{user}":     "Removed group member",
 	"DELETE /admin/api/history":                          "Deleted all position history",
+	"DELETE /admin/api/login-protection/blocked/{ip}":    "Unblocked an address",
 	"DELETE /admin/api/maps/{file}":                      "Deleted offline map",
 	"DELETE /admin/api/missions/{name}":                  "Deleted mission",
 	"DELETE /admin/api/overlays/{id}":                    "Deleted overlay",
@@ -117,6 +118,7 @@ var auditActions = map[string]string{
 	"PUT /admin/api/groups/{name}/members/{user}":        "Added group member",
 	"PUT /admin/api/history/settings":                    "Changed position history settings",
 	"PUT /admin/api/ldap":                                "Changed directory sign-in",
+	"PUT /admin/api/login-protection":                    "Changed login protection",
 	"PUT /admin/api/lost-contact":                        "Changed lost contact alerts",
 	"PUT /admin/api/map/sources":                         "Changed map sources",
 	"PUT /admin/api/maps/{file}":                         "Changed offline map",
@@ -262,7 +264,7 @@ func (s *Server) auditTarget(r *http.Request, body []byte) string {
 		return id
 	}
 	var parts []string
-	for _, k := range []string{"name", "user", "file", "serial", "uid", "fp", "code", "hash"} {
+	for _, k := range []string{"name", "user", "file", "serial", "uid", "fp", "code", "hash", "ip"} {
 		if v := r.PathValue(k); v != "" {
 			if k == "code" || k == "hash" {
 				v = truncate(v, 12)

@@ -736,6 +736,31 @@ webhook at once. Delivery is retried, and each webhook gets at most 20
 messages a minute; more are counted in the next one. The console shows only
 each URL's host, since chat services put their token in the URL.
 
+### Login protection
+
+**Server → Settings → Login protection** (on by default): an address that
+fails to sign in with a password 10 times in 15 minutes is blocked from
+password sign-ins for 30 minutes. That covers the console and account page,
+device enrollment and other username/password requests to the device API
+(the update server, for one), and ATAK's username sign-in; wrong two-factor
+codes count too. Devices connected with their certificate and people
+already signed in carry on, so one person mistyping on a shared network
+doesn't cut off a team's devices. The numbers are adjustable.
+
+- **Never block**: addresses or ranges (`192.168.0.0/16`) that are never
+  blocked; one click adds your own address or all private networks. This
+  machine is never blocked.
+- **Always refuse**: addresses or ranges refused everything, the streaming
+  ports included.
+- **Blocked now** and **recent failed sign-ins**, with **Unblock**. Each
+  block is in the audit log, and a webhook with **Blocked sign-ins** ticked
+  hears about it.
+
+If every connection reaches EdgeTAK from one address (Docker Desktop's port
+forwarding on Windows and macOS, or a reverse proxy in front of it), add
+that address to **Never block**, or one person's typos block everyone's
+password sign-ins.
+
 ### Audit log
 
 **Server → Audit log** records every change an administrator makes, in the

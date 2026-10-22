@@ -27,7 +27,7 @@ import (
 // the groups whose devices it cares about. Delivery is in the background,
 // retried, and limited per webhook so a burst can't flood a channel.
 
-var webhookKinds = []string{"emergency", "geofence", "lost_contact", "ended", "signup", "admin", "server"}
+var webhookKinds = []string{"emergency", "geofence", "lost_contact", "ended", "signup", "admin", "server", "security"}
 
 var webhookFormats = map[string]bool{"discord": true, "slack": true, "teams": true, "ntfy": true, "json": true}
 
@@ -226,7 +226,7 @@ func urlHost(u string) string {
 
 // ---- message formats ----
 
-var webhookEmoji = map[string]string{"emergency": "🚨", "geofence": "🚧", "lost_contact": "📡", "ended": "✅", "signup": "👤", "test": "🔔", "admin": "🛠️", "server": "🖥️"}
+var webhookEmoji = map[string]string{"emergency": "🚨", "geofence": "🚧", "lost_contact": "📡", "ended": "✅", "signup": "👤", "test": "🔔", "admin": "🛠️", "server": "🖥️", "security": "🔒"}
 
 func (a notice) headline() string {
 	h := a.Title
@@ -267,7 +267,7 @@ func (s *Server) webhookRequest(h store.Webhook, a notice) (string, []byte, map[
 	target, headers := h.URL, map[string]string{}
 	switch h.Format {
 	case "discord":
-		colors := map[string]int{"emergency": 0xD32F2F, "geofence": 0xF29900, "lost_contact": 0xF29900, "ended": 0x2E7D32, "signup": 0x1E88E5, "test": 0x1E88E5, "server": 0xF29900}
+		colors := map[string]int{"emergency": 0xD32F2F, "geofence": 0xF29900, "lost_contact": 0xF29900, "ended": 0x2E7D32, "signup": 0x1E88E5, "test": 0x1E88E5, "server": 0xF29900, "security": 0xD32F2F}
 		fields := []map[string]any{}
 		for _, f := range facts {
 			v := f[1]
@@ -320,9 +320,9 @@ func (s *Server) webhookRequest(h store.Webhook, a notice) (string, []byte, map[
 		topic := strings.Trim(u.Path, "/")
 		u.Path, u.RawQuery = "/", ""
 		target = u.String()
-		priority := map[string]int{"emergency": 5, "geofence": 4, "lost_contact": 4, "server": 4}[a.Kind]
+		priority := map[string]int{"emergency": 5, "geofence": 4, "lost_contact": 4, "server": 4, "security": 4}[a.Kind]
 		tags := map[string][]string{"emergency": {"rotating_light"}, "geofence": {"construction"}, "lost_contact": {"satellite"},
-			"ended": {"white_check_mark"}, "signup": {"bust_in_silhouette"}, "test": {"bell"}, "server": {"desktop_computer"}, "admin": {"hammer_and_wrench"}}[a.Kind]
+			"ended": {"white_check_mark"}, "signup": {"bust_in_silhouette"}, "test": {"bell"}, "server": {"desktop_computer"}, "admin": {"hammer_and_wrench"}, "security": {"lock"}}[a.Kind]
 		var lines []string
 		if a.Text != "" {
 			lines = append(lines, a.Text)

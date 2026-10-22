@@ -216,6 +216,7 @@
             <label class="chip"><input type="checkbox" value="signup">Sign-ups</label>
             <label class="chip"><input type="checkbox" value="admin">Admin changes</label>
             <label class="chip"><input type="checkbox" value="server">Server health</label>
+            <label class="chip"><input type="checkbox" value="security">Blocked sign-ins</label>
           </div>
           <div class="muted picker-label">About devices in these groups (none selected = all; sign-ups only go to webhooks without groups)</div>
           <div id="hook-groups" class="group-picker"></div>
@@ -335,6 +336,34 @@
           <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
         </form>
       </dialog>
+      <div class="card" id="guard-card">
+        <div class="card-head"><h2>Login protection</h2><span id="guard-state"></span></div>
+        <p class="muted">An address that fails to sign in with a password too often is blocked from password sign-ins for a while: the console, account page, device enrollment, the update server and ATAK's username sign-in. Devices connected with their certificate and people already signed in carry on, so one person mistyping on a shared network doesn't cut off a team. This machine is never blocked. Failed sign-ins and blocks are in the audit log; a webhook with <strong>Blocked sign-ins</strong> ticked hears about each block.</p>
+        <form id="guard-form" class="stack">
+          <label class="check"><input type="checkbox" name="on"> Block addresses after repeated failed sign-ins</label>
+          <div class="inline-form">
+            <label class="inline-label">Block after <input type="number" name="max" min="1" max="1000" class="days-input"> failures</label>
+            <label class="inline-label">within <input type="number" name="window" min="1" max="1440" class="days-input"> minutes,</label>
+            <label class="inline-label">for <input type="number" name="block" min="1" max="43200" class="days-input"> minutes</label>
+          </div>
+          <label><span>Never block <span class="muted">(one address or range per line, e.g. 192.168.1.0/24)</span></span>
+            <textarea name="allow" rows="3" spellcheck="false" placeholder="192.168.0.0/16"></textarea></label>
+          <p class="muted" id="guard-me"></p>
+          <label>Always refuse (blocks everything from them, the streaming ports too)
+            <textarea name="deny" rows="2" spellcheck="false" placeholder="203.0.113.0/24"></textarea></label>
+          <div class="inline-form"><button class="primary" type="submit">Save</button></div>
+        </form>
+        <h3>Blocked now</h3>
+        <div class="table-wrap"><table id="guard-blocked">
+          <thead><tr><th>Address</th><th>Failures</th><th>Last username tried</th><th>Until</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <h3>Recent failed sign-ins</h3>
+        <div class="table-wrap"><table id="guard-recent">
+          <thead><tr><th>Address</th><th>Failures</th><th>Last username tried</th><th>Last</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
       <div class="card" id="retention-card">
         <div class="card-head"><h2>Data retention</h2><span class="muted" id="retention-last"></span></div>
         <p class="muted">How long to keep each kind of data, in days (0 = keep forever). Rules run every hour. The right column shows what a rule would remove right now.</p>

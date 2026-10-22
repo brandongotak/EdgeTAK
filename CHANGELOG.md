@@ -10,6 +10,27 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.21.0 (2026-10-22)
+
+### Added
+- **Login protection** (Server → Settings, on by default): an address with
+  10 failed password sign-ins in 15 minutes (adjustable) is blocked from
+  password sign-ins for 30 minutes: console and account page, device
+  enrollment and the device API's username/password requests, and ATAK's
+  username sign-in. Wrong two-factor codes count. Certificate-connected
+  devices and existing sessions are not affected; this machine is never
+  blocked.
+  - **Never block** list (one click for your address or all private
+    networks) and **Always refuse** list (refused everything, streaming
+    ports included).
+  - Blocked addresses and recent failures, with **Unblock**; blocks go to
+    the audit log and to webhooks with **Blocked sign-ins** ticked.
+
+### Upgrading
+- Login protection is on after the upgrade. If all connections reach
+  EdgeTAK from one address (Docker Desktop on Windows or macOS, or a
+  reverse proxy), add that address under **Never block**.
+
 ## v0.20.2 (2026-10-22)
 
 ### Fixed
