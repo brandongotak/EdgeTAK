@@ -364,7 +364,7 @@ current section's pages in the row below:
 | People | Users, Groups, Sign-ups, Certificates |
 | Data | Data Packages, Missions, Maps, Overlays, Plugins, Video |
 | Messages | Send, Chat log |
-| Server | Connect, Federation, Settings |
+| Server | Connect, Federation, Settings, Simulator |
 
 1. **Change the admin password**: on the **Users** tab, click **Password** on
    `admin`. Then delete the file holding the first-run password:
@@ -675,6 +675,40 @@ listener (port 9001). For OpenTAKServer to connect to EdgeTAK, use the
 address its certificate names, or set the plugin's **TLS server name**:
 unlike TAK Server, the plugin checks it.
 
+### Simulator (load testing)
+
+Simulated TAK devices show how the server copes with many users. Each one
+connects to the TLS streaming port like ATAK, walks around a point sending
+position reports (and chat, if chosen), and reads everything the server
+relays. One device's reports carry a timestamp, so the others measure the
+**relay time**: how long the server takes to pass a position on.
+
+- **Console** (Server → Simulator): choose how many devices (up to 5,000),
+  how fast they join, how often they report, chat and how long to run, and
+  watch connections, events per second, relay times and the server's CPU
+  and memory live. The devices sign in as a temporary account in the
+  **Simulator** group (or another you name), so real devices don't see
+  them; the account and its certificate are removed when the run ends.
+  They run inside EdgeTAK, sharing the machine's CPU.
+- **Another computer**: `edgetak sim` runs the same simulator over the
+  network. Create an account in a test group, then:
+
+  ```
+  edgetak sim -server tak.example.org -user loadtest -lat 39.74 -lon -104.99 -devices 500 -duration 5m
+  ```
+
+  The password comes from `-password` or `EDGETAK_SIM_PASSWORD`. It prints
+  statistics every few seconds and a summary at the end (exit status 1 if
+  any connection failed or dropped). Add `-insecure` when the enrollment
+  port uses EdgeTAK's own certificate, `-tcp` for the plain TCP port, and
+  see `edgetak sim -h` for the rest. It works against any TAK server.
+
+Every device in a group receives every other device's reports, so traffic
+grows with the square of the devices: 300 devices reporting every 2
+seconds is about 150 reports a second in and 45,000 events a second out.
+Turn position history off first if you don't want the simulated devices
+recorded.
+
 ## Connect clients
 
 There are two ways to connect, depending on the server:
@@ -838,6 +872,7 @@ internal/federation/ TAK Server Federation v2 (gRPC): federates, listener, CoT a
 internal/apps/      ATAK update server: APK reading, product.inf(z) indexes
 internal/maps/      offline maps: MBTiles reading and tiles
 internal/overlay/   map overlays: KML/KMZ checks, GeoJSON to KML, data packages
+internal/sim/       simulated devices for load testing (console and edgetak sim)
 internal/backup/    backup files, checking, staged restore
 internal/stream/    TCP/TLS stream sessions and protocol negotiation
 internal/web/       Marti API, enrollment, OAuth, groups/channels, admin console (embedded)

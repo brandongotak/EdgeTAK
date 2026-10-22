@@ -3,6 +3,7 @@
 package web
 
 import (
+	"context"
 	"crypto/rand"
 	"embed"
 	"encoding/hex"
@@ -67,6 +68,8 @@ type Server struct {
 	// point them at a fake one).
 	TakGovAuthURL, TakGovAPIURL string
 	TakGovClient                *http.Client
+	// SimDial connects simulated devices (tests use an in-memory network).
+	SimDial func(ctx context.Context, network, addr string) (net.Conn, error)
 
 	history       sendHistory  // admin "send to devices" log
 	signupLimiter *rateLimiter // public sign-up attempts per address
@@ -79,6 +82,7 @@ type Server struct {
 	ldap          ldapState
 	takgov        takGovState
 	pushed        pushedFiles
+	sim           simState
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -141,6 +145,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.appRoutes(mux)
 	s.takGovRoutes(mux)
 	s.overlayRoutes(mux)
+	s.simRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)

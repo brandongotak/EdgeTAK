@@ -330,6 +330,9 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	a.Federation = federation.New(fedCfg)
 	ws.Federation = a.Federation
 	ws.FederationDial = a.Dial
+	if a.Dial != nil {
+		ws.SimDial = func(_ context.Context, _, addr string) (net.Conn, error) { return a.Dial(addr) }
+	}
 	ws.Start(ctx) // server contact, Inbox and video (writes mediamtx.yml)
 	a.Federation.Start(ctx.Done())
 

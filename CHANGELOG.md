@@ -10,6 +10,21 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.19.0 (2026-10-22)
+
+### Added
+- **Simulator** (Server → Simulator) for load testing: up to 5,000
+  simulated TAK devices connect to the TLS streaming port, walk around the
+  map's centre reporting positions (and chat, if chosen) and read
+  everything relayed. Live connections, events per second, relay time
+  (median, 95%, worst), failures and the server's CPU and memory. The
+  devices use a temporary account in the Simulator group, so real devices
+  don't see them; it is removed when the run ends.
+- **`edgetak sim`**: the same simulator from another computer, over the
+  network, against EdgeTAK or any TAK server (enrolls with a username and
+  password, or uses the plain TCP port). Prints statistics as it runs and
+  a summary at the end.
+
 ## v0.18.0 (2026-10-22)
 
 ### Added

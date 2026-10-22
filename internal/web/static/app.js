@@ -153,6 +153,7 @@ const loaders = {
   connect: loadConnect,
   chat: loadChat,
   federation: loadFederation,
+  simulator: loadSim,
   settings: () => Promise.all([loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadBackups()]),
 };
 
@@ -211,6 +212,8 @@ function selectTab(name) {
     pollTimer = setInterval(guard(loadSendLive), 5000); // Inbox updates
   } else if (name === 'chat') {
     pollTimer = setInterval(() => loadChat().catch(() => {}), 5000); // new messages
+  } else if (name === 'simulator') {
+    pollTimer = setInterval(() => loadSim().catch(() => {}), 2000);
   } else if (name === 'federation') {
     pollTimer = setInterval(() => { if (!$('#fed-dialog').open) loadFederation().catch(() => {}); }, 3000); // live connection state
   }
@@ -4595,6 +4598,74 @@ $('#overlay-edit').addEventListener('submit', guard(async (e) => {
     { name: e.target.name.value, groups: checkedIn('#overlay-edit-groups') }));
   $('#overlay-dialog').close();
   toast('Overlay saved');
+}));
+
+// ---------- simulator ----------
+
+function simCenter() {
+  if (map) {
+    const c = map.getCenter();
+    return [c.lat, c.lng];
+  }
+  const v = prefs.get('map.view', null);
+  return v ? [v.lat, v.lon] : null;
+}
+
+function renderSim(v) {
+  const st = v.stats, srv = v.server || {};
+  $('#sim-start').hidden = v.running;
+  $('#sim-stop').hidden = !v.running;
+  for (const el of $('#sim-form').elements) if (el.name) el.disabled = v.running;
+  $('#sim-state').innerHTML = v.running ? '<span class="pill warn">running</span>' : '';
+  const c = simCenter();
+  $('#sim-center').textContent = c ? `Devices walk around the map's centre (${c[0].toFixed(4)}, ${c[1].toFixed(4)}); move the map to change it.` : 'Open the map and centre it where the devices should be.';
+  $('#sim-results').hidden = !st;
+  if (!st) return;
+  $('#sim-results-title').textContent = v.running ? `Running for ${Math.round(st.elapsed)} s` : `Last run: ${Math.round(st.elapsed)} s${v.by ? ' by ' + v.by : ''}`;
+  const ms = (x) => (st.latency_samples ? `${Math.round(x)} ms` : '—');
+  const tiles = [
+    ['Connected', `${st.connected} / ${st.devices}`],
+    ['Events sent', v.running ? `${Math.round(st.sent_per_sec)}/s` : String(st.sent)],
+    ['Events received', v.running ? `${Math.round(st.received_per_sec)}/s` : String(st.received)],
+    ['Relay time (median)', ms(st.latency_p50_ms)],
+    ['Relay time (95%)', ms(st.latency_p95_ms)],
+    ['Relay time (worst)', ms(st.latency_max_ms)],
+    ['Failed / dropped', `${st.failed} / ${st.dropped}`],
+    ['Server CPU', srv.cpu >= 0 ? `${Math.round(srv.cpu)} %` : '—'],
+    ['Server memory', srv.heap ? fmtSize(srv.heap) : '—'],
+    ['Connections', String(srv.clients ?? '—')],
+  ];
+  $('#sim-stats').innerHTML = tiles.map(([k, val]) => `<div class="stat"><div class="v">${esc(val)}</div><div class="k">${esc(k)}</div></div>`).join('');
+  $('#sim-note').textContent = [
+    `In total: ${st.sent} events sent (${fmtSize(st.bytes_out)}), ${st.received} received (${fmtSize(st.bytes_in)}).`,
+    srv.dropped ? `The server has dropped ${srv.dropped} events for clients that couldn't keep up.` : '',
+    st.last_error ? `Last error: ${st.last_error}` : '',
+  ].filter(Boolean).join(' ');
+}
+
+async function loadSim() {
+  const v = await api('GET', 'api/sim');
+  renderSim(v);
+  const host = location.hostname;
+  $('#sim-cli').textContent = `edgetak sim -server ${host} -user loadtest -lat ${(simCenter() || [0, 0])[0].toFixed(4)} -lon ${(simCenter() || [0, 0])[1].toFixed(4)} -devices 500 -duration 5m`;
+}
+
+$('#sim-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const center = simCenter();
+  if (!center) throw new Error('Open the map and centre it where the devices should be');
+  const n = Number(f.devices.value);
+  if (n > 500 && !confirm(`Start ${n} simulated devices? This loads the server heavily while it runs.`)) return;
+  await api('POST', 'api/sim/start', { devices: n, ramp: Number(f.ramp.value), interval: Number(f.interval.value), chat_every: Number(f.chat.value),
+    minutes: Number(f.minutes.value), group: f.group.value.trim(), center, radius: Number(f.radius.value) });
+  toast(`Simulating ${n} devices`);
+  await loadSim();
+}));
+
+$('#sim-stop').addEventListener('click', guard(async () => {
+  renderSim(await api('POST', 'api/sim/stop'));
+  toast('Simulation stopped');
 }));
 
 // ---------- events ----------

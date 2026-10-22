@@ -51,6 +51,7 @@
       <button data-tab="connect" data-section="server">Connect</button>
       <button data-tab="federation" data-section="server">Federation</button>
       <button data-tab="settings" data-section="server">Settings</button>
+      <button data-tab="simulator" data-section="server">Simulator</button>
     </nav>
   </header>
 
@@ -178,6 +179,39 @@
           <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
         </form>
       </dialog>
+    </section>
+
+    <section id="tab-simulator" class="tab" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Simulator</h2><span id="sim-state"></span></div>
+        <p class="muted">Load-test this server with simulated TAK devices. Each one connects to the TLS streaming port like ATAK, walks around the map's centre sending position reports (and chat, if you like), and reads everything the server relays. They sign in as a temporary account in the group below (<strong>Simulator</strong> keeps them away from real devices), which is removed when the run ends. They run on this machine, sharing its CPU with the server; for load from another computer use <code>edgetak sim</code> (below).</p>
+        <form id="sim-form" class="stack">
+          <div class="inline-form">
+            <label>Devices <input name="devices" type="number" min="1" max="5000" value="100" class="days-input" style="width:7em"></label>
+            <label>Joining per second <input name="ramp" type="number" min="1" max="1000" value="50" class="days-input" style="width:6em"></label>
+            <label>Position every <select name="interval"><option value="1">1 s</option><option value="2">2 s</option><option value="5" selected>5 s</option><option value="10">10 s</option><option value="30">30 s</option></select></label>
+            <label>Chat <select name="chat"><option value="0" selected>off</option><option value="10">every 10 s</option><option value="60">every minute</option><option value="300">every 5 min</option></select></label>
+          </div>
+          <div class="inline-form">
+            <label>Run for <select name="minutes"><option value="1">1 minute</option><option value="5" selected>5 minutes</option><option value="15">15 minutes</option><option value="60">1 hour</option><option value="0">until stopped</option></select></label>
+            <label>Group <input name="group" value="Simulator" maxlength="64"></label>
+            <label>Area radius <select name="radius"><option value="500">500 m</option><option value="2000" selected>2 km</option><option value="10000">10 km</option><option value="50000">50 km</option></select></label>
+          </div>
+          <p class="muted" id="sim-center"></p>
+          <div class="inline-form"><button class="primary" type="submit" id="sim-start">Start</button><button type="button" class="danger" id="sim-stop" hidden>Stop</button></div>
+        </form>
+      </div>
+      <div class="card" id="sim-results" hidden>
+        <h2 id="sim-results-title">Results</h2>
+        <div class="stats" id="sim-stats"></div>
+        <p class="muted" id="sim-note"></p>
+      </div>
+      <div class="card">
+        <h2>From another computer</h2>
+        <p class="muted">The same simulator runs as <code>edgetak sim</code> (any EdgeTAK download, Windows, Linux or macOS), so the load comes over the network. Create an account in a test group for it, then:</p>
+        <pre class="code-block" id="sim-cli"></pre>
+        <p class="muted"><code>edgetak sim -h</code> lists the options (chat, how long, plain TCP). Add <code>-insecure</code> when the enrollment port uses EdgeTAK's own certificate rather than a public one.</p>
+      </div>
     </section>
 
     <section id="tab-settings" class="tab" hidden>
