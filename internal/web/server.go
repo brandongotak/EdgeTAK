@@ -312,6 +312,9 @@ func safeMethod(m string) bool { return m == http.MethodGet || m == http.MethodH
 // signed by our CA that are not in the user table get the anonymous group.
 func (s *Server) userIdentity(name string) *identity {
 	if u, ok := s.Store.User(name); ok {
+		if u.Disabled {
+			return nil
+		}
 		return s.fromUser(u)
 	}
 	anon := []string{s.Cfg.AnonymousGroup}

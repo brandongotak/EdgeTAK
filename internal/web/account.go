@@ -81,7 +81,7 @@ func (s *Server) accountAuth(h func(w http.ResponseWriter, r *http.Request, u *s
 		}
 		s.account.mu.Unlock()
 		u, exists := s.Store.User(sess.username)
-		if !ok || !exists {
+		if !ok || !exists || u.Disabled {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "sign in first"})
 			return
 		}

@@ -111,8 +111,8 @@ func (s *Server) bearerIdentity(r *http.Request) *identity {
 		return nil
 	}
 	u, ok := s.Store.User(c.Sub)
-	if !ok {
-		return nil // user deleted since the token was issued
+	if !ok || u.Disabled {
+		return nil // user deleted or disabled since the token was issued
 	}
 	return s.fromUser(u)
 }

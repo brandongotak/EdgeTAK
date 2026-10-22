@@ -63,8 +63,18 @@ var errBadPassword = errors.New("the directory rejected the username or password
 // authenticate checks a username and password, locally or against the
 // directory.
 func (s *Server) authenticate(name, password string) (*store.User, bool) {
+	u, ok := s.checkPassword(name, password)
+	if ok && u.Disabled {
+		return nil, false
+	}
+	return u, ok
+}
+
+func (s *Server) checkPassword(name, password string) (*store.User, bool) {
 	if u, ok := s.Store.User(name); ok && u.Source != "ldap" {
 		return s.Store.Authenticate(name, password)
+	} else if ok && u.Disabled {
+		return nil, false // a disabled directory user: don't ask the directory
 	}
 	set := s.Store.LDAP()
 	if !set.Enabled || password == "" || !usernameRE.MatchString(name) {

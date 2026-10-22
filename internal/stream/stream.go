@@ -80,6 +80,10 @@ func (s *Server) handle(ctx context.Context, conn net.Conn, transport string) {
 		}
 		username, serial = leaf.Subject.CommonName, pki.SerialHex(leaf)
 		if u, ok := s.Store.User(username); ok {
+			if u.Disabled {
+				s.Log.Info("rejected a disabled user's device", "remote", remote, "user", username)
+				return
+			}
 			in, out = u.Effective(s.AnonymousGroup)
 		}
 	}

@@ -166,17 +166,20 @@ func (s *Server) disconnectClient(w http.ResponseWriter, r *http.Request, id *id
 var usernameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$`)
 
 type userView struct {
-	Username  string    `json:"username"`
-	Groups    []string  `json:"groups"`     // both directions
-	GroupsIn  []string  `json:"groups_in"`  // receive only
-	GroupsOut []string  `json:"groups_out"` // send only
-	Inactive  []string  `json:"inactive"`   // channels the user switched off ("group:IN")
-	Admin     bool      `json:"admin"`
-	Created   time.Time `json:"created"`
-	Online    int       `json:"online"`
-	TwoFactor bool      `json:"two_factor"`
-	Source    string    `json:"source,omitempty"`            // "ldap" for directory users
-	Missing   bool      `json:"directory_missing,omitempty"` // not found at the last directory sync
+	Username   string    `json:"username"`
+	Groups     []string  `json:"groups"`     // both directions
+	GroupsIn   []string  `json:"groups_in"`  // receive only
+	GroupsOut  []string  `json:"groups_out"` // send only
+	Inactive   []string  `json:"inactive"`   // channels the user switched off ("group:IN")
+	Admin      bool      `json:"admin"`
+	Created    time.Time `json:"created"`
+	Online     int       `json:"online"`
+	TwoFactor  bool      `json:"two_factor"`
+	Source     string    `json:"source,omitempty"`            // "ldap" for directory users
+	Missing    bool      `json:"directory_missing,omitempty"` // not found at the last directory sync
+	Disabled   bool      `json:"disabled,omitempty"`
+	DisabledBy string    `json:"disabled_by,omitempty"`
+	DisabledAt time.Time `json:"disabled_at,omitzero"`
 }
 
 func newUserView(u *store.User, online int) userView {
@@ -186,7 +189,7 @@ func newUserView(u *store.User, online int) userView {
 		}
 		return l
 	}
-	return userView{u.Username, nn(u.Groups), nn(u.GroupsIn), nn(u.GroupsOut), nn(u.Inactive), u.Admin, u.Created, online, u.TwoFactor(), u.Source, u.DirectoryOff}
+	return userView{u.Username, nn(u.Groups), nn(u.GroupsIn), nn(u.GroupsOut), nn(u.Inactive), u.Admin, u.Created, online, u.TwoFactor(), u.Source, u.DirectoryOff, u.Disabled, u.DisabledBy, u.DisabledAt}
 }
 
 // applyUserGroups pushes a user's current memberships to their live connections.
@@ -259,6 +262,7 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request, id *identity
 		GroupsIn  *[]string `json:"groups_in"`
 		GroupsOut *[]string `json:"groups_out"`
 		Admin     *bool     `json:"admin"`
+		Disabled  *bool     `json:"disabled"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "invalid request")
@@ -267,6 +271,16 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request, id *identity
 	if req.Admin != nil && !*req.Admin && name == id.Username {
 		jsonError(w, http.StatusBadRequest, "you cannot remove your own administrator role")
 		return
+	}
+	if req.Disabled != nil && *req.Disabled {
+		if name == id.Username {
+			jsonError(w, http.StatusBadRequest, "you cannot disable your own account")
+			return
+		}
+		if u, ok := s.Store.User(name); ok && u.Admin && !u.Disabled && s.enabledAdmins() <= 1 {
+			jsonError(w, http.StatusBadRequest, "this is the last administrator who can sign in")
+			return
+		}
 	}
 	var hash string
 	if req.Password != nil {
@@ -300,6 +314,13 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request, id *identity
 		if req.Admin != nil {
 			u.Admin = *req.Admin
 		}
+		if req.Disabled != nil && *req.Disabled != u.Disabled {
+			u.Disabled = *req.Disabled
+			u.DisabledBy, u.DisabledAt = "", time.Time{}
+			if u.Disabled {
+				u.DisabledBy, u.DisabledAt = id.Username, time.Now().UTC()
+			}
+		}
 		return nil
 	})
 	if errors.Is(err, store.ErrNotFound) {
@@ -309,9 +330,59 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request, id *identity
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if req.Disabled != nil {
+		if u.Disabled {
+			s.cutOff(name)
+			s.Log.Warn("user disabled", "admin", id.Username, "user", name)
+		} else {
+			s.Log.Info("user enabled", "admin", id.Username, "user", name)
+		}
+	}
 	s.applyUserGroups(name)
 	s.Log.Info("user updated", "admin", id.Username, "user", name)
 	writeJSON(w, http.StatusOK, newUserView(u, 0))
+}
+
+// enabledAdmins counts the administrators who can sign in.
+func (s *Server) enabledAdmins() int {
+	n := 0
+	for _, u := range s.Store.Users() {
+		if u.Admin && !u.Disabled {
+			n++
+		}
+	}
+	return n
+}
+
+// cutOff ends everything a just-disabled user has open: device streams,
+// console and account sessions, and remembered directory sign-ins.
+func (s *Server) cutOff(name string) {
+	for _, c := range s.Router.Clients() {
+		if c.Username == name {
+			c.Close()
+		}
+	}
+	s.sessMu.Lock()
+	for k, sess := range s.sessions {
+		if sess.username == name {
+			delete(s.sessions, k)
+		}
+	}
+	s.sessMu.Unlock()
+	s.account.mu.Lock()
+	for k, sess := range s.account.sessions {
+		if sess.username == name {
+			delete(s.account.sessions, k)
+		}
+	}
+	s.account.mu.Unlock()
+	s.ldap.mu.Lock()
+	for k := range s.ldap.cache {
+		if strings.HasPrefix(k, strings.ToLower(name)+"\x00") {
+			delete(s.ldap.cache, k)
+		}
+	}
+	s.ldap.mu.Unlock()
 }
 
 func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request, id *identity) {

@@ -87,6 +87,10 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   devices and certificates (with expiry), revoke the certificate of a lost
   device, and change their password. Share the link from the console's
   Connect tab.
+- **Disable a user** (People → Users) instead of deleting them: they can't
+  sign in, their certificates stop working and their devices are
+  disconnected at once, while their account, groups and certificates are
+  kept. **Enable** brings everything back. You can't disable yourself.
 - **Federation** with TAK Servers and other EdgeTAKs (TAK Server Federation
   v2): positions, markers, chat, direct messages and data packages cross
   between servers, in either direction, with certificate or token sign-in,

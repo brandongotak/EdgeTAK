@@ -1809,8 +1809,8 @@ async function loadUsers() {
   allGroups = groups;
   usersByName = Object.fromEntries(users.map((u) => [u.username, u]));
   renderNewUserPicker();
-  $('#users-table tbody').innerHTML = users.map((u) => `<tr>
-    <td><strong>${esc(u.username)}</strong>${u.source === 'ldap' ? ` <span class="pill" title="Signs in with the directory password; groups come from the directory">directory</span>` : ''}${u.directory_missing ? ' <span class="pill warn" title="Not found in the directory at the last sync. Its certificates still work: revoke them if the person left.">not in directory</span>' : ''}</td>
+  $('#users-table tbody').innerHTML = users.map((u) => `<tr${u.disabled ? ' class="dim"' : ''}>
+    <td><strong>${esc(u.username)}</strong>${u.disabled ? ` <span class="pill bad" title="Disabled${u.disabled_by ? ' by ' + esc(u.disabled_by) : ''}${u.disabled_at ? ' on ' + esc(date(u.disabled_at)) : ''}">disabled</span>` : ''}${u.source === 'ldap' ? ` <span class="pill" title="Signs in with the directory password; groups come from the directory">directory</span>` : ''}${u.directory_missing ? ' <span class="pill warn" title="Not found in the directory at the last sync. Its certificates still work: revoke them if the person left.">not in directory</span>' : ''}</td>
     <td>${userGroupPills(u)}</td>
     <td>${u.admin ? '<span class="pill ok">admin</span>' : 'user'}${u.two_factor ? ' <span class="pill ok" title="Two-factor login is on">2FA</span>' : ''}</td>
     <td>${u.online ? `<span class="pill ok">${u.online} online</span>` : '<span class="muted">offline</span>'}</td>
@@ -1819,6 +1819,7 @@ async function loadUsers() {
       <button class="small" data-act="groups" data-user="${esc(u.username)}">Groups</button>
       ${u.source === 'ldap' ? '' : `<button class="small" data-act="password" data-user="${esc(u.username)}">Password</button>`}
       <button class="small" data-act="admin" data-user="${esc(u.username)}" data-admin="${u.admin}">${u.admin ? 'Revoke admin' : 'Make admin'}</button>
+      ${u.username === $('#me').textContent ? '' : `<button class="small${u.disabled ? ' primary' : ''}" data-act="disable" data-user="${esc(u.username)}" data-disabled="${!!u.disabled}" title="${u.disabled ? 'Let this user sign in and connect again' : 'Block sign-in, certificates and connections, keeping the account'}">${u.disabled ? 'Enable' : 'Disable'}</button>`}
       ${u.two_factor && u.username !== $('#me').textContent ? `<button class="small" data-act="reset2fa" data-user="${esc(u.username)}" title="For a lost phone">Reset 2FA</button>` : ''}
       <button class="small" data-act="package" data-user="${esc(u.username)}" title="Connection data package for this user">Package</button>
       <button class="small" data-act="p12" data-user="${esc(u.username)}">Issue .p12</button>
@@ -1931,6 +1932,13 @@ $('#users-table').addEventListener('click', guard(async (e) => {
     case 'admin':
       await api('PATCH', path, { admin: b.dataset.admin !== 'true' });
       break;
+    case 'disable': {
+      const disable = b.dataset.disabled !== 'true';
+      if (disable && !confirm(`Disable ${user}? They can't sign in, their devices are disconnected and their certificates stop working until you enable them again. Their account, groups and certificates are kept.`)) return;
+      await api('PATCH', path, { disabled: disable });
+      toast(disable ? `${user} disabled and disconnected` : `${user} enabled`);
+      break;
+    }
     case 'p12': {
       const pw = prompt(`Password to protect ${user}.p12 (blank = server trust store password)`, '');
       if (pw === null) return;

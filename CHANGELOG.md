@@ -10,6 +10,16 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.14.0 (2026-10-22)
+
+### Added
+- **Disable users** (People → Users): a disabled user can't sign in
+  anywhere (console, account page, enrollment, API), their certificates stop
+  working, and their devices and console sessions are cut off at once.
+  Their account, groups and certificates are kept, so **Enable** brings
+  everything back. Works for directory (LDAP) users too, without asking the
+  directory. You can't disable your own account.
+
 ## v0.13.1 (2026-10-22)
 
 ### Changed

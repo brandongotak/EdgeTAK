@@ -41,6 +41,12 @@ type User struct {
 	DirectoryDN  string `json:"directory_dn,omitempty"`
 	DirectoryOff bool   `json:"directory_missing,omitempty"` // not found at the last sync
 
+	// Disabled users can't sign in, use their certificates or stay
+	// connected; everything else about them is kept for re-enabling.
+	Disabled   bool      `json:"disabled,omitempty"`
+	DisabledBy string    `json:"disabled_by,omitempty"`
+	DisabledAt time.Time `json:"disabled_at,omitzero"`
+
 	// Two-factor login for the admin console (authenticator app codes).
 	TOTPSecret   string   `json:"totp_secret,omitempty"`
 	TOTPPending  string   `json:"totp_pending,omitempty"` // being set up, not yet confirmed
