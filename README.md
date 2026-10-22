@@ -564,7 +564,7 @@ downloading and uploading them by hand:
    sees the password: it keeps only tak.gov's sign-in (refresh) token, which
    tak.gov replaces each time it is used.
 2. Pick the **product** (ATAK-CIV, or another your account can see) and
-   **ATAK version**, and **Show plugins**. Plugins already on this server
+   **ATAK version** from the list, and **Show plugins**. Plugins already on this server
    are marked.
 3. **Add** downloads the plugin from tak.gov, checks it against the hash
    tak.gov lists, and adds it to the update server like an upload.

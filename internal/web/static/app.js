@@ -2600,6 +2600,9 @@ $('#apk-table').addEventListener('click', guard(async (e) => {
 
 // ---------- tak.gov plugins ----------
 
+// ATAK 5.5 and later (a newer version the server has plugins for is added).
+const TAKGOV_VERSIONS = ['5.8.0', '5.7.0', '5.6.0', '5.5.0'];
+const takgovVersionOK = (v) => /^\d+(\.\d+)*$/.test(v) && v.localeCompare('5.5', undefined, { numeric: true }) >= 0;
 let takgov = {};
 let takgovPlugins = [];
 let takgovTimer = null;
@@ -2619,7 +2622,13 @@ function renderTakGov(v) {
   }
   const f = $('#takgov-form');
   if (!f.product.value) f.product.value = v.product;
-  if (!f.version.value) f.version.value = v.product_version;
+  // tak.gov's ATAK versions, plus the one last browsed (or the server's plugins are for).
+  let chosen = f.version.value || v.product_version;
+  if (!takgovVersionOK(chosen)) chosen = '5.6.0';
+  const versions = [...new Set([...TAKGOV_VERSIONS, v.product_version, chosen].filter(takgovVersionOK))]
+    .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+  f.version.innerHTML = versions.map((x) => `<option>${esc(x)}</option>`).join('');
+  f.version.value = chosen;
   clearTimeout(takgovTimer);
   if (pending) takgovTimer = setTimeout(pollTakGov, (v.pending.interval || 5) * 1000);
 }
@@ -2689,6 +2698,7 @@ $('#takgov-form').addEventListener('submit', guard(async (e) => {
   await showTakGovPlugins();
 }));
 $('#takgov-filter').addEventListener('input', renderTakGovPlugins);
+$('#takgov-form').version.addEventListener('change', () => $('#takgov-form').requestSubmit());
 $('#takgov-table').addEventListener('click', guard(async (e) => {
   const btn = e.target.closest('[data-takgov-install]');
   if (!btn) return;

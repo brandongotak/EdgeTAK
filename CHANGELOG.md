@@ -10,6 +10,13 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.16.1 (2026-10-22)
+
+### Changed
+- **Plugins from tak.gov:** the ATAK version is picked from a list (5.5.0
+  and later) instead of typed, and picking one shows its plugins straight
+  away.
+
 ## v0.16.0 (2026-10-22)
 
 ### Added
