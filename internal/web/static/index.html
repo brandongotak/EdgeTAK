@@ -192,6 +192,11 @@
           <tbody></tbody>
         </table></div>
       </div>
+      <div class="card">
+        <h2>How to set up a webhook</h2>
+        <p class="muted">Pick the service your team already uses. Each gives you a web address (the webhook URL) that EdgeTAK posts alerts to; paste it into <strong>Add webhook</strong>, choose the alerts, save, then press <strong>Send test</strong> and check the message arrives. Treat the URL like a password: anyone who has it can post to your channel.</p>
+        <div id="hook-guide"></div>
+      </div>
       <dialog id="hook-dialog" class="card dialog">
         <form method="dialog" id="hook-form" class="stack">
           <div class="card-head"><h2 id="hook-dialog-title">Add webhook</h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
@@ -199,7 +204,7 @@
           <label>Sends to <select name="format">
             <option value="discord">Discord</option><option value="slack">Slack</option><option value="teams">Microsoft Teams</option>
             <option value="ntfy">ntfy (phone notifications)</option><option value="json">Any URL (JSON)</option></select></label>
-          <p class="muted" id="hook-help"></p>
+          <div class="hook-help" id="hook-help"></div>
           <label>Webhook URL <input name="url" type="url" maxlength="2000" placeholder="https://"></label>
           <label id="hook-secret-row">Signing secret (optional) <input name="secret" maxlength="200" autocomplete="off" placeholder="signs each body: X-EdgeTAK-Signature: sha256=…"></label>
           <div class="muted picker-label">Alerts</div>

@@ -686,13 +686,32 @@ unlike TAK Server, the plugin checks it.
 **Server → Webhooks** sends alerts where people already look, so they hear
 about them with the console closed:
 
-| Sends to | Get the URL from |
-|---|---|
-| Discord | channel settings → Integrations → Webhooks → New Webhook |
-| Slack | an app with Incoming Webhooks for the channel |
-| Microsoft Teams | the channel's Workflows → "Post to a channel when a webhook request is received" |
-| ntfy | `https://ntfy.sh/<a topic only your team knows>` (or your own ntfy server; `https://user:password@host/topic` if it is protected); subscribe to the topic in the ntfy app |
-| Any URL | JSON: `event`, `title`, `callsign`, `username`, `text`, `lat`, `lon`, `map_url`, `time`, `server`; with a signing secret, `X-EdgeTAK-Signature: sha256=<HMAC-SHA256 of the body>` |
+Setting one up (the Webhooks page has the same steps):
+
+- **Discord**: on the channel, the gear (Edit Channel) → Integrations →
+  Webhooks → New Webhook (needs the Manage Webhooks permission) → Copy
+  Webhook URL.
+- **Slack**: at api.slack.com/apps, Create New App → From scratch; turn on
+  Incoming Webhooks; Add New Webhook to Workspace, pick the channel, Allow;
+  copy the `https://hooks.slack.com/services/…` URL.
+- **Microsoft Teams**: on the channel, ⋯ → Workflows → "Post to a channel
+  when a webhook request is received" → name it, choose the team and
+  channel, Add workflow; copy the URL it shows. (Microsoft is retiring the
+  old Incoming Webhook connector.)
+- **ntfy** (phone notifications): install the ntfy app, subscribe to a topic
+  nobody could guess (anyone who knows a topic on ntfy.sh can read it), and
+  use `https://ntfy.sh/<topic>` (or your own server,
+  `https://user:password@host/topic` if it needs a login). Emergencies
+  arrive at priority 5.
+- **Any URL**: EdgeTAK posts JSON: `event` (emergency, geofence,
+  lost_contact, ended, signup, admin, server or test), `title`,
+  `callsign`, `username`, `text`, `lat`, `lon`, `map_url`, `time`,
+  `server`. With a signing secret, `X-EdgeTAK-Signature` is `sha256=` and
+  the hex HMAC-SHA256 of the body. Answer with a 2xx; 429 and 5xx are
+  retried.
+
+Then **Add webhook**, choose the service, paste the URL, choose the alerts,
+save and press **Send test**.
 
 Each webhook chooses its alerts (emergencies, geofence alerts, lost
 contact, alerts ending, sign-ups, admin changes, server health) and,

@@ -114,6 +114,10 @@ main { padding: 16px; max-width: 1400px; margin: 0 auto; display: flex; flex-dir
 .map-toolbar select { padding: 4px 8px; font-size: 13px; max-width: 200px; }
 #map { flex: 1; min-height: 0; display: grid; place-items: center; }
 tr.warn-row td { background: color-mix(in srgb, var(--warn, #F29900) 8%, transparent); }
+#hook-guide details, .hook-help details { border-top: 1px solid var(--line); padding: 4px 0; }
+#hook-guide summary, .hook-help summary { color: var(--text); font-weight: 600; padding: 6px 0; }
+#hook-guide ol, .hook-help ol { margin: 6px 0 6px 20px; padding: 0; display: grid; gap: 6px; }
+#hook-guide code, .hook-help code { word-break: break-all; }
 .code-block { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; overflow-x: auto; font-size: 13px; white-space: pre; }
 .code-big { font-size: 22px; font-weight: 700; letter-spacing: 2px; padding: 4px 12px; border: 1px dashed var(--line); border-radius: var(--radius); }
 .app-icon { width: 36px; height: 36px; border-radius: 8px; display: block; }

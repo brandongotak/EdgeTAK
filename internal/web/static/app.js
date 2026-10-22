@@ -4765,13 +4765,71 @@ let webhooks = [];
 let editingHook = null;
 const HOOK_FORMATS = { discord: 'Discord', slack: 'Slack', teams: 'Teams', ntfy: 'ntfy', json: 'JSON' };
 const HOOK_EVENTS = { emergency: 'Emergencies', geofence: 'Geofence', lost_contact: 'Lost contact', ended: 'Ended', signup: 'Sign-ups', admin: 'Admin changes', server: 'Server health' };
-const HOOK_HELP = {
-  discord: 'In Discord: channel settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.',
-  slack: 'In Slack: create an app with Incoming Webhooks turned on, add one for the channel and copy its URL.',
-  teams: 'In Teams: the channel\'s ⋯ → Workflows → "Post to a channel when a webhook request is received", then copy the URL it gives.',
-  ntfy: 'Install the ntfy app and subscribe to a topic only your team knows; the URL is the server and topic, e.g. https://ntfy.sh/acme-sar-alerts-7f3k. Emergencies arrive at top priority. For a protected server: https://user:password@ntfy.example.org/topic.',
-  json: 'EdgeTAK posts JSON: event, title, callsign, username, text, lat, lon, map_url, time and server. With a signing secret, X-EdgeTAK-Signature is the body\'s HMAC-SHA256.',
+// Setup steps for each service, shown on the page and in the dialog.
+const HOOK_GUIDE = {
+  discord: {
+    name: 'Discord',
+    steps: [
+      'In Discord, open the server and hover over the channel the alerts should go to. Click the gear (Edit Channel).',
+      'Go to <strong>Integrations → Webhooks</strong> and click <strong>New Webhook</strong> (you need the Manage Webhooks permission).',
+      'Give it a name, e.g. <em>EdgeTAK</em>, and check the channel is right.',
+      'Click <strong>Copy Webhook URL</strong>. It looks like <code>https://discord.com/api/webhooks/1234…/abcd…</code>.',
+      'In EdgeTAK: <strong>Add webhook</strong>, Sends to <strong>Discord</strong>, paste the URL, choose the alerts, Save, then <strong>Send test</strong>.',
+    ],
+    note: 'Alerts arrive as coloured cards (red for emergencies) with a map link. Everyone in the channel gets Discord\'s usual notification.',
+  },
+  slack: {
+    name: 'Slack',
+    steps: [
+      'Go to <strong>api.slack.com/apps</strong> and click <strong>Create New App → From scratch</strong>. Name it, e.g. <em>EdgeTAK</em>, and pick your workspace.',
+      'Under <strong>Features</strong>, open <strong>Incoming Webhooks</strong> and switch <strong>Activate Incoming Webhooks</strong> on.',
+      'Click <strong>Add New Webhook to Workspace</strong>, pick the channel and click <strong>Allow</strong>. (Some workspaces need an admin to approve the app.)',
+      'Copy the <strong>Webhook URL</strong>. It looks like <code>https://hooks.slack.com/services/T…/B…/…</code>.',
+      'In EdgeTAK: <strong>Add webhook</strong>, Sends to <strong>Slack</strong>, paste the URL, choose the alerts, Save, then <strong>Send test</strong>.',
+    ],
+    note: 'Each webhook posts to one channel; add another app webhook (and another EdgeTAK webhook) for a second channel.',
+  },
+  teams: {
+    name: 'Microsoft Teams',
+    steps: [
+      'In Teams, go to the channel, click <strong>⋯</strong> (More options) next to its name and choose <strong>Workflows</strong>.',
+      'Pick the template <strong>Post to a channel when a webhook request is received</strong>.',
+      'Name the workflow, e.g. <em>EdgeTAK alerts</em>, click <strong>Next</strong>, check the team and channel, then <strong>Add workflow</strong>.',
+      'Copy the URL Teams shows (it starts with <code>https://</code> and is long). If you missed it: Workflows app → the workflow → edit the first step, <em>When a Teams webhook request is received</em>.',
+      'In EdgeTAK: <strong>Add webhook</strong>, Sends to <strong>Microsoft Teams</strong>, paste the URL, choose the alerts, Save, then <strong>Send test</strong>.',
+    ],
+    note: 'Alerts arrive as cards with an Open map button. They are posted by the Workflows app as the person who made the workflow. The old "Incoming Webhook" connector is being retired by Microsoft; use Workflows.',
+  },
+  ntfy: {
+    name: 'ntfy (phone notifications)',
+    steps: [
+      'Install the <strong>ntfy</strong> app on each phone (Google Play, F-Droid or the App Store).',
+      'Make up a topic name nobody could guess, e.g. <code>acme-sar-alerts-7f3k9q</code>: on the public ntfy.sh server, anyone who knows a topic can read it.',
+      'In the app tap <strong>+</strong>, enter the topic and subscribe. Everyone who should get alerts does the same.',
+      'In EdgeTAK: <strong>Add webhook</strong>, Sends to <strong>ntfy</strong>, URL <code>https://ntfy.sh/</code> followed by the topic, choose the alerts, Save, then <strong>Send test</strong>.',
+      'Running your own ntfy server? Use its address instead, e.g. <code>https://ntfy.example.org/alerts</code>; if it needs a login, <code>https://user:password@ntfy.example.org/alerts</code>.',
+    ],
+    note: 'Emergencies are sent at ntfy\'s highest priority (5), which rings even when other notifications are quiet; tap a notification to open the position on a map. In the app you can set how each priority sounds, or let priority 5 override Do Not Disturb (Android).',
+  },
+  json: {
+    name: 'Any URL (JSON)',
+    steps: [
+      'For your own system or an automation tool (Node-RED, n8n, Zapier, Home Assistant, a script): create an endpoint that accepts a POST with a JSON body.',
+      'In EdgeTAK: <strong>Add webhook</strong>, Sends to <strong>Any URL (JSON)</strong>, paste the endpoint\'s URL, and optionally set a <strong>signing secret</strong>.',
+      'Each alert is posted as JSON: <code>{"event":"emergency","title":"911 Alert","callsign":"ALPHA","username":"alpha","text":"","lat":39.74,"lon":-104.99,"map_url":"https://…","time":"2026-10-22T14:00:00Z","server":"EdgeTAK"}</code>. <code>event</code> is one of emergency, geofence, lost_contact, ended, signup, admin, server or test; the header <code>X-EdgeTAK-Event</code> repeats it.',
+      'With a secret, check <code>X-EdgeTAK-Signature</code>: it is <code>sha256=</code> followed by the hex HMAC-SHA256 of the raw body, keyed with the secret. Reject requests where it doesn\'t match.',
+      'Answer with any 2xx status. Other answers count as failures; 429 and 5xx are retried twice.',
+    ],
+    note: 'Most automation tools have a "webhook" trigger that gives you such a URL; services that expect their own format need a small relay in between.',
+  },
 };
+
+function hookSteps(key) {
+  const g = HOOK_GUIDE[key];
+  return `<ol>${g.steps.map((x) => `<li>${x}</li>`).join('')}</ol><p class="muted">${g.note}</p>`;
+}
+
+$('#hook-guide').innerHTML = Object.keys(HOOK_GUIDE).map((k) => `<details><summary>${HOOK_GUIDE[k].name}</summary>${hookSteps(k)}</details>`).join('');
 
 function renderWebhooks(list) {
   webhooks = list;
@@ -4800,7 +4858,7 @@ async function loadWebhooks() {
 
 function hookFormatChanged() {
   const f = $('#hook-form');
-  $('#hook-help').textContent = HOOK_HELP[f.format.value];
+  $('#hook-help').innerHTML = `<details><summary>How to get the ${HOOK_GUIDE[f.format.value].name} URL</summary>${hookSteps(f.format.value)}</details>`;
   $('#hook-secret-row').hidden = f.format.value !== 'json';
 }
 

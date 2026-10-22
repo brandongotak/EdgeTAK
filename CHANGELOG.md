@@ -10,6 +10,14 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.20.1 (2026-10-22)
+
+### Changed
+- **Webhooks**: step-by-step setup instructions for Discord, Slack,
+  Microsoft Teams, ntfy and any URL (JSON, with the payload and how to
+  check its signature), on the Webhooks page and in the Add webhook dialog
+  for the service chosen.
+
 ## v0.20.0 (2026-10-22)
 
 ### Added
