@@ -78,9 +78,12 @@ func TestUpdateServer(t *testing.T) {
 	if files["icons/"+hash+".png"] == "" {
 		t.Errorf("no icon in the index: %v", files)
 	}
-	// ATAK asks for its own version first; without plugins for it, 404.
-	if st, _, _ := device.do("GET", "/update/5.4.0/product.infz", nil); st != 404 {
-		t.Errorf("version index = %d, want 404", st)
+	// ATAK asks for its own version first: the apps and the plugins it loads.
+	if st, _, raw := device.do("GET", "/update/5.7.0/product.inf", nil); st != 200 || !strings.Contains(string(raw), "com.example.helloworld") {
+		t.Errorf("version index = %d %s", st, raw)
+	}
+	if st, _, _ := device.do("GET", "/update/nonsense/product.infz", nil); st != 404 {
+		t.Errorf("unknown folder = %d, want 404", st)
 	}
 	st, _, raw = device.do("GET", "/update/apk/"+hash+".apk", nil)
 	if st != 200 || !bytes.Equal(raw, apk) {

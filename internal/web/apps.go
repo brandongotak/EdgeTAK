@@ -151,9 +151,9 @@ func (s *Server) updateServer(w http.ResponseWriter, r *http.Request, id *identi
 	all := s.Store.Apps()
 	version := ""
 	if first, rest, ok := strings.Cut(path, "/"); ok && first != "apk" {
-		// ATAK first asks for <url>/<its version>/product.infz; without
-		// plugins for that version, a 404 makes it use the general index.
-		if !apps.HasVersion(all, first) {
+		// ATAK first asks for <url>/<its version>/product.infz: answer with
+		// the builds that version loads.
+		if !apps.IsVersion(first) {
 			http.NotFound(w, r)
 			return
 		}

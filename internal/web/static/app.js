@@ -2471,7 +2471,7 @@ function renderApps(r) {
     <td><img class="app-icon" src="api/apps/${esc(a.sha256)}/icon" alt=""></td>
     <td><strong>${esc(a.name)}</strong><div class="muted mono">${esc(a.package)}</div>${a.description && a.description !== a.name ? `<div class="muted">${esc(a.description.length > 120 ? a.description.slice(0, 120) + "…" : a.description)}</div>` : ''}</td>
     <td>${esc(a.version || String(a.version_code))}</td>
-    <td>${a.plugin_api ? `<span class="pill">ATAK ${esc(a.atak_version)}${flavor && flavor !== a.atak_version ? ' ' + esc(flavor) : ''}</span>` : '<span class="pill">App</span>'}</td>
+    <td>${a.plugin_api ? `<span class="pill" title="Built for ATAK ${esc(a.atak_version)}; runs on it and later versions">ATAK ${esc(a.atak_version)}+${flavor && flavor !== a.atak_version ? ' ' + esc(flavor) : ''}</span>` : '<span class="pill">App</span>'}</td>
     <td>${a.min_sdk ? esc(ANDROID[a.min_sdk] ? ANDROID[a.min_sdk] + '+' : 'API ' + a.min_sdk) : ''}</td>
     <td>${bytes(a.size)}</td>
     <td>${esc(date(a.uploaded))}<div class="muted">${esc(a.uploader)}</div></td>

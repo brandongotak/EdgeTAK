@@ -10,6 +10,16 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.10.1 (2026-10-21)
+
+### Fixed
+- **Plugins built for an older ATAK version are offered to newer ATAK.**
+  ATAK runs plugins built for its own version or an older one (from 4.10),
+  but EdgeTAK only offered each device the builds for its exact version, so
+  a 5.6 plugin did not show on ATAK 5.7. Each device now gets, per plugin,
+  the build for the nearest ATAK version at or below its own. The Plugins
+  tab shows builds as "ATAK 5.6.0+".
+
 ## v0.10.0 (2026-10-21)
 
 ### Added

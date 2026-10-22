@@ -98,7 +98,7 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
 - **Plugins** (update server): upload ATAK plugin and app APKs, and devices
   install and update them from ATAK's **Plugins** screen. Names, versions,
   icons and the ATAK version each plugin is built for are read from the
-  APK; each device sees the builds for its ATAK version. Device profiles
+  APK; each device is offered the builds its ATAK version runs. Device profiles
   point ATAK at it. See [Plugins](#plugins).
 - **Device profiles** (Groups tab): settings and files sent to the TAK
   devices of a group's members, or of every user, as on the official server.
@@ -456,10 +456,13 @@ The **Plugins** tab is an update server for ATAK, like the one ATAK's
    them over the device's own connection (its certificate, or a username and
    password, which ATAK asks for).
 
-ATAK only loads plugins built for its exact version, and asks for its own
-version's list first. Upload a build per ATAK version your devices run; a
-device on ATAK 5.4.0 sees the 5.4.0 builds (and apps). A newer build of a
-plugin for the same ATAK version replaces the old one. Icons drawn as
+ATAK loads plugins built for its own version or an older one (from 4.10),
+never for a newer one, and asks for its own version's list first. Each
+device is offered, per plugin, the build for the nearest ATAK version at or
+below its own: a device on ATAK 5.7.0 gets a plugin's 5.7.0 build if there
+is one, else its 5.6.0 build. Builds for several ATAK versions can be
+uploaded side by side; a newer build for the same ATAK version replaces the
+old one. Icons drawn as
 vectors (adaptive icons) show as a plain placeholder: use **Change icon** to
 upload your own (PNG, JPEG or WebP). A newer build without a readable icon
 keeps the icon of the build it replaces.

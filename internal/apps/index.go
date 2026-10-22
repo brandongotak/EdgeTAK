@@ -3,9 +3,11 @@ package apps
 import (
 	"archive/zip"
 	"bytes"
+	"cmp"
 	"image"
 	"image/color"
 	"image/draw"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,7 +20,7 @@ import (
 //
 //	<url>/product.infz            zip of product.inf and the icons
 //	<url>/<atak version>/...      the same for one ATAK version, tried first
-//	                              (e.g. 5.4.0); a 404 falls back to <url>
+//	                              (e.g. 5.7.0); a 404 falls back to <url>
 //
 // product.inf has one line per APK with 13 columns: platform, type, package,
 // name, version, version code, APK path, icon path, description, SHA-256,
@@ -43,16 +45,21 @@ func ATAKVersion(pluginAPI string) string {
 	return strings.Join(parts[:3], ".")
 }
 
-// Select picks what an index offers: for an ATAK version, the plugins built
-// for it plus apps; for "" (the general index), every plugin and app. Only
-// the newest build of each package is listed per index.
+// Select picks what an index offers. For an ATAK version: the apps, and of
+// each plugin the build that version loads, the one for the nearest ATAK
+// version at or below it. For "" (the general index): the newest build of
+// each plugin and app.
+//
+// ATAK loads plugins built for its own version, and, from plugins built for
+// 4.10.0 on, ones built for older versions too (AtakPluginRegistry
+// isTakCompatible); never ones built for a newer version.
 func Select(all []store.App, version string) []store.App {
 	best := map[string]store.App{}
 	for _, a := range all {
-		if version != "" && a.PluginAPI != "" && ATAKVersion(a.PluginAPI) != version {
+		if version != "" && a.PluginAPI != "" && !Loads(version, ATAKVersion(a.PluginAPI)) {
 			continue
 		}
-		if b, ok := best[a.Package]; !ok || newer(a, b, version) {
+		if b, ok := best[a.Package]; !ok || better(a, b, version) {
 			best[a.Package] = a
 		}
 	}
@@ -64,7 +71,15 @@ func Select(all []store.App, version string) []store.App {
 	return out
 }
 
-func newer(a, b store.App, version string) bool {
+// better reports whether build a should be listed instead of b: for an
+// ATAK version, the one built for the nearer ATAK version; then the higher
+// version code; then the later upload.
+func better(a, b store.App, version string) bool {
+	if version != "" {
+		if c := CompareVersions(ATAKVersion(a.PluginAPI), ATAKVersion(b.PluginAPI)); c != 0 {
+			return c > 0
+		}
+	}
 	if a.VersionCode != b.VersionCode {
 		return a.VersionCode > b.VersionCode
 	}
@@ -74,16 +89,38 @@ func newer(a, b store.App, version string) bool {
 	return a.Uploaded.After(b.Uploaded)
 }
 
-// HasVersion reports whether any plugin is built for the ATAK version, so a
-// version-specific index is worth serving.
-func HasVersion(all []store.App, version string) bool {
-	for _, a := range all {
-		if a.PluginAPI != "" && ATAKVersion(a.PluginAPI) == version {
-			return true
+// Loads reports whether ATAK version atak loads a plugin built for version
+// built.
+func Loads(atak, built string) bool {
+	if built == atak {
+		return true
+	}
+	return CompareVersions(built, "4.10.0") >= 0 && CompareVersions(built, atak) < 0
+}
+
+// CompareVersions compares dotted version numbers ("5.6.0" < "5.10.0").
+func CompareVersions(a, b string) int {
+	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < max(len(pa), len(pb)); i++ {
+		var x, y int
+		if i < len(pa) {
+			x, _ = strconv.Atoi(pa[i])
+		}
+		if i < len(pb) {
+			y, _ = strconv.Atoi(pb[i])
+		}
+		if x != y {
+			return cmp.Compare(x, y)
 		}
 	}
-	return false
+	return 0
 }
+
+var versionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+
+// IsVersion reports whether s is an ATAK version ("5.7.0"), as ATAK puts in
+// the path of its version-specific requests.
+func IsVersion(s string) bool { return versionPattern.MatchString(s) }
 
 // field escapes a value the way ATAK persists it.
 func field(s string) string {

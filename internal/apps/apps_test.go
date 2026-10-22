@@ -43,6 +43,51 @@ func TestIconPNG(t *testing.T) {
 	}
 }
 
+// ATAK loads plugins built for its version or an older one (from 4.10.0):
+// a 5.6 plugin runs on 5.7.
+func TestSelectForATAKVersion(t *testing.T) {
+	now := time.Now()
+	plugin := func(id, pkg, atak string, code int64) store.App {
+		return store.App{SHA256: id, Package: pkg, Name: pkg, VersionCode: code, PluginAPI: "com.atakmap.app@" + atak + ".CIV", Uploaded: now}
+	}
+	all := []store.App{
+		plugin("p56", "com.p", "5.6.0", 5),
+		plugin("q56", "com.q", "5.6.0", 1),
+		plugin("q57", "com.q", "5.7.0", 1), // built for 5.7: preferred on 5.7, though not a newer version code
+		plugin("r58", "com.r", "5.8.0", 9), // too new for 5.7
+		plugin("s49", "com.s", "4.9.0", 1), // before 4.10: only on 4.9.0
+		plugin("t510", "com.t", "5.10.0", 1),
+		{SHA256: "app", Package: "com.app", Name: "app", VersionCode: 1, Uploaded: now},
+	}
+	ids := func(l []store.App) map[string]bool {
+		out := map[string]bool{}
+		for _, a := range l {
+			out[a.SHA256] = true
+		}
+		return out
+	}
+	for version, want := range map[string][]string{
+		"5.7.0":  {"p56", "q57", "app"},
+		"5.6.0":  {"p56", "q56", "app"},
+		"5.10.0": {"p56", "q57", "r58", "t510", "app"},
+		"4.9.0":  {"s49", "app"},
+	} {
+		got := ids(Select(all, version))
+		if len(got) != len(want) {
+			t.Errorf("%s: got %v, want %v", version, got, want)
+			continue
+		}
+		for _, id := range want {
+			if !got[id] {
+				t.Errorf("%s: got %v, want %v", version, got, want)
+			}
+		}
+	}
+	if CompareVersions("5.10.0", "5.9.0") <= 0 || CompareVersions("5.6.0", "5.6.0") != 0 {
+		t.Error("CompareVersions")
+	}
+}
+
 func TestIndex(t *testing.T) {
 	now := time.Now()
 	all := []store.App{
@@ -53,8 +98,8 @@ func TestIndex(t *testing.T) {
 	if v := ATAKVersion("com.atakmap.app@5.4.0.CIV"); v != "5.4.0" {
 		t.Errorf("ATAKVersion = %q", v)
 	}
-	if !HasVersion(all, "5.3.0") || HasVersion(all, "5.5.0") {
-		t.Error("HasVersion")
+	if !IsVersion("5.7.0") || IsVersion("apk") || IsVersion("5.7") {
+		t.Error("IsVersion")
 	}
 	// The 5.3.0 index has the 5.3.0 build and the app; the general one the newest build.
 	if l := Select(all, "5.3.0"); len(l) != 2 || l[0].SHA256 != "a2" || l[1].SHA256 != "b1" {
