@@ -121,6 +121,7 @@ func (s *Server) crossing(g *store.Geofence, uid, callsign, username string, lat
 	}
 	s.fences.alerts[key] = id
 	s.Log.Warn("GEOFENCE", "what", what, "callsign", callsign, "user", username, "lat", lat, "lon", lon)
+	go s.notify(notice{Kind: "geofence", Title: what, Callsign: callsign, Username: username, Lat: lat, Lon: lon})
 }
 
 // endAlert closes an alert (unless an admin already did).

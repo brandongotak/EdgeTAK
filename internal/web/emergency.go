@@ -94,6 +94,8 @@ func (s *Server) emergencyHook(src *router.Client, ev *cot.Event) bool {
 			s.Log.Error("store emergency", "err", err)
 		}
 		s.Log.Warn("emergency cancelled by the device", "callsign", active.Callsign, "type", active.Type, "user", src.Username)
+		s.notify(notice{Kind: "ended", Title: active.Type + " cancelled", Callsign: active.Callsign, Username: active.Username,
+			Text: "Cancelled on the device.", Lat: ev.Lat, Lon: ev.Lon})
 		return true
 	}
 	if em.Type != "" {
@@ -120,6 +122,7 @@ func (s *Server) emergencyHook(src *router.Client, ev *cot.Event) bool {
 		s.Log.Error("store emergency", "err", err)
 	}
 	s.Log.Warn("EMERGENCY", "type", desc, "callsign", callsign, "user", src.Username, "lat", ev.Lat, "lon", ev.Lon)
+	s.notify(notice{Kind: "emergency", Title: desc, Callsign: callsign, Username: src.Username, Lat: ev.Lat, Lon: ev.Lon})
 	return true
 }
 
@@ -179,6 +182,8 @@ func (s *Server) emergencyRoutes(mux *http.ServeMux) {
 			return
 		}
 		s.Log.Warn("emergency dismissed by an administrator", "admin", id.Username, "callsign", e.Callsign, "type", e.Type)
+		s.notify(notice{Kind: "ended", Title: e.Type + " dismissed", Callsign: e.Callsign, Username: e.Username,
+			Text: "Dismissed in the console by " + id.Username + "."})
 		writeJSON(w, http.StatusOK, e)
 	}))
 }

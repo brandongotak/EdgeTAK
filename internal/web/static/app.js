@@ -154,6 +154,8 @@ const loaders = {
   chat: loadChat,
   federation: loadFederation,
   simulator: loadSim,
+  webhooks: loadWebhooks,
+  audit: () => loadAudit(),
   settings: () => Promise.all([loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadBackups()]),
 };
 
@@ -603,6 +605,7 @@ const RETENTION_RULES = [
   ['invites_days', 'invites', 'Old invites', 'used up, expired or revoked', 'invite'],
   ['certs_days', 'certs', 'Expired certificate records', 'after the certificate expired; valid ones are always kept', 'record'],
   ['chat_days', 'chat', 'Chat log', 'messages recorded on the Chat log tab', 'message'],
+  ['audit_days', 'audit', 'Audit log', 'whole months older than this are removed', 'month'],
 ];
 let retentionTimer = null;
 
@@ -3407,7 +3410,119 @@ async function loadSendLive() {
     || emptyRow(4, 'No messages yet');
 }
 
+// ---------- scheduled sends ----------
+
+let schedules = [];
+let editingSched = null;
+let schedPackages = [];
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function schedWhen(c) {
+  const t = new Date(c.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const until = c.until ? `, until ${new Date(c.until).toLocaleDateString()}` : '';
+  switch (c.repeat) {
+    case 'once': return `once, ${date(c.start)}`;
+    case 'hourly': return `every ${c.every} hour${c.every === 1 ? '' : 's'} from ${t}${until}`;
+    case 'daily': return `every day at ${t}${until}`;
+    case 'weekdays': return `weekdays at ${t}${until}`;
+    default: return `${c.days.map((d) => DAY_NAMES[d]).join(', ')} at ${t}${until}`;
+  }
+}
+
+function renderSchedules(list) {
+  schedules = list;
+  $('#sched-tz').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  $('#sched-table tbody').innerHTML = list.map((c) => {
+    const done = !c.next;
+    return `<tr${c.off || done ? ' class="dim"' : ''}>
+    <td><div><strong>${esc(c.name)}</strong>${c.off ? ' <span class="pill warn">paused</span>' : done ? ' <span class="pill">finished</span>' : ''}
+      <div class="muted">${c.kind === 'message' ? esc(truncateText(c.text, 90)) : 'Data package: ' + esc(c.package_name || '(deleted)')}</div></div></td>
+    <td>${c.all ? 'everyone' : c.groups.map((g) => `<span class="pill">${esc(g)}</span>`).join(' ')}</td>
+    <td><div>${esc(schedWhen(c))}${c.next && !c.off ? `<div class="muted">next ${esc(date(c.next))}</div>` : ''}</div></td>
+    <td>${c.last_run || c.last_result ? `<div class="muted">${c.last_run ? esc(ago(c.last_run)) + ': ' : ''}${esc(c.last_result || '')}</div>` : '<span class="muted">not yet</span>'}</td>
+    <td class="actions wrap-actions">
+      <button class="small" data-sched-run="${esc(c.id)}">Send now</button>
+      <button class="small" data-sched-edit="${esc(c.id)}">Edit</button>
+      ${done ? '' : `<button class="small" data-sched-off="${esc(c.id)}">${c.off ? 'Resume' : 'Pause'}</button>`}
+      <button class="small danger" data-sched-del="${esc(c.id)}">Delete</button></td></tr>`;
+  }).join('') || emptyRow(5, 'Nothing scheduled');
+}
+
+async function loadSchedules() {
+  renderSchedules(await api('GET', 'api/schedules'));
+}
+
+function schedFormChanged() {
+  const f = $('#sched-form');
+  const pkg = f.kind.value === 'package';
+  $('#sched-text-row').hidden = pkg;
+  $('#sched-pkg-row').hidden = !pkg;
+  $('#sched-groups-row').hidden = f.all.checked;
+  $('#sched-every-row').hidden = f.repeat.value !== 'hourly';
+  $('#sched-days').hidden = f.repeat.value !== 'weekly';
+}
+
+async function openSchedDialog(c) {
+  if (!allGroups.length) allGroups = await api('GET', 'api/groups');
+  schedPackages = await api('GET', 'api/packages');
+  editingSched = c;
+  const f = $('#sched-form');
+  $('#sched-title').textContent = c ? `Edit ${c.name}` : 'Schedule a send';
+  f.name.value = c?.name || '';
+  f.kind.value = c?.kind || 'message';
+  f.text.value = c?.text || '';
+  f.from.value = c?.from || '';
+  f.all.checked = c ? c.all : false;
+  f.package.innerHTML = schedPackages.map((p) => `<option value="${esc(p.hash)}">${esc(p.name)}</option>`).join('') || '<option value="">No data packages uploaded</option>';
+  if (c?.package_hash) f.package.value = c.package_hash;
+  renderChips('#sched-groups', c?.groups || []);
+  const first = c ? new Date(c.start) : new Date(Math.ceil((Date.now() + 60000) / 300000) * 300000);
+  f.start.value = localInput(first);
+  f.repeat.value = c?.repeat || 'daily';
+  f.every.value = c?.every || 4;
+  for (const d of $('#sched-days').querySelectorAll('input')) d.checked = (c?.days || [1, 2, 3, 4, 5]).includes(Number(d.value));
+  f.until.value = c?.until ? new Date(c.until).toISOString().slice(0, 10) : '';
+  $('#sched-error').textContent = '';
+  schedFormChanged();
+  $('#sched-dialog').showModal();
+}
+
+$('#sched-add').addEventListener('click', guard(() => openSchedDialog(null)));
+$('#sched-form').addEventListener('change', schedFormChanged);
+$('#sched-form').addEventListener('submit', async (e) => {
+  if (e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  const f = e.target;
+  const body = { name: f.name.value, kind: f.kind.value, text: f.text.value, from: f.from.value, package_hash: f.package.value,
+    all: f.all.checked, groups: checkedIn('#sched-groups'), start: new Date(f.start.value).toISOString(), repeat: f.repeat.value,
+    every: Number(f.every.value) || 1, days: checkedIn('#sched-days').map(Number), off: editingSched?.off || false,
+    until: f.until.value ? new Date(f.until.value + 'T23:59:59').toISOString() : '0001-01-01T00:00:00Z' };
+  try {
+    renderSchedules(await api(editingSched ? 'PUT' : 'POST', editingSched ? `api/schedules/${encodeURIComponent(editingSched.id)}` : 'api/schedules', body));
+    $('#sched-dialog').close();
+    toast(editingSched ? 'Schedule saved' : 'Scheduled');
+  } catch (ex) {
+    $('#sched-error').textContent = ex.message;
+  }
+});
+
+$('#sched-table').addEventListener('click', guard(async (e) => {
+  const d = e.target.dataset;
+  const c = schedules.find((x) => x.id === (d.schedRun || d.schedEdit || d.schedOff || d.schedDel));
+  if (!c) return;
+  if (d.schedRun && confirm(`Send ${c.name} now?`)) {
+    const r = await api('POST', `api/schedules/${encodeURIComponent(c.id)}/run`);
+    renderSchedules(r.schedules);
+    toast(r.result);
+    loadSendLive().catch(() => {});
+  }
+  if (d.schedEdit) await openSchedDialog(c);
+  if (d.schedOff) renderSchedules(await api('PATCH', `api/schedules/${encodeURIComponent(c.id)}`, { off: !c.off }));
+  if (d.schedDel && confirm(`Delete the schedule ${c.name}?`)) renderSchedules(await api('DELETE', `api/schedules/${encodeURIComponent(c.id)}`));
+}));
+
 async function loadSend() {
+  loadSchedules().catch(() => {});
   const [groups, clients, packages, contact] = await Promise.all([
     api('GET', 'api/groups'), api('GET', 'api/clients'), api('GET', 'api/packages'), api('GET', 'api/send/contact'),
   ]);
@@ -4598,6 +4713,155 @@ $('#overlay-edit').addEventListener('submit', guard(async (e) => {
     { name: e.target.name.value, groups: checkedIn('#overlay-edit-groups') }));
   $('#overlay-dialog').close();
   toast('Overlay saved');
+}));
+
+// ---------- audit log ----------
+
+const AUDIT_PAGE = 100;
+let auditOldest = null;
+
+function auditQuery(before) {
+  const f = $('#audit-filter');
+  const q = new URLSearchParams({ limit: AUDIT_PAGE });
+  if (f.q.value.trim()) q.set('q', f.q.value.trim());
+  if (f.since.value) q.set('since', new Date(f.since.value + 'T00:00:00').toISOString());
+  if (f.failed.checked) q.set('failed', '1');
+  if (before) q.set('before', before);
+  return q;
+}
+
+function auditRow(e) {
+  return `<tr${e.failed ? ' class="warn-row"' : ''}>
+    <td title="${esc(e.time)}">${esc(date(e.time))}</td>
+    <td><div><strong>${esc(e.actor || '—')}</strong>${e.ip ? `<div class="muted mono">${esc(e.ip)}</div>` : ''}</div></td>
+    <td><div><div>${esc(e.action)}${e.failed ? ` <span class="pill warn">${e.status ? 'refused ' + e.status : 'failed'}</span>` : ''}</div>${e.target ? `<div class="muted">${esc(e.target)}</div>` : ''}</div></td>
+    <td class="muted">${esc(e.details || '')}</td></tr>`;
+}
+
+async function loadAudit(more = false) {
+  const list = await api('GET', `api/audit?${auditQuery(more ? auditOldest : null)}`);
+  const tbody = $('#audit-table tbody');
+  const rows = list.map(auditRow).join('');
+  if (more) tbody.insertAdjacentHTML('beforeend', rows);
+  else tbody.innerHTML = rows || emptyRow(4, 'Nothing recorded matches');
+  if (list.length) auditOldest = list[list.length - 1].time;
+  $('#audit-more').hidden = list.length < AUDIT_PAGE;
+  const q = auditQuery();
+  q.delete('limit');
+  $('#audit-csv').href = `api/audit.csv?${q}`;
+}
+
+let auditTimer = null;
+$('#audit-filter').addEventListener('input', () => {
+  clearTimeout(auditTimer);
+  auditTimer = setTimeout(() => loadAudit().catch((ex) => toast(ex.message, true)), 300);
+});
+$('#audit-filter').addEventListener('submit', (e) => e.preventDefault());
+$('#audit-more').addEventListener('click', guard(() => loadAudit(true)));
+
+// ---------- webhooks ----------
+
+let webhooks = [];
+let editingHook = null;
+const HOOK_FORMATS = { discord: 'Discord', slack: 'Slack', teams: 'Teams', ntfy: 'ntfy', json: 'JSON' };
+const HOOK_EVENTS = { emergency: 'Emergencies', geofence: 'Geofence', lost_contact: 'Lost contact', ended: 'Ended', signup: 'Sign-ups', admin: 'Admin changes', server: 'Server health' };
+const HOOK_HELP = {
+  discord: 'In Discord: channel settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.',
+  slack: 'In Slack: create an app with Incoming Webhooks turned on, add one for the channel and copy its URL.',
+  teams: 'In Teams: the channel\'s ⋯ → Workflows → "Post to a channel when a webhook request is received", then copy the URL it gives.',
+  ntfy: 'Install the ntfy app and subscribe to a topic only your team knows; the URL is the server and topic, e.g. https://ntfy.sh/acme-sar-alerts-7f3k. Emergencies arrive at top priority. For a protected server: https://user:password@ntfy.example.org/topic.',
+  json: 'EdgeTAK posts JSON: event, title, callsign, username, text, lat, lon, map_url, time and server. With a signing secret, X-EdgeTAK-Signature is the body\'s HMAC-SHA256.',
+};
+
+function renderWebhooks(list) {
+  webhooks = list;
+  $('#hook-table tbody').innerHTML = list.map((h) => `<tr${h.off ? ' class="dim"' : ''}>
+    <td><div><strong>${esc(h.name)}</strong> <span class="pill">${esc(HOOK_FORMATS[h.format] || h.format)}</span>${h.off ? ' <span class="pill warn">off</span>' : ''}
+      <div class="muted mono">${esc(h.url)}</div></div></td>
+    <td>${h.events.map((e) => `<span class="pill">${esc(HOOK_EVENTS[e] || e)}</span>`).join(' ')}</td>
+    <td>${h.groups.length ? h.groups.map((g) => `<span class="pill">${esc(g)}</span>`).join(' ') : '<span class="muted">all</span>'}</td>
+    <td>${h.last_sent ? `<div>${esc(ago(h.last_sent))} ${h.last_ok ? '<span class="pill ok">ok</span>' : '<span class="pill warn">failed</span>'}</div>` : '<span class="muted">never</span>'}
+      ${h.last_error ? `<div class="muted" title="${esc(h.last_error)}">${esc(truncateText(h.last_error, 80))}</div>` : ''}
+      ${h.sent || h.failed ? `<div class="muted">${h.sent} sent${h.failed ? `, ${h.failed} failed` : ''}</div>` : ''}</td>
+    <td class="actions wrap-actions">
+      <button class="small" data-hook-test="${esc(h.id)}">Send test</button>
+      <button class="small" data-hook-edit="${esc(h.id)}">Edit</button>
+      <button class="small" data-hook-off="${esc(h.id)}">${h.off ? 'Turn on' : 'Turn off'}</button>
+      <button class="small danger" data-hook-del="${esc(h.id)}">Delete</button></td></tr>`).join('') || emptyRow(5, 'No webhooks yet');
+}
+
+const truncateText = (s, n) => (s.length > n ? s.slice(0, n) + '…' : s);
+
+async function loadWebhooks() {
+  const [list, groups] = await Promise.all([api('GET', 'api/webhooks'), allGroups.length ? allGroups : api('GET', 'api/groups')]);
+  allGroups = groups;
+  renderWebhooks(list);
+}
+
+function hookFormatChanged() {
+  const f = $('#hook-form');
+  $('#hook-help').textContent = HOOK_HELP[f.format.value];
+  $('#hook-secret-row').hidden = f.format.value !== 'json';
+}
+
+function openHookDialog(h) {
+  editingHook = h;
+  const f = $('#hook-form');
+  $('#hook-dialog-title').textContent = h ? `Edit ${h.name}` : 'Add webhook';
+  f.name.value = h?.name || '';
+  f.format.value = h?.format || 'discord';
+  f.url.value = '';
+  f.url.required = !h;
+  f.url.placeholder = h ? `${h.url} (leave blank to keep)` : 'https://';
+  f.secret.value = '';
+  f.secret.placeholder = h?.has_secret ? 'set (leave blank to keep)' : 'signs each body: X-EdgeTAK-Signature: sha256=…';
+  for (const c of $('#hook-events').querySelectorAll('input')) c.checked = h ? h.events.includes(c.value) : ['emergency', 'geofence', 'lost_contact'].includes(c.value);
+  renderChips('#hook-groups', h?.groups || []);
+  $('#hook-error').textContent = '';
+  hookFormatChanged();
+  $('#hook-dialog').showModal();
+}
+
+$('#hook-add').addEventListener('click', guard(async () => {
+  if (!allGroups.length) allGroups = await api('GET', 'api/groups');
+  openHookDialog(null);
+}));
+$('#hook-form').format.addEventListener('change', hookFormatChanged);
+
+$('#hook-form').addEventListener('submit', async (e) => {
+  if (e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  const f = e.target;
+  const body = { name: f.name.value, format: f.format.value, url: f.url.value.trim(), secret: f.secret.value,
+    events: checkedIn('#hook-events'), groups: checkedIn('#hook-groups'), off: editingHook?.off || false };
+  try {
+    renderWebhooks(await api(editingHook ? 'PUT' : 'POST', editingHook ? `api/webhooks/${encodeURIComponent(editingHook.id)}` : 'api/webhooks', body));
+    $('#hook-dialog').close();
+    toast(editingHook ? 'Webhook saved' : 'Webhook added: use Send test to check it');
+  } catch (ex) {
+    $('#hook-error').textContent = ex.message;
+  }
+});
+
+$('#hook-table').addEventListener('click', guard(async (e) => {
+  const d = e.target.dataset;
+  const h = webhooks.find((x) => x.id === (d.hookTest || d.hookEdit || d.hookOff || d.hookDel));
+  if (!h) return;
+  if (d.hookTest) {
+    e.target.disabled = true;
+    try {
+      renderWebhooks(await api('POST', `api/webhooks/${encodeURIComponent(h.id)}/test`));
+      toast(`Test sent to ${h.name}`);
+    } finally {
+      loadWebhooks().catch(() => {});
+    }
+  }
+  if (d.hookEdit) openHookDialog(h);
+  if (d.hookOff) {
+    renderWebhooks(await api('PUT', `api/webhooks/${encodeURIComponent(h.id)}`, { ...h, url: '', secret: '', off: !h.off }));
+    toast(h.off ? `${h.name} is on` : `${h.name} is off`);
+  }
+  if (d.hookDel && confirm(`Delete the webhook ${h.name}?`)) renderWebhooks(await api('DELETE', `api/webhooks/${encodeURIComponent(h.id)}`));
 }));
 
 // ---------- simulator ----------

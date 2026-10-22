@@ -48,6 +48,12 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   - **Direct messages**: the server can appear on devices as an HQ contact.
     Its messages open as a private conversation, users can reply, and
     replies show up in the console's Inbox.
+  - **Scheduled sends**: a message or data package at a set time, once or
+    on a repeat (every few hours, every day, weekdays, chosen days), to
+    everyone or chosen groups, with an optional end date. Times follow the
+    server's time zone; a run missed while EdgeTAK was off is skipped
+    rather than sent late. **Send now**, pause and resume; each run is in
+    the Sent list and the audit log.
 - **Self-registration**: invite links (with groups, a use limit and an expiry)
   let people create their own account. Without an invite, sign-up can be
   off, require admin approval, or be open. Afterwards the sign-up page shows
@@ -364,7 +370,7 @@ current section's pages in the row below:
 | People | Users, Groups, Sign-ups, Certificates |
 | Data | Data Packages, Missions, Maps, Overlays, Plugins, Video |
 | Messages | Send, Chat log |
-| Server | Connect, Federation, Settings, Simulator |
+| Server | Connect, Federation, Settings, Webhooks, Audit log, Simulator |
 
 1. **Change the admin password**: on the **Users** tab, click **Password** on
    `admin`. Then delete the file holding the first-run password:
@@ -675,6 +681,49 @@ listener (port 9001). For OpenTAKServer to connect to EdgeTAK, use the
 address its certificate names, or set the plugin's **TLS server name**:
 unlike TAK Server, the plugin checks it.
 
+### Webhooks
+
+**Server → Webhooks** sends alerts where people already look, so they hear
+about them with the console closed:
+
+| Sends to | Get the URL from |
+|---|---|
+| Discord | channel settings → Integrations → Webhooks → New Webhook |
+| Slack | an app with Incoming Webhooks for the channel |
+| Microsoft Teams | the channel's Workflows → "Post to a channel when a webhook request is received" |
+| ntfy | `https://ntfy.sh/<a topic only your team knows>` (or your own ntfy server; `https://user:password@host/topic` if it is protected); subscribe to the topic in the ntfy app |
+| Any URL | JSON: `event`, `title`, `callsign`, `username`, `text`, `lat`, `lon`, `map_url`, `time`, `server`; with a signing secret, `X-EdgeTAK-Signature: sha256=<HMAC-SHA256 of the body>` |
+
+Each webhook chooses its alerts (emergencies, geofence alerts, lost
+contact, alerts ending, sign-ups, admin changes, server health) and,
+optionally, groups: then it only hears about devices of users in those
+groups (and gets no sign-ups, admin changes or server health).
+
+**Server health** alerts are about the server itself: the issues on the
+Health tab (disk, memory, temperature, CPU, dropped messages, certificates
+expiring), plus a federation link down for over 5 minutes, an automatic
+backup failing and a new EdgeTAK version (checked daily when the server can
+reach GitHub). Each is sent when it starts, again once a day while it
+lasts, and when it is resolved.
+Messages include the callsign, user, position with a map link, time and
+server; ntfy delivers emergencies at top priority. **Send test** checks a
+webhook at once. Delivery is retried, and each webhook gets at most 20
+messages a minute; more are counted in the next one. The console shows only
+each URL's host, since chat services put their token in the URL.
+
+### Audit log
+
+**Server → Audit log** records every change an administrator makes, in the
+console or through the admin API: who, from which address, what, to what
+(named even after it was deleted), the settings it changed and whether it
+worked (refused changes are kept, marked). Sign-ins, failed sign-ins and
+device enrollments are recorded too. Passwords, tokens, keys and webhook
+addresses never are. Search it, show failures only, page back through it
+and download it as CSV. It is kept in `audit/` in the data directory, one
+file per month, for as long as **Settings → Data retention** says (forever
+by default). A webhook with **Admin changes** ticked hears about each
+change as it happens.
+
 ### Simulator (load testing)
 
 Simulated TAK devices show how the server copes with many users. Each one
@@ -873,6 +922,7 @@ internal/apps/      ATAK update server: APK reading, product.inf(z) indexes
 internal/maps/      offline maps: MBTiles reading and tiles
 internal/overlay/   map overlays: KML/KMZ checks, GeoJSON to KML, data packages
 internal/sim/       simulated devices for load testing (console and edgetak sim)
+internal/audit/     the audit log: monthly JSON-lines files, search
 internal/backup/    backup files, checking, staged restore
 internal/stream/    TCP/TLS stream sessions and protocol negotiation
 internal/web/       Marti API, enrollment, OAuth, groups/channels, admin console (embedded)

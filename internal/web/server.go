@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/brandongotak/EdgeTAK/internal/audit"
 	"github.com/brandongotak/EdgeTAK/internal/chatlog"
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/federation"
@@ -68,6 +69,10 @@ type Server struct {
 	// point them at a fake one).
 	TakGovAuthURL, TakGovAPIURL string
 	TakGovClient                *http.Client
+	// Audit is the audit log (nil: nothing is recorded).
+	Audit *audit.Log
+	// WebhookClient sends webhooks (tests); default a 15 s client.
+	WebhookClient *http.Client
 	// SimDial connects simulated devices (tests use an in-memory network).
 	SimDial func(ctx context.Context, network, addr string) (net.Conn, error)
 
@@ -83,6 +88,8 @@ type Server struct {
 	takgov        takGovState
 	pushed        pushedFiles
 	sim           simState
+	hooks         webhookState
+	healthWatch   healthWatch
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -146,6 +153,9 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.takGovRoutes(mux)
 	s.overlayRoutes(mux)
 	s.simRoutes(mux)
+	s.webhookRoutes(mux)
+	s.auditRoutes(mux)
+	s.scheduleRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)
@@ -399,7 +409,7 @@ func (s *Server) admin(h handlerFunc) http.HandlerFunc {
 				return
 			}
 		}
-		h(w, r, id)
+		s.auditRequest(h, w, r, id)
 	}
 }
 

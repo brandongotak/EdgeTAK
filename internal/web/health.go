@@ -44,8 +44,11 @@ func (s *Server) healthRoutes(mux *http.ServeMux) {
 }
 
 // serverIssues are warnings about the server itself.
-func (s *Server) serverIssues() []issue {
-	out := s.certIssues(s.certReport())
+func (s *Server) serverIssues() []issue { return s.serverIssuesAt(time.Now()) }
+
+// serverIssuesAt are the issues as of now (health alerts pass their check's time).
+func (s *Server) serverIssuesAt(now time.Time) []issue {
+	out := append(s.certIssues(s.certReport()), s.moreServerIssues(now)...)
 	if s.Health == nil {
 		return out
 	}

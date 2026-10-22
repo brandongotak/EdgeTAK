@@ -193,6 +193,8 @@ func (s *Server) CheckLostContact(now time.Time) {
 		}
 		s.lost.alerts[a.uid] = id
 		s.Log.Warn("LOST CONTACT", "what", a.what, "callsign", a.callsign, "user", a.username, "since", a.since.Format(time.TimeOnly))
+		go s.notify(notice{Kind: "lost_contact", Title: a.what, Callsign: a.callsign, Username: a.username, Lat: a.lat, Lon: a.lon,
+			Text: "Last heard from at " + a.since.Local().Format("15:04:05 MST") + "."})
 	}
 	s.lost.mu.Unlock()
 }
@@ -208,6 +210,7 @@ func (s *Server) endLostAlert(id string) {
 	})
 	if err == nil && e.EndedBy == "device" {
 		s.Log.Info("back in contact", "callsign", e.Callsign)
+		go s.notify(notice{Kind: "ended", Title: "Back in contact", Callsign: e.Callsign, Username: e.Username})
 	}
 }
 

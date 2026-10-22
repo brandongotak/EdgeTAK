@@ -132,6 +132,7 @@ func (s *Server) backupStart(ctx context.Context) {
 				return
 			}
 			b, err := s.saveBackup(backup.Options{History: set.History}, set.Keep)
+			s.backupResult(err)
 			if err != nil {
 				s.Log.Error("automatic backup failed", "err", err)
 				return

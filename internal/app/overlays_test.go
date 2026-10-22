@@ -47,7 +47,9 @@ func TestOverlays(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&list)
 		return resp.StatusCode, list
 	}
-	offer := func(e *cot.Event) bool { return e.Type == "b-f-t-r" && strings.Contains(e.Detail.XML, "Search Sectors") }
+	offer := func(e *cot.Event) bool {
+		return e.Type == "b-f-t-r" && strings.Contains(e.Detail.XML, "Search Sectors")
+	}
 	urlRE := regexp.MustCompile(`senderUrl="https://[^/]+(/Marti/sync/content\?hash=[0-9a-f]+)"`)
 
 	alphaCert, redCert := enroll(t, a, "alpha", "password-alpha"), enroll(t, a, "red1", "password-red1")

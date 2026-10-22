@@ -51,6 +51,8 @@
       <button data-tab="connect" data-section="server">Connect</button>
       <button data-tab="federation" data-section="server">Federation</button>
       <button data-tab="settings" data-section="server">Settings</button>
+      <button data-tab="webhooks" data-section="server">Webhooks</button>
+      <button data-tab="audit" data-section="server">Audit log</button>
       <button data-tab="simulator" data-section="server">Simulator</button>
     </nav>
   </header>
@@ -179,6 +181,60 @@
           <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
         </form>
       </dialog>
+    </section>
+
+    <section id="tab-webhooks" class="tab" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Webhooks</h2><button class="primary small" id="hook-add">Add webhook</button></div>
+        <p class="muted">Send alerts to Discord, Slack, Microsoft Teams, ntfy (a phone app) or any URL, so people hear about them with the console closed: emergencies, geofence alerts, lost contact, alerts ending and sign-ups. Each webhook can be limited to devices in some groups. At most 20 messages a minute go to each; more are counted in the next one.</p>
+        <div class="table-wrap"><table id="hook-table">
+          <thead><tr><th>Webhook</th><th>Alerts</th><th>Groups</th><th>Last sent</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <dialog id="hook-dialog" class="card dialog">
+        <form method="dialog" id="hook-form" class="stack">
+          <div class="card-head"><h2 id="hook-dialog-title">Add webhook</h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
+          <label>Name <input name="name" required maxlength="80" placeholder="e.g. Ops channel"></label>
+          <label>Sends to <select name="format">
+            <option value="discord">Discord</option><option value="slack">Slack</option><option value="teams">Microsoft Teams</option>
+            <option value="ntfy">ntfy (phone notifications)</option><option value="json">Any URL (JSON)</option></select></label>
+          <p class="muted" id="hook-help"></p>
+          <label>Webhook URL <input name="url" type="url" maxlength="2000" placeholder="https://"></label>
+          <label id="hook-secret-row">Signing secret (optional) <input name="secret" maxlength="200" autocomplete="off" placeholder="signs each body: X-EdgeTAK-Signature: sha256=…"></label>
+          <div class="muted picker-label">Alerts</div>
+          <div class="group-picker" id="hook-events">
+            <label class="chip"><input type="checkbox" value="emergency" checked>Emergencies</label>
+            <label class="chip"><input type="checkbox" value="geofence" checked>Geofence alerts</label>
+            <label class="chip"><input type="checkbox" value="lost_contact" checked>Lost contact</label>
+            <label class="chip"><input type="checkbox" value="ended">Alerts ending</label>
+            <label class="chip"><input type="checkbox" value="signup">Sign-ups</label>
+            <label class="chip"><input type="checkbox" value="admin">Admin changes</label>
+            <label class="chip"><input type="checkbox" value="server">Server health</label>
+          </div>
+          <div class="muted picker-label">About devices in these groups (none selected = all; sign-ups only go to webhooks without groups)</div>
+          <div id="hook-groups" class="group-picker"></div>
+          <p class="error" id="hook-error" role="alert"></p>
+          <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
+        </form>
+      </dialog>
+    </section>
+
+    <section id="tab-audit" class="tab" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Audit log</h2><a class="button small" id="audit-csv" href="api/audit.csv">Download CSV</a></div>
+        <p class="muted">Every change made by an administrator (in this console or through the admin API), sign-ins, failed sign-ins and device enrollments: who, from where, what and whether it worked. Passwords, tokens and webhook addresses are never recorded. How long it is kept is under Settings → Data retention.</p>
+        <form id="audit-filter" class="inline-form">
+          <input type="search" name="q" placeholder="Search: user, action, target…">
+          <label>Since <input type="date" name="since"></label>
+          <label class="check"><input type="checkbox" name="failed"> Failures only</label>
+        </form>
+        <div class="table-wrap"><table id="audit-table">
+          <thead><tr><th>When</th><th>Who</th><th>What</th><th>Details</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <div class="inline-form"><button id="audit-more" hidden>Show older</button></div>
+      </div>
     </section>
 
     <section id="tab-simulator" class="tab" hidden>
@@ -939,6 +995,42 @@
           </form>
         </div>
       </div>
+      <div class="card">
+        <div class="card-head"><h2>Scheduled sends</h2><button class="primary small" id="sched-add">Schedule a send</button></div>
+        <p class="muted">A message or data package sent at a set time, once or on a repeat (a morning brief, a shift change), to everyone connected or chosen groups. Times are the server's (<span id="sched-tz"></span>).</p>
+        <div class="table-wrap"><table id="sched-table">
+          <thead><tr><th>Send</th><th>To</th><th>When</th><th>Last</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <dialog id="sched-dialog" class="card dialog">
+        <form method="dialog" id="sched-form" class="stack">
+          <div class="card-head"><h2 id="sched-title">Schedule a send</h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
+          <label>Name <input name="name" required maxlength="80" placeholder="e.g. 0700 brief"></label>
+          <div class="inline-form">
+            <label class="check"><input type="radio" name="kind" value="message" checked> Message</label>
+            <label class="check"><input type="radio" name="kind" value="package"> Data package</label>
+          </div>
+          <label id="sched-text-row">Message <textarea name="text" rows="3" maxlength="4000"></textarea></label>
+          <label id="sched-pkg-row" hidden>Data package <select name="package"></select></label>
+          <label>From <input name="from" maxlength="64" placeholder="the server's name"></label>
+          <label class="check"><input type="checkbox" name="all"> Everyone connected</label>
+          <div id="sched-groups-row"><div class="muted picker-label">Members of these groups</div><div id="sched-groups" class="group-picker"></div></div>
+          <div class="inline-form">
+            <label>First send <input type="datetime-local" name="start" required></label>
+            <label>Repeat <select name="repeat">
+              <option value="once">Once</option><option value="hourly">Every few hours</option><option value="daily" selected>Every day</option>
+              <option value="weekdays">Weekdays (Mon–Fri)</option><option value="weekly">Chosen days</option></select></label>
+            <label id="sched-every-row" hidden>Every <input name="every" type="number" min="1" max="24" value="4" class="days-input"> hours</label>
+          </div>
+          <div id="sched-days" class="group-picker" hidden>
+            <label class="chip"><input type="checkbox" value="1">Mon</label><label class="chip"><input type="checkbox" value="2">Tue</label><label class="chip"><input type="checkbox" value="3">Wed</label><label class="chip"><input type="checkbox" value="4">Thu</label><label class="chip"><input type="checkbox" value="5">Fri</label><label class="chip"><input type="checkbox" value="6">Sat</label><label class="chip"><input type="checkbox" value="0">Sun</label>
+          </div>
+          <label>Stop after (optional) <input type="date" name="until"></label>
+          <p class="error" id="sched-error" role="alert"></p>
+          <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
+        </form>
+      </dialog>
       <div class="card">
         <h2>Sent</h2>
         <div class="table-wrap"><table id="send-history">

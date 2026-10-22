@@ -10,6 +10,38 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.20.0 (2026-10-22)
+
+### Added
+- **Webhooks** (Server → Webhooks): alerts sent to **Discord**, **Slack**,
+  **Microsoft Teams**, **ntfy** (phone notifications) or **any URL**
+  (JSON, optionally signed with HMAC-SHA256).
+  - Choose the alerts: emergencies, geofence alerts, lost contact, alerts
+    ending (cancelled, dismissed, back in contact) and sign-ups; optionally
+    only about devices in chosen groups.
+  - Messages carry the callsign, user, position with a map link, time and
+    server, formatted for each service; ntfy delivers emergencies at top
+    priority.
+  - **Send test**, last result and counts per webhook; retries, and at most
+    20 messages a minute per webhook (the rest are counted in the next).
+  - Webhook URLs and secrets are never shown back in the console.
+- **Server health alerts**: webhooks with *Server health* ticked hear when
+  the server needs attention: disk, memory, temperature, CPU or dropped
+  messages; certificates expiring; a federation link down for over 5
+  minutes; an automatic backup failing; a new EdgeTAK version. Sent when it
+  starts, daily while it lasts, and when resolved. Federation links down,
+  backup failures and updates also show on the Health tab.
+- **Scheduled sends** (Messages → Send): a message or data package at a set
+  time, once or repeating (every few hours, daily, weekdays, chosen days),
+  to everyone or chosen groups, with an optional end date. Send now, pause
+  and resume; runs missed while EdgeTAK was off are skipped, not sent late.
+- **Audit log** (Server → Audit log): every change an administrator makes
+  (console or admin API), with who, from where, what, the target and the
+  settings changed, and whether it worked; plus sign-ins, failed sign-ins
+  and device enrollments. Secrets are never recorded. Search, failures
+  only, paging and CSV download; kept per **Data retention** (forever by
+  default). Webhooks can send **Admin changes** as they happen.
+
 ## v0.19.0 (2026-10-22)
 
 ### Added

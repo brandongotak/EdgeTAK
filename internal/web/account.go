@@ -111,6 +111,7 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		time.Sleep(500 * time.Millisecond)
 		s.Log.Warn("sign-in failed", "user", req.Username, "remote", r.RemoteAddr)
+		s.auditEvent(r, truncate(req.Username, 64), "Sign-in failed", "", true)
 		jsonError(w, http.StatusUnauthorized, "wrong username or password")
 		return
 	}
@@ -148,6 +149,11 @@ func (s *Server) signIn(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	s.Log.Info("sign-in", "user", u.Username, "admin", u.Admin, "remote", r.RemoteAddr)
+	what := "Signed in"
+	if u.Admin {
+		what = "Signed in (administrator)"
+	}
+	s.auditEvent(r, u.Username, what, "", false)
 	writeJSON(w, http.StatusOK, map[string]any{"username": u.Username, "admin": u.Admin})
 }
 

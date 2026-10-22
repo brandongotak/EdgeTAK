@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/brandongotak/EdgeTAK/internal/audit"
 	"github.com/brandongotak/EdgeTAK/internal/chatlog"
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/cot"
@@ -60,6 +61,8 @@ type App struct {
 	Federation *federation.Manager
 	// Web is the HTTP side (set by Start).
 	Web *web.Server
+	// Audit is the audit log.
+	Audit *audit.Log
 	// ConfigPath is the configuration file (for backups); Restart stops
 	// EdgeTAK for its service manager to start again (after a restore).
 	ConfigPath string
@@ -112,6 +115,9 @@ func New(cfg config.Config, dataDir, version string, log *slog.Logger) (*App, er
 	a.Missions.PackageDir = filepath.Join(dataDir, "packages")
 	if a.History, err = history.Open(filepath.Join(dataDir, "history"), log); err != nil {
 		return nil, fmt.Errorf("open history: %w", err)
+	}
+	if a.Audit, err = audit.Open(filepath.Join(dataDir, "audit")); err != nil {
+		return nil, fmt.Errorf("open audit log: %w", err)
 	}
 	hs := a.Store.HistorySettings()
 	a.History.Configure(hs.Enabled, time.Duration(hs.RetentionHours)*time.Hour)
@@ -216,7 +222,7 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		ServerUID:   "EdgeTAK-" + a.nodeID, Version: "EdgeTAK " + a.Version,
 	}
 	ws := &web.Server{
-		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, History: a.History, Chat: a.Chat, Log: a.Log,
+		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, History: a.History, Chat: a.Chat, Audit: a.Audit, Log: a.Log,
 		PackageDir: filepath.Join(a.DataDir, "packages"), NodeID: a.nodeID, Version: a.Version, Started: time.Now(),
 		DataDir: a.DataDir, ConfigPath: a.ConfigPath, Restart: a.Restart, Maps: &maps.Library{Dir: filepath.Join(a.DataDir, "maps")},
 	}
@@ -342,7 +348,7 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	wg.Add(1)
 	go func() { defer wg.Done(); a.History.Run(ctx) }()
 	wg.Add(1)
-	go func() { defer wg.Done(); <-ctx.Done(); a.Chat.Close() }()
+	go func() { defer wg.Done(); <-ctx.Done(); a.Chat.Close(); a.Audit.Close() }()
 	wg.Add(1)
 	go func() { defer wg.Done(); <-ctx.Done(); ws.Maps.Close() }()
 	wg.Add(1)

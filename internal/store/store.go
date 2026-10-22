@@ -221,6 +221,10 @@ type db struct {
 	TakGov TakGovLink `json:"takgov"`
 
 	Overlays map[string]*Overlay `json:"overlays"` // by id
+
+	Webhooks []Webhook `json:"webhooks,omitempty"`
+
+	Schedules []Schedule `json:"schedules,omitempty"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -233,6 +237,7 @@ type RetentionSettings struct {
 	InvitesDays      int `json:"invites_days"`       // used-up, expired or revoked invites
 	CertsDays        int `json:"certs_days"`         // records of certificates expired this long ago
 	ChatDays         int `json:"chat_days"`          // chat log messages
+	AuditDays        int `json:"audit_days"`         // audit log (whole months)
 }
 
 // RecordingSettings controls video recording: Mode "off" (default), "feeds"
@@ -1981,6 +1986,152 @@ func (s *Store) DeleteDrawing(id string) (Drawing, error) {
 	}
 	delete(s.db.Drawings, id)
 	return cloneDrawing(d), s.save()
+}
+
+// ---- scheduled sends ----
+
+// Schedule sends a chat message or data package to devices at a set time,
+// once or on a repeat. Times follow the server's time zone.
+type Schedule struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Kind        string    `json:"kind"` // message or package
+	Text        string    `json:"text,omitempty"`
+	From        string    `json:"from,omitempty"` // sender shown in chat (default: the server's name)
+	PackageHash string    `json:"package_hash,omitempty"`
+	All         bool      `json:"all"`             // every connected device
+	Groups      []string  `json:"groups"`          // else members of these groups
+	Start       time.Time `json:"start"`           // the first time; its clock time is used for repeats
+	Repeat      string    `json:"repeat"`          // once, hourly, daily, weekdays or weekly
+	Every       int       `json:"every,omitempty"` // hours, for hourly
+	Days        []int     `json:"days,omitempty"`  // weekdays (0 = Sunday), for weekly
+	Until       time.Time `json:"until,omitzero"`  // no runs after this
+	Off         bool      `json:"off,omitempty"`
+	Next        time.Time `json:"next,omitzero"` // zero when finished
+	LastRun     time.Time `json:"last_run,omitzero"`
+	LastResult  string    `json:"last_result,omitempty"`
+	Runs        int       `json:"runs,omitempty"`
+	Author      string    `json:"author"`
+	Created     time.Time `json:"created"`
+}
+
+func cloneSchedule(c Schedule) Schedule {
+	c.Groups, c.Days = slices.Clone(c.Groups), slices.Clone(c.Days)
+	return c
+}
+
+func (s *Store) Schedules() []Schedule {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Schedule, 0, len(s.db.Schedules))
+	for _, c := range s.db.Schedules {
+		out = append(out, cloneSchedule(c))
+	}
+	return out
+}
+
+// PutSchedule adds or replaces a schedule (by ID).
+func (s *Store) PutSchedule(c Schedule) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c = cloneSchedule(c)
+	for i := range s.db.Schedules {
+		if s.db.Schedules[i].ID == c.ID {
+			s.db.Schedules[i] = c
+			return s.save()
+		}
+	}
+	s.db.Schedules = append(s.db.Schedules, c)
+	return s.save()
+}
+
+func (s *Store) DeleteSchedule(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.Schedules {
+		if s.db.Schedules[i].ID == id {
+			s.db.Schedules = slices.Delete(s.db.Schedules, i, i+1)
+			return s.save()
+		}
+	}
+	return ErrNotFound
+}
+
+// ---- webhooks ----
+
+// Webhook sends alerts to a chat service or any URL: the kinds in Events
+// (emergency, geofence, lost_contact, ended, signup), about devices in
+// Groups (none = all).
+type Webhook struct {
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	URL      string    `json:"url"`    // secret: chat services put the token in it
+	Format   string    `json:"format"` // discord, slack, teams, ntfy or json
+	Events   []string  `json:"events"`
+	Groups   []string  `json:"groups"`
+	Secret   string    `json:"secret,omitempty"` // json: signs the body (X-EdgeTAK-Signature)
+	Off      bool      `json:"off,omitempty"`
+	Created  time.Time `json:"created"`
+	LastSent time.Time `json:"last_sent,omitzero"`
+	LastOK   bool      `json:"last_ok,omitempty"`
+	LastErr  string    `json:"last_error,omitempty"`
+	Sent     int       `json:"sent,omitempty"`
+	Failed   int       `json:"failed,omitempty"`
+}
+
+func cloneWebhook(w Webhook) Webhook {
+	w.Events, w.Groups = slices.Clone(w.Events), slices.Clone(w.Groups)
+	return w
+}
+
+func (s *Store) Webhooks() []Webhook {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Webhook, 0, len(s.db.Webhooks))
+	for _, w := range s.db.Webhooks {
+		out = append(out, cloneWebhook(w))
+	}
+	return out
+}
+
+// PutWebhook adds or replaces a webhook (by ID).
+func (s *Store) PutWebhook(w Webhook) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w = cloneWebhook(w)
+	for i := range s.db.Webhooks {
+		if s.db.Webhooks[i].ID == w.ID {
+			s.db.Webhooks[i] = w
+			return s.save()
+		}
+	}
+	s.db.Webhooks = append(s.db.Webhooks, w)
+	return s.save()
+}
+
+// UpdateWebhook changes a webhook in place (delivery results).
+func (s *Store) UpdateWebhook(id string, fn func(w *Webhook)) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.Webhooks {
+		if s.db.Webhooks[i].ID == id {
+			fn(&s.db.Webhooks[i])
+			return s.save()
+		}
+	}
+	return ErrNotFound
+}
+
+func (s *Store) DeleteWebhook(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.Webhooks {
+		if s.db.Webhooks[i].ID == id {
+			s.db.Webhooks = slices.Delete(s.db.Webhooks, i, i+1)
+			return s.save()
+		}
+	}
+	return ErrNotFound
 }
 
 // ---- overlays ----

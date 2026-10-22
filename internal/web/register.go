@@ -154,6 +154,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		// A team signing up behind one NAT address shouldn't run into the limit.
 		s.signupLimiter.refund(remote)
 		s.Log.Info("user registered with invite", "user", u.Username, "groups", u.Groups, "remote", remote)
+		s.notify(notice{Kind: "signup", Title: "New account", Username: u.Username, Text: u.Username + " signed up with an invite."})
 		writeJSON(w, http.StatusCreated, map[string]any{"status": "created", "username": u.Username})
 	case reg.Mode == "open":
 		u, err := s.Store.CreateUserWithHash(req.Username, hash, reg.DefaultGroups)
@@ -161,6 +162,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.Log.Info("user registered (open sign-up)", "user", u.Username, "groups", u.Groups, "remote", remote)
+		s.notify(notice{Kind: "signup", Title: "New account", Username: u.Username, Text: u.Username + " signed up."})
 		writeJSON(w, http.StatusCreated, map[string]any{"status": "created", "username": u.Username})
 	case reg.Mode == "approval":
 		err := s.Store.AddRequest(store.SignupRequest{ID: uuid(), Username: req.Username, PasswordHash: hash,
@@ -169,6 +171,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.Log.Info("sign-up request received", "user", req.Username, "remote", remote)
+		s.notify(notice{Kind: "signup", Title: "Sign-up request", Text: req.Username + " asked for an account; approve or reject it in the console (People → Sign-ups).", Groups: []string{}})
 		writeJSON(w, http.StatusAccepted, map[string]any{"status": "pending", "username": req.Username})
 	default:
 		jsonError(w, http.StatusForbidden, "registration is closed; ask an administrator for an invite link")
