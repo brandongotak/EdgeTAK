@@ -181,34 +181,42 @@ func fenceVisible(g *store.Geofence, c *router.Client) bool {
 	return watched(store.LostContactSettings{Groups: g.Groups}, deviceGroups(c))
 }
 
-// fenceShape is the fence as ATAK draws shapes: a closed freeform polygon
-// (u-d-f) or a circle (u-d-c-c).
 func fenceShape(g *store.Geofence) *cot.Event {
-	rgb, _ := strconv.ParseUint(strings.TrimPrefix(g.Color, "#"), 16, 32)
-	stroke := int32(0xFF000000 | uint32(rgb))
-	fill := int32(0x40000000 | uint32(rgb))
+	return shapeEvent(fenceUID(g), g.Name, "Geofence (EdgeTAK)", g.Shape == "circle", g.Points, g.Center, g.Radius, g.Color)
+}
+
+// atakColor turns #RRGGBB into ATAK's signed ARGB integer.
+func atakColor(hex string, alpha uint32) int32 {
+	rgb, _ := strconv.ParseUint(strings.TrimPrefix(hex, "#"), 16, 32)
+	return int32(alpha<<24 | uint32(rgb))
+}
+
+// shapeEvent is an area or circle as ATAK draws shapes: a closed freeform
+// polygon (u-d-f) or a circle (u-d-c-c).
+func shapeEvent(uid, name, remarks string, circle bool, points [][2]float64, center [2]float64, radius float64, color string) *cot.Event {
+	stroke, fill := atakColor(color, 0xFF), atakColor(color, 0x40)
 	style := fmt.Sprintf(`<strokeColor value="%d"/><strokeWeight value="4.0"/><fillColor value="%d"/>`, stroke, fill) +
-		`<contact callsign="` + xmlEscape(g.Name) + `"/><remarks>Geofence (EdgeTAK)</remarks><labels_on value="true"/>`
-	if g.Shape == "circle" {
-		ev := cot.NewEvent("u-d-c-c", fenceUID(g), "h-e", fenceShapeStale)
-		ev.Lat, ev.Lon, ev.Hae = g.Center[0], g.Center[1], 9999999
+		`<contact callsign="` + xmlEscape(name) + `"/><remarks>` + xmlEscape(remarks) + `</remarks><labels_on value="true"/><archive/>`
+	if circle {
+		ev := cot.NewEvent("u-d-c-c", uid, "h-e", fenceShapeStale)
+		ev.Lat, ev.Lon, ev.Hae = center[0], center[1], 9999999
 		kml := func(argb uint32) string { // KML colors are aabbggrr
 			return fmt.Sprintf("%02x%02x%02x%02x", argb>>24, argb&0xff, argb>>8&0xff, argb>>16&0xff)
 		}
-		ev.Detail.XML = fmt.Sprintf(`<shape><ellipse major="%g" minor="%g" angle="360"/>`, g.Radius, g.Radius) +
-			`<link uid="` + fenceUID(g) + `.Style" type="b-x-KmlStyle" relation="p-c"><Style><LineStyle><color>` + kml(uint32(stroke)) +
+		ev.Detail.XML = fmt.Sprintf(`<shape><ellipse major="%g" minor="%g" angle="360"/>`, radius, radius) +
+			`<link uid="` + xmlEscape(uid) + `.Style" type="b-x-KmlStyle" relation="p-c"><Style><LineStyle><color>` + kml(uint32(stroke)) +
 			`</color><width>4.0</width></LineStyle><PolyStyle><color>` + kml(uint32(fill)) + `</color></PolyStyle></Style></link></shape>` + style
 		return ev
 	}
-	ev := cot.NewEvent("u-d-f", fenceUID(g), "h-e", fenceShapeStale)
+	ev := cot.NewEvent("u-d-f", uid, "h-e", fenceShapeStale)
 	var lat, lon float64
 	var links strings.Builder
-	for _, p := range g.Points {
+	for _, p := range points {
 		lat, lon = lat+p[0], lon+p[1]
 		fmt.Fprintf(&links, `<link point="%.7f,%.7f"/>`, p[0], p[1])
 	}
-	fmt.Fprintf(&links, `<link point="%.7f,%.7f"/>`, g.Points[0][0], g.Points[0][1]) // closed
-	ev.Lat, ev.Lon, ev.Hae = lat/float64(len(g.Points)), lon/float64(len(g.Points)), 9999999
+	fmt.Fprintf(&links, `<link point="%.7f,%.7f"/>`, points[0][0], points[0][1]) // closed
+	ev.Lat, ev.Lon, ev.Hae = lat/float64(len(points)), lon/float64(len(points)), 9999999
 	ev.Detail.XML = links.String() + style
 	return ev
 }

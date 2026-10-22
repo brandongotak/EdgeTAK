@@ -39,6 +39,7 @@ func (s *Server) Start(ctx context.Context) {
 	go s.redrawAppIcons()
 	s.lostStart(ctx)
 	s.geofenceStart()
+	s.drawingsStart()
 	s.certWatchStart(ctx)
 	go func() {
 		t := time.NewTicker(presenceRefresh)

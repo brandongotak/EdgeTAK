@@ -10,6 +10,25 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.12.0 (2026-10-22)
+
+### Added
+- **Drawings** (Maps tab): draw on the console map and it appears on
+  devices' maps, like items a teammate placed.
+  - **Markers** (friendly, hostile, neutral, unknown, or a colored spot),
+    **routes** (navigable in ATAK), **areas** and **circles**, each with a
+    name, remarks and color.
+  - **Who gets them:** every device, or devices in chosen groups.
+  - **Persistent:** EdgeTAK keeps them and sends them to each device as it
+    connects, so phones that were off when you drew get them too.
+  - **Edit or delete** from the console and devices update; EdgeTAK's copy
+    is the reference, so changes made on a device are replaced the next time
+    it connects.
+  - The console map shows them as the **Drawings** layer.
+
+### Fixed
+- **Show** on a geofence left an extra copy of the area on the console map.
+
 ## v0.11.0 (2026-10-21)
 
 ### Added

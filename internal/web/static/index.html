@@ -563,6 +563,30 @@
 
     <section id="tab-maps" class="tab" hidden>
       <div class="card">
+        <div class="card-head"><h2>Drawings</h2>
+          <div class="inline-form"><button type="button" class="small primary" id="draw-marker">Marker</button> <button type="button" class="small" id="draw-route">Route</button> <button type="button" class="small" id="draw-area">Area</button> <button type="button" class="small" id="draw-circle">Circle</button></div></div>
+        <p class="muted">Markers, routes, areas and circles drawn on the map here appear on devices' maps, like items a teammate placed: on every device or only those in chosen groups. EdgeTAK keeps them and sends them again to each device as it connects, so phones that were off get them too. Changing or deleting one changes or removes it on devices; changes made on a device are replaced the next time it connects.</p>
+        <div class="table-wrap"><table id="drawing-list">
+          <thead><tr><th>Name</th><th>What</th><th>Sent to</th><th>Changed</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <dialog id="drawing-dialog" class="card dialog">
+        <form method="dialog" id="drawing-form" class="stack">
+          <div class="card-head"><h2 id="drawing-dialog-title">New drawing</h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
+          <label>Name <input name="name" required maxlength="80" placeholder="e.g. Rally point 1"></label>
+          <label id="drawing-type-row">Marker
+            <select name="mtype"><option value="a-f-G">Friendly</option><option value="a-h-G">Hostile</option><option value="a-n-G">Neutral</option><option value="a-u-G">Unknown</option><option value="b-m-p-s-m">Spot (colored dot)</option></select>
+          </label>
+          <label>Remarks <textarea name="remarks" rows="2" maxlength="2000"></textarea></label>
+          <label class="inline-label">Color <input type="color" name="color" value="#F29900"></label>
+          <div class="muted picker-label">Send to devices in these groups (none selected = every device)</div>
+          <div id="drawing-groups" class="group-picker"></div>
+          <p class="error" id="drawing-error" role="alert"></p>
+          <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Send to devices</button></div>
+        </form>
+      </dialog>
+      <div class="card">
         <h2>Offline maps</h2>
         <p class="muted">Maps this server serves without internet access, from MBTiles files (raster: PNG, JPEG or WebP tiles), made with QGIS, MOBAC, TileMill, gdal2tiles and similar tools. They appear on the console map, and devices get each one as an ATAK map source in their device profile when they enroll or connect, loading the tiles from this server.</p>
         <form id="map-upload-form" class="inline-form">

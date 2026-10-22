@@ -131,7 +131,7 @@ const loaders = {
   certs: loadCerts,
   packages: loadPackages,
   plugins: loadApps,
-  maps: loadOfflineMaps,
+  maps: () => Promise.all([loadDrawings(), loadOfflineMaps()]),
   missions: loadMissions,
   video: loadVideo,
   send: loadSend,
@@ -857,6 +857,8 @@ let trailsLayer = null;
 let trailsTimer = null;
 let videoLayer = null;
 let fenceLayer = null; // geofences on the console map
+let drawingLayer = null; // drawings (markers, routes, areas, circles) on the console map
+let drawings = [];
 let geofences = [];
 let weather = null; // radar and hillshade overlays, see initWeather
 let mapSources = [];
@@ -914,6 +916,8 @@ function initMap() {
   weather = initWeather();
   fenceLayer = L.layerGroup();
   api('GET', 'api/geofences').then((r) => { geofences = r; drawFences(); }).catch(() => {});
+  drawingLayer = L.layerGroup();
+  api('GET', 'api/drawings').then((r) => { drawings = r; drawDrawings(); }).catch(() => {});
   trailsLayer = L.layerGroup();
   trailsLayer.on('add', () => {
     $('#trails-show').checked = true;
@@ -1019,7 +1023,7 @@ function initWeather() {
 function buildLayers() {
   if (!map) return;
   const activeBase = prefs.get('map.base', 'Streets');
-  const activeOverlays = new Set(prefs.get('map.overlays', ['Devices', 'Callsigns', 'Server contact', 'Video', 'Geofences']));
+  const activeOverlays = new Set(prefs.get('map.overlays', ['Devices', 'Callsigns', 'Server contact', 'Video', 'Geofences', 'Drawings']));
   // Detach the switcher first, or removing the old layers would be saved as
   // the viewer turning them off.
   rebuildingLayers = true;
@@ -1028,7 +1032,7 @@ function buildLayers() {
 
   baseLayers = {};
   for (const [name, def] of BASEMAPS) baseLayers[name] = buildBase(def);
-  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer, Geofences: fenceLayer,
+  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer, Geofences: fenceLayer, Drawings: drawingLayer,
     'Weather radar': weather.radar, 'Weather radar (US, detailed)': weather.nexrad, Hillshade: weather.hillshade };
   for (const p of packageLayers.values()) overlayLayers[p.name] = p.layer;
   for (const m of offlineMaps) {
@@ -3876,6 +3880,14 @@ function fenceLayerOf(g) {
   return l.bindTooltip(`🚧 ${esc(g.name)}`, { sticky: true });
 }
 
+// fitLayer zooms to a shape (a circle can only be measured on the map).
+function fitLayer(l) {
+  l.addTo(map);
+  const b = l.getBounds();
+  l.remove();
+  map.fitBounds(b, { padding: [30, 30] });
+}
+
 function drawFences() {
   if (!fenceLayer) return;
   fenceLayer.clearLayers();
@@ -3916,17 +3928,21 @@ function stopDrawing() {
   drawing = null;
 }
 
-function startDrawing(shape) {
+function startDrawing(shape, done = openFenceDialog) {
   setMapVisible(true);
   if (!map) return;
   stopDrawing();
-  fenceLayer.addTo(map);
+  if (done === openFenceDialog) fenceLayer.addTo(map);
+  else drawingLayer.addTo(map);
   const hint = L.control({ position: 'topleft' });
   hint.onAdd = () => {
     const d = L.DomUtil.create('div', 'draw-hint');
-    d.innerHTML = shape === 'circle'
-      ? '<span>Click the center, then the edge of the circle.</span> <button type="button" class="small" data-draw="cancel">Cancel</button>'
-      : '<span>Click the corners of the area.</span> <button type="button" class="small primary" data-draw="finish">Finish</button> <button type="button" class="small" data-draw="undo">Undo</button> <button type="button" class="small" data-draw="cancel">Cancel</button>';
+    const cancel = '<button type="button" class="small" data-draw="cancel">Cancel</button>';
+    const finishUndo = '<button type="button" class="small primary" data-draw="finish">Finish</button> <button type="button" class="small" data-draw="undo">Undo</button> ';
+    d.innerHTML = shape === 'circle' ? `<span>Click the center, then the edge of the circle.</span> ${cancel}`
+      : shape === 'marker' ? `<span>Click where the marker goes.</span> ${cancel}`
+      : shape === 'route' ? `<span>Click the route's points in order.</span> ${finishUndo}${cancel}`
+      : `<span>Click the corners of the area.</span> ${finishUndo}${cancel}`;
     L.DomEvent.disableClickPropagation(d);
     d.addEventListener('click', (ev) => {
       const act = ev.target.dataset.draw;
@@ -3946,25 +3962,33 @@ function startDrawing(shape) {
       if (drawing.center && cursor) drawing.preview = L.circle(drawing.center, { ...style, radius: map.distance(drawing.center, cursor) }).addTo(map);
       return;
     }
+    if (shape === 'marker') return;
     const pts = cursor ? [...drawing.points, cursor] : drawing.points;
-    if (pts.length) drawing.preview = (pts.length > 2 ? L.polygon(pts, style) : L.polyline(pts, style)).addTo(map);
+    if (pts.length) drawing.preview = (pts.length > 2 && shape !== 'route' ? L.polygon(pts, style) : L.polyline(pts, style)).addTo(map);
   };
   const finish = (edge) => {
     if (shape === 'circle') {
       const radius = map.distance(drawing.center, edge);
       const center = [drawing.center.lat, drawing.center.lng];
       stopDrawing();
-      openFenceDialog({ shape: 'circle', center, radius });
+      done({ shape: 'circle', center, radius });
       return;
     }
-    if (drawing.points.length < 3) { toast('An area needs at least 3 corners', true); return; }
+    if (shape === 'marker') {
+      stopDrawing();
+      done({ shape: 'marker', center: [edge.lat, edge.lng] });
+      return;
+    }
+    const least = shape === 'route' ? 2 : 3;
+    if (drawing.points.length < least) { toast(shape === 'route' ? 'A route needs at least 2 points' : 'An area needs at least 3 corners', true); return; }
     const points = drawing.points.map((p) => [p.lat, p.lng]);
     stopDrawing();
-    openFenceDialog({ shape: 'polygon', points });
+    done({ shape, points });
   };
   drawing = {
     shape, points: [], center: null, preview: null, hint,
     onClick: (ev) => {
+      if (shape === 'marker') { finish(ev.latlng); return; }
       if (shape === 'circle') {
         if (!drawing.center) drawing.center = ev.latlng;
         else finish(ev.latlng);
@@ -4020,12 +4044,113 @@ $('#fence-list').addEventListener('click', guard(async (e) => {
     setMapVisible(true);
     if (!map) return;
     fenceLayer.addTo(map);
-    map.fitBounds(fenceLayerOf(g).addTo(map).getBounds(), { padding: [30, 30] });
-    drawFences();
+    fitLayer(fenceLayerOf(g));
   }
   if (fenceEdit) openFenceDialog(g);
   if (fenceDel && confirm(`Delete the geofence ${g.name}? Its open alerts end, and it is removed from devices' maps.`)) {
     renderGeofences(await api('DELETE', `api/geofences/${encodeURIComponent(g.id)}`));
+  }
+}));
+
+// ---------- drawings ----------
+//
+// Markers, routes, areas and circles drawn here and kept on devices' maps.
+
+const MARKER_TYPES = { 'a-f-G': 'Friendly', 'a-h-G': 'Hostile', 'a-n-G': 'Neutral', 'a-u-G': 'Unknown', 'b-m-p-s-m': 'Spot (colored dot)' };
+
+function drawingLayerOf(d) {
+  const style = { color: d.color, weight: 3, fillOpacity: 0.12 };
+  let l;
+  if (d.kind === 'marker') {
+    const detail = new DOMParser().parseFromString(`<detail><color argb="${parseInt(d.color.slice(1), 16) - 0x1000000}"/></detail>`, 'text/xml').documentElement;
+    l = cotPointMarker(d.center, d.type, detail);
+  } else if (d.kind === 'circle') l = L.circle(d.center, { ...style, radius: d.radius });
+  else if (d.kind === 'route') l = L.polyline(d.points, { ...style, dashArray: '8 6' });
+  else l = L.polygon(d.points, style);
+  return l.bindTooltip(`${esc(d.name)}${d.remarks ? `<br><span class="muted">${esc(d.remarks)}</span>` : ''}`, { sticky: d.kind !== 'marker', direction: 'right' });
+}
+
+function drawDrawings() {
+  if (!drawingLayer) return;
+  // Military symbols need their library, loaded on first use.
+  if (!window.ms && drawings.some((d) => d.kind === 'marker' && d.type.startsWith('a-'))) {
+    loadMilsymbol().then(drawDrawings).catch(() => {});
+  }
+  drawingLayer.clearLayers();
+  for (const d of drawings) drawingLayerOf(d).addTo(drawingLayer);
+}
+
+function renderDrawings(list) {
+  drawings = list;
+  drawDrawings();
+  const kind = (d) => d.kind === 'marker' ? MARKER_TYPES[d.type] + ' marker' : d.kind === 'route' ? `route, ${d.points.length} points`
+    : d.kind === 'circle' ? `circle, ${d.radius >= 1000 ? (d.radius / 1000).toFixed(1) + ' km' : Math.round(d.radius) + ' m'}` : `area, ${d.points.length} corners`;
+  $('#drawing-list tbody').innerHTML = list.map((d) => `<tr>
+    <td><span class="fence-swatch" style="background:${esc(d.color)}"></span> <strong>${esc(d.name)}</strong>${d.remarks ? `<div class="muted">${esc(d.remarks)}</div>` : ''}</td>
+    <td>${esc(kind(d))}</td>
+    <td>${d.groups.length ? groupPills(d.groups) : '<span class="muted">every device</span>'}</td>
+    <td>${esc(date(d.updated))}<div class="muted">${esc(d.author)}</div></td>
+    <td class="actions"><button class="small" data-draw-show="${esc(d.id)}">Show</button>
+      <button class="small" data-draw-edit="${esc(d.id)}">Edit</button>
+      <button class="small danger" data-draw-del="${esc(d.id)}">Delete</button></td></tr>`).join('')
+    || emptyRow(5, 'Nothing drawn yet');
+}
+
+async function loadDrawings() {
+  if (!allGroups.length) allGroups = await api('GET', 'api/groups');
+  renderDrawings(await api('GET', 'api/drawings'));
+}
+
+let editingDrawing = null;
+
+function openDrawingDialog(geom) {
+  const d = geom.id ? geom : { kind: geom.shape === 'polygon' ? 'area' : geom.shape, points: geom.points, center: geom.center, radius: geom.radius };
+  editingDrawing = d;
+  const f = $('#drawing-form');
+  $('#drawing-dialog-title').textContent = d.id ? `Edit ${d.name}` : `New ${d.kind}`;
+  f.name.value = d.name || '';
+  f.remarks.value = d.remarks || '';
+  f.mtype.value = d.type || 'a-f-G';
+  f.color.value = d.color || (d.kind === 'marker' ? '#FFD24C' : '#F29900');
+  $('#drawing-type-row').hidden = d.kind !== 'marker';
+  renderChips('#drawing-groups', d.groups || []);
+  $('#drawing-error').textContent = '';
+  $('#drawing-dialog').showModal();
+}
+
+$('#drawing-form').addEventListener('submit', async (e) => {
+  if (e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  const f = e.target, d = editingDrawing;
+  const body = { ...d, name: f.name.value, remarks: f.remarks.value, color: f.color.value, groups: checkedIn('#drawing-groups'),
+    type: d.kind === 'marker' ? f.mtype.value : '' };
+  try {
+    renderDrawings(await api(d.id ? 'PUT' : 'POST', d.id ? `api/drawings/${encodeURIComponent(d.id)}` : 'api/drawings', body));
+    $('#drawing-dialog').close();
+    toast(d.id ? 'Saved; devices get the change' : 'Sent to devices');
+  } catch (ex) {
+    $('#drawing-error').textContent = ex.message;
+  }
+});
+
+for (const [btn, shape] of [['#draw-marker', 'marker'], ['#draw-route', 'route'], ['#draw-area', 'polygon'], ['#draw-circle', 'circle']]) {
+  $(btn).addEventListener('click', () => startDrawing(shape, openDrawingDialog));
+}
+
+$('#drawing-list').addEventListener('click', guard(async (e) => {
+  const { drawShow, drawEdit, drawDel } = e.target.dataset;
+  const d = drawings.find((x) => x.id === (drawShow || drawEdit || drawDel));
+  if (!d) return;
+  if (drawShow) {
+    setMapVisible(true);
+    if (!map) return;
+    drawingLayer.addTo(map);
+    if (d.kind === 'marker') map.setView(d.center, Math.max(map.getZoom(), 15));
+    else fitLayer(drawingLayerOf(d));
+  }
+  if (drawEdit) openDrawingDialog(d);
+  if (drawDel && confirm(`Delete ${d.name}? It is removed from devices' maps too.`)) {
+    renderDrawings(await api('DELETE', `api/drawings/${encodeURIComponent(d.id)}`));
   }
 }));
 

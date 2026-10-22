@@ -194,6 +194,8 @@ type db struct {
 	LostContact LostContactSettings `json:"lost_contact"`
 
 	Geofences map[string]*Geofence `json:"geofences"` // by id
+
+	Drawings map[string]*Drawing `json:"drawings"` // by id
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -342,7 +344,7 @@ type Store struct {
 // Open loads the store at path, creating an empty one if needed.
 func Open(path string) (*Store, error) {
 	s := &Store{path: path, db: db{Users: map[string]*User{}, Certs: map[string]*Cert{}, Packages: map[string]*Package{}, Groups: map[string]*Group{},
-		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, DeviceProfiles: map[string]*DeviceProfile{}, Apps: map[string]*App{}, Geofences: map[string]*Geofence{}, NextSeq: 1}}
+		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, DeviceProfiles: map[string]*DeviceProfile{}, Apps: map[string]*App{}, Geofences: map[string]*Geofence{}, Drawings: map[string]*Drawing{}, NextSeq: 1}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, s.save()
@@ -382,6 +384,9 @@ func Open(path string) (*Store, error) {
 	}
 	if s.db.Geofences == nil {
 		s.db.Geofences = map[string]*Geofence{}
+	}
+	if s.db.Drawings == nil {
+		s.db.Drawings = map[string]*Drawing{}
 	}
 	// Groups used to exist only as names on users; give them records.
 	for _, u := range s.db.Users {
@@ -1715,6 +1720,65 @@ func (s *Store) DeleteGeofence(id string) (Geofence, error) {
 	}
 	delete(s.db.Geofences, id)
 	return cloneGeofence(g), s.save()
+}
+
+// ---- drawings ----
+
+// Drawing is a marker, route, area or circle drawn on the console map and
+// kept on devices' maps: sent to the devices in Groups (none = every device)
+// and again to each as it connects.
+type Drawing struct {
+	ID      string       `json:"id"`
+	Kind    string       `json:"kind"` // "marker", "route", "area" or "circle"
+	Name    string       `json:"name"`
+	Remarks string       `json:"remarks"`
+	Type    string       `json:"type,omitempty"` // a marker's CoT type, e.g. a-h-G or b-m-p-s-m
+	Points  [][2]float64 `json:"points,omitempty"`
+	Center  [2]float64   `json:"center"` // a marker's or circle's position
+	Radius  float64      `json:"radius,omitempty"`
+	Color   string       `json:"color"` // #RRGGBB
+	Groups  []string     `json:"groups"`
+	Author  string       `json:"author"`
+	Created time.Time    `json:"created"`
+	Updated time.Time    `json:"updated"`
+}
+
+func cloneDrawing(d *Drawing) Drawing {
+	c := *d
+	c.Points = slices.Clone(d.Points)
+	c.Groups = slices.Clone(d.Groups)
+	return c
+}
+
+// Drawings returns the drawings, newest first.
+func (s *Store) Drawings() []Drawing {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Drawing, 0, len(s.db.Drawings))
+	for _, d := range s.db.Drawings {
+		out = append(out, cloneDrawing(d))
+	}
+	slices.SortFunc(out, func(a, b Drawing) int { return b.Created.Compare(a.Created) })
+	return out
+}
+
+func (s *Store) PutDrawing(d Drawing) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := cloneDrawing(&d)
+	s.db.Drawings[d.ID] = &c
+	return s.save()
+}
+
+func (s *Store) DeleteDrawing(id string) (Drawing, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.db.Drawings[id]
+	if !ok {
+		return Drawing{}, ErrNotFound
+	}
+	delete(s.db.Drawings, id)
+	return cloneDrawing(d), s.save()
 }
 
 // ---- offline maps ----

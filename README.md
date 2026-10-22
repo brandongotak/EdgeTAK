@@ -92,6 +92,13 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   between servers, in either direction, with certificate or token sign-in,
   approval of servers that connect, and per-federate group sharing. See
   [Federation](#federation).
+- **Drawings** (Maps tab): draw markers (friendly, hostile, neutral,
+  unknown, or a colored spot), routes, areas and circles on the console map
+  and they appear on devices' maps like items a teammate placed, for every
+  device or chosen groups. EdgeTAK keeps them and sends them to each device
+  as it connects, so phones that were off get them too; editing or deleting
+  one updates devices. EdgeTAK's copy is the reference: changes made on a
+  device are replaced the next time it connects.
 - **Offline maps** (Maps tab): MBTiles maps served by EdgeTAK, on the
   console map and in ATAK (as map sources in device profiles), with no
   internet access. See [Offline maps](#offline-maps).
