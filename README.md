@@ -331,6 +331,17 @@ covered by the image; use the installer.
 
 ## First steps in the admin console
 
+The console's pages are grouped into five sections in the top bar, with the
+current section's pages in the row below:
+
+| Section | Pages |
+|---|---|
+| Dashboard | Dashboard, Health |
+| People | Users, Groups, Sign-ups, Certificates |
+| Data | Data Packages, Missions, Maps, Plugins, Video |
+| Messages | Send, Chat log |
+| Server | Connect, Federation, Settings |
+
 1. **Change the admin password**: on the **Users** tab, click **Password** on
    `admin`. Then delete the file holding the first-run password:
    `sudo rm /var/lib/edgetak/initial-admin-password.txt` (installer) or

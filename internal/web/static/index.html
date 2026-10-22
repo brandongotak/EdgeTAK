@@ -20,25 +20,36 @@
 <div id="shell" class="shell" hidden>
   <header class="topbar">
     <div class="brand"><span class="logo">◆</span> <span id="server-name">EdgeTAK</span> <span id="server-version" class="version-tag" title="EdgeTAK version"></span></div>
-    <nav id="tabs" class="tabs" role="tablist">
-      <button data-tab="dashboard" class="active">Dashboard</button>
-      <button data-tab="health">Health</button>
-      <button data-tab="users">Users</button>
-      <button data-tab="groups">Groups</button>
-      <button data-tab="signups">Sign-ups</button>
-      <button data-tab="certs">Certificates</button>
-      <button data-tab="packages">Data Packages</button>
-      <button data-tab="plugins">Plugins</button>
-      <button data-tab="maps">Maps</button>
-      <button data-tab="missions">Missions</button>
-      <button data-tab="video">Video</button>
-      <button data-tab="send">Send</button>
-      <button data-tab="chat">Chat log</button>
-      <button data-tab="connect">Connect</button>
-      <button data-tab="federation">Federation</button>
-      <button data-tab="settings">Settings</button>
+    <nav id="sections" class="tabs" aria-label="Sections">
+      <button data-section="overview" class="active">Dashboard</button>
+      <button data-section="people">People</button>
+      <button data-section="data">Data</button>
+      <button data-section="messages">Messages</button>
+      <button data-section="server">Server</button>
     </nav>
-    <div class="who"><button id="install-app" class="ghost" hidden title="Install the console as an app">Install app</button> <a class="button ghost" href="/account" title="Your own devices, certificates and password">My account</a> <button id="map-toggle" class="ghost" aria-pressed="false" title="Show or hide the map">Map</button> <span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
+    <div class="who" id="who">
+      <button id="map-toggle" class="ghost" aria-pressed="false" title="Show or hide the map">Map</button>
+      <button id="who-menu" class="ghost" aria-expanded="false" aria-controls="who-items" title="Account and app">☰</button>
+      <div class="who-items" id="who-items"><button id="install-app" class="ghost" hidden title="Install the console as an app">Install app</button> <a class="button ghost" href="/account" title="Your own devices, certificates and password">My account</a> <span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
+    </div>
+    <nav id="tabs" class="subtabs" role="tablist" aria-label="Pages">
+      <button data-tab="dashboard" data-section="overview" class="active">Dashboard</button>
+      <button data-tab="health" data-section="overview">Health</button>
+      <button data-tab="users" data-section="people">Users</button>
+      <button data-tab="groups" data-section="people">Groups</button>
+      <button data-tab="signups" data-section="people">Sign-ups</button>
+      <button data-tab="certs" data-section="people">Certificates</button>
+      <button data-tab="packages" data-section="data">Data Packages</button>
+      <button data-tab="missions" data-section="data">Missions</button>
+      <button data-tab="maps" data-section="data">Maps</button>
+      <button data-tab="plugins" data-section="data">Plugins</button>
+      <button data-tab="video" data-section="data">Video</button>
+      <button data-tab="send" data-section="messages">Send</button>
+      <button data-tab="chat" data-section="messages">Chat log</button>
+      <button data-tab="connect" data-section="server">Connect</button>
+      <button data-tab="federation" data-section="server">Federation</button>
+      <button data-tab="settings" data-section="server">Settings</button>
+    </nav>
   </header>
 
   <div id="workspace" class="workspace">

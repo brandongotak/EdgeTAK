@@ -10,6 +10,19 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.13.1 (2026-10-22)
+
+### Changed
+- **Tidier console navigation.** The 16 tabs are grouped into five sections
+  in the top bar (Dashboard, People, Data, Messages, Server), with the
+  current section's pages in a row below. Each section reopens the page last
+  used in it, and a section shows a dot when one of its pages has news (an
+  update, certificates needing attention). Links to pages (`#users`,
+  `#settings`) still work.
+- **On phones, the account buttons fold into a ☰ menu** (Install app, My
+  account, Sign out), so the server name fits again; **Map** stays on the
+  bar.
+
 ## v0.13.0 (2026-10-22)
 
 ### Added

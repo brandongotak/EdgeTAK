@@ -63,8 +63,27 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .tabs button { background: transparent; border-color: transparent; color: var(--muted); white-space: nowrap; }
 .tabs button.active { color: var(--text); background: var(--panel-2); border-color: var(--line); }
 .tab-badge { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 999px; background: var(--warn); color: #111; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+.subtabs { display: flex; gap: 2px; flex: 1 0 100%; order: 4; overflow-x: auto; margin: -2px -16px -10px; padding: 4px 16px 6px; border-top: 1px solid var(--line); background: var(--panel-2); scrollbar-width: none; }
+.subtabs::-webkit-scrollbar { display: none; }
+.subtabs button { background: transparent; border-color: transparent; color: var(--muted); white-space: nowrap; min-height: 0; padding: 4px 10px; font-size: 13px; }
+.subtabs button.active { color: var(--text); background: var(--panel); border-color: var(--line); }
+.subtabs button.has-update::after,
 .tabs button.has-update::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--warn); vertical-align: middle; }
 .who { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.who-items { display: flex; align-items: center; gap: 8px; }
+#who-menu { display: none; font-size: 18px; line-height: 1; }
+#map-toggle { order: 1; }
+@media (max-width: 700px) {
+  .who { position: relative; }
+  #who-menu { display: inline-flex; order: 2; }
+  .who-items { display: none; }
+  .who.open .who-items {
+    display: flex; flex-direction: column; align-items: stretch; gap: 6px; position: absolute; right: 0; top: calc(100% + 6px); z-index: 1100;
+    min-width: 180px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 6px 20px #0006;
+  }
+  .who.open .who-items #me { display: block; padding: 2px 4px 6px; border-bottom: 1px solid var(--line); color: var(--text); font-weight: 600; }
+  .who.open .who-items > button, .who.open .who-items > a { justify-content: flex-start; text-align: left; }
+}
 #map-toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 
 main { padding: 16px; max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
@@ -384,6 +403,7 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .topbar .brand { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .tabs { order: 3; flex: 1 0 100%; margin: 0 -12px; padding: 0 12px 2px; scrollbar-width: none; }
   .tabs::-webkit-scrollbar { display: none; }
+  .subtabs { margin: 0 -12px -8px; padding: 4px 12px 6px; }
   .who #me { display: none; }
 
   main { padding: 12px; gap: 12px; }

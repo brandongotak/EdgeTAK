@@ -115,6 +115,19 @@ async function start() {
   watchEmergencies();
 }
 
+// On phones the account buttons fold into the ☰ menu.
+$('#who-menu').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const open = $('#who').classList.toggle('open');
+  $('#who-menu').setAttribute('aria-expanded', String(open));
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#who-items')) {
+    $('#who').classList.remove('open');
+    $('#who-menu').setAttribute('aria-expanded', 'false');
+  }
+});
+
 $('#logout').addEventListener('click', async () => {
   await fetch('api/logout', { method: 'POST', headers: { 'X-EdgeTAK': '1' } });
   location.replace('/');
@@ -143,22 +156,44 @@ const loaders = {
 
 let currentTab = '';
 
-// The tab bar scrolls when the window is narrow; keep the selected tab in
-// view, also when the bar itself narrows (the Install app button appears).
+// Navigation: sections in the top bar, and the pages of the current section
+// in a second row. Each section reopens the page last used in it.
+const lastPageIn = {};
+
+// The bars scroll when the window is narrow; keep the selected button in
+// view, also when a bar narrows (the Install app button appears).
 function showActiveTab() {
-  const t = $('#tabs'), b = t.querySelector('button.active');
-  if (!b) return;
-  const bar = t.getBoundingClientRect(), r = b.getBoundingClientRect();
-  if (r.left < bar.left) t.scrollLeft -= bar.left - r.left;
-  else if (r.right > bar.right) t.scrollLeft += r.right - bar.right;
+  for (const t of [$('#sections'), $('#tabs')]) {
+    const b = t.querySelector('button.active');
+    if (!b) continue;
+    const bar = t.getBoundingClientRect(), r = b.getBoundingClientRect();
+    if (r.left < bar.left) t.scrollLeft -= bar.left - r.left;
+    else if (r.right > bar.right) t.scrollLeft += r.right - bar.right;
+  }
 }
 new ResizeObserver(showActiveTab).observe($('#tabs'));
+
+// A section shows a dot when one of its other pages has news (an update,
+// certificates needing attention).
+function markSections() {
+  for (const s of $('#sections').children) {
+    const pages = [...$('#tabs').querySelectorAll(`[data-section="${s.dataset.section}"]`)];
+    s.classList.toggle('has-update', !s.classList.contains('active') && pages.some((p) => p.classList.contains('has-update') || p.querySelector('.tab-badge')));
+  }
+}
 
 function selectTab(name) {
   if (!loaders[name]) name = 'dashboard';
   currentTab = name;
   history.replaceState(null, '', '#' + name);
-  for (const b of $('#tabs').children) b.classList.toggle('active', b.dataset.tab === name);
+  const section = $(`#tabs [data-tab="${name}"]`).dataset.section;
+  lastPageIn[section] = name;
+  for (const b of $('#tabs').children) {
+    b.classList.toggle('active', b.dataset.tab === name);
+    b.hidden = b.dataset.section !== section;
+  }
+  for (const b of $('#sections').children) b.classList.toggle('active', b.dataset.section === section);
+  markSections();
   showActiveTab();
   for (const s of document.querySelectorAll('.tab')) s.hidden = s.id !== 'tab-' + name;
   clearInterval(pollTimer);
@@ -183,6 +218,13 @@ $('#tabs').addEventListener('click', (e) => {
   if (!b) return;
   if (isNarrow() && mapVisible()) setMapVisible(false); // the map covers the tabs on phones
   selectTab(b.dataset.tab);
+});
+$('#sections').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-section]');
+  if (!b) return;
+  if (isNarrow() && mapVisible()) setMapVisible(false);
+  const first = $(`#tabs [data-section="${b.dataset.section}"]`).dataset.tab;
+  selectTab(lastPageIn[b.dataset.section] || first);
 });
 
 // ---------- dashboard ----------
@@ -735,6 +777,7 @@ function renderSelfUpdate() {
   if (!u) return;
   // A dot on the Dashboard tab says an update is waiting.
   $('#tabs button[data-tab="dashboard"]').classList.toggle('has-update', !!(u.available && u.update_available));
+  markSections();
   const st = u.status;
   const running = st?.state === 'running' || !!selfUpdWatch;
   $('#update-state').innerHTML = running ? '<span class="pill warn">updating</span>'
@@ -2145,11 +2188,12 @@ function certBadge(st) {
   const serious = st.issues.some((i) => i.level !== 'info');
   const tab = $('#tabs [data-tab="certs"]');
   let b = tab.querySelector('.tab-badge');
-  if (!serious) { b?.remove(); return; }
+  if (!serious) { b?.remove(); markSections(); return; }
   if (!b) { b = document.createElement('span'); b.className = 'tab-badge'; tab.append(b); }
   const server = st.report.server.filter((c) => c.state === 'expiring' || c.state === 'expired').length;
   b.textContent = n + server;
   b.title = 'Certificates that need attention';
+  markSections();
 }
 
 async function loadCerts() {
