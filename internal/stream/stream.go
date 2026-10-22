@@ -25,6 +25,10 @@ type Server struct {
 	IdleTimeout    time.Duration
 	ServerUID      string
 	Version        string
+	// Ended is told when a client's stream ends, and whether the client closed
+	// it (clean): turning the connection off, quitting ATAK or shutting the
+	// phone down. A stream that times out or is reset was lost.
+	Ended func(c *router.Client, clean bool)
 }
 
 // Serve accepts connections on ln until ctx is done. Pass a tls.Listener for
@@ -105,6 +109,12 @@ func (s *Server) handle(ctx context.Context, conn net.Conn, transport string) {
 	}
 
 	r := cot.NewReader(conn)
+	var readErr error
+	defer func() {
+		if s.Ended != nil {
+			s.Ended(c, cleanEnd(readErr))
+		}
+	}()
 	for {
 		if s.IdleTimeout > 0 {
 			conn.SetReadDeadline(time.Now().Add(s.IdleTimeout))
@@ -119,6 +129,7 @@ func (s *Server) handle(ctx context.Context, conn net.Conn, transport string) {
 			if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 				s.Log.Debug("read ended", "remote", remote, "err", err)
 			}
+			readErr = err
 			break
 		}
 		c.In.Add(1)
@@ -190,4 +201,10 @@ func (s *Server) writeLoop(conn net.Conn, c *router.Client, ctrl <-chan control,
 			}
 		}
 	}
+}
+
+// cleanEnd reports whether a stream ended because the client closed it (or
+// EdgeTAK did), rather than going silent (timeout) or being reset.
+func cleanEnd(err error) bool {
+	return err == nil || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, net.ErrClosed)
 }

@@ -10,6 +10,35 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.11.0 (2026-10-21)
+
+### Added
+- **Lost contact alerts** (Settings tab): an amber alert, with a gentler
+  alarm than emergencies, the last known position and a marker on the map,
+  when a device stops reporting.
+  - **Signing off doesn't alert.** EdgeTAK tells how a connection ended: a
+    device that turns its server connection off, quits ATAK or shuts down
+    closes it cleanly and is only listed under **Devices offline**. A
+    connection that goes silent or is cut raises the alert after a grace
+    period (5 minutes by default).
+  - **Switching networks doesn't alert**: a device back within the grace
+    period is fine, and a new connection replacing a dropped one counts as
+    back.
+  - **Connected without a position** for 10 minutes (adjustable, or off)
+    alerts too, for a frozen app or lost GPS.
+  - Alerts end by themselves when the device is back, can be acknowledged
+    or dismissed like emergencies, and can be limited to chosen groups.
+- **Geofences** (Settings tab): draw an area or a circle on the console map
+  and get an amber alert, with the device's position, when a device enters
+  it, leaves it, or both.
+  - **Who:** every device, or devices in chosen groups.
+  - **Ends by itself** when the device crosses back.
+  - **No alert storm:** a device's first position only notes where it is, so
+    drawing an area around people already in it doesn't alert.
+  - **On devices' maps** too (as ATAK shapes, on by default per area), sent
+    when the area is saved and to devices as they connect; deleting an area
+    removes it there. The console map shows them as the **Geofences** layer.
+
 ## v0.10.2 (2026-10-21)
 
 ### Fixed

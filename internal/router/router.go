@@ -295,6 +295,7 @@ type Client struct {
 	uid       string
 	callsign  string
 	lastSA    *cot.Event
+	lastSAAt  time.Time // when lastSA arrived (the device's own clock may be off)
 	lastSeen  time.Time
 }
 
@@ -374,7 +375,7 @@ func (c *Client) Observe(ev *cot.Event) {
 	}
 	if ev.UID == c.uid {
 		c.callsign = ev.Callsign()
-		c.lastSA = ev
+		c.lastSA, c.lastSAAt = ev, time.Now()
 	}
 }
 
@@ -404,6 +405,13 @@ func (c *Client) LastSA() *cot.Event {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.lastSA
+}
+
+// LastSAAt is when the client last reported its own position (zero if never).
+func (c *Client) LastSAAt() time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.lastSAAt
 }
 
 func (c *Client) LastSeen() time.Time {

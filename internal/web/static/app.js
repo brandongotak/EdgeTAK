@@ -138,7 +138,7 @@ const loaders = {
   connect: loadConnect,
   chat: loadChat,
   federation: loadFederation,
-  settings: () => Promise.all([loadRetention(), loadEmergencyCard(), loadBackups()]),
+  settings: () => Promise.all([loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadBackups()]),
 };
 
 let currentTab = '';
@@ -856,6 +856,8 @@ let labelsLayer = null;
 let trailsLayer = null;
 let trailsTimer = null;
 let videoLayer = null;
+let fenceLayer = null; // geofences on the console map
+let geofences = [];
 let weather = null; // radar and hillshade overlays, see initWeather
 let mapSources = [];
 let offlineMaps = []; // MBTiles maps served by this server
@@ -910,6 +912,8 @@ function initMap() {
   videoLayer = L.layerGroup();
   videoLayer.on('add', () => loadVideoFeeds().catch(() => {}));
   weather = initWeather();
+  fenceLayer = L.layerGroup();
+  api('GET', 'api/geofences').then((r) => { geofences = r; drawFences(); }).catch(() => {});
   trailsLayer = L.layerGroup();
   trailsLayer.on('add', () => {
     $('#trails-show').checked = true;
@@ -1015,7 +1019,7 @@ function initWeather() {
 function buildLayers() {
   if (!map) return;
   const activeBase = prefs.get('map.base', 'Streets');
-  const activeOverlays = new Set(prefs.get('map.overlays', ['Devices', 'Callsigns', 'Server contact', 'Video']));
+  const activeOverlays = new Set(prefs.get('map.overlays', ['Devices', 'Callsigns', 'Server contact', 'Video', 'Geofences']));
   // Detach the switcher first, or removing the old layers would be saved as
   // the viewer turning them off.
   rebuildingLayers = true;
@@ -1024,7 +1028,7 @@ function buildLayers() {
 
   baseLayers = {};
   for (const [name, def] of BASEMAPS) baseLayers[name] = buildBase(def);
-  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer,
+  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer, Geofences: fenceLayer,
     'Weather radar': weather.radar, 'Weather radar (US, detailed)': weather.nexrad, Hillshade: weather.hillshade };
   for (const p of packageLayers.values()) overlayLayers[p.name] = p.layer;
   for (const m of offlineMaps) {
@@ -3709,15 +3713,25 @@ function beep() {
   }
 }
 
-function setAlarm(on) {
-  if (on && prefs.get('alerts.sound', true)) {
-    ensureAudio();
-    if (!alarmTimer) { beep(); alarmTimer = setInterval(beep, 1400); }
-  } else {
-    clearInterval(alarmTimer);
-    alarmTimer = null;
-  }
+// setAlarm sounds the alarm: "urgent" (emergencies) every 1.4 s, "gentle"
+// (lost contact) every 8 s, or nothing.
+let alarmMode = '';
+function setAlarm(mode) {
+  if (!mode || !prefs.get('alerts.sound', true)) mode = '';
+  if (mode === alarmMode) return;
+  clearInterval(alarmTimer);
+  alarmTimer = null;
+  alarmMode = mode;
+  if (!mode) return;
+  ensureAudio();
+  beep();
+  alarmTimer = setInterval(beep, mode === 'urgent' ? 1400 : 8000);
 }
+
+const isLost = (e) => e.kind === 'lost';
+const isFence = (e) => e.kind === 'geofence';
+const isNotice = (e) => isLost(e) || isFence(e); // amber, gentle alarm
+const noticeIcon = (e) => (isFence(e) ? '🚧' : isLost(e) ? '📡' : '🚨');
 
 const minutesAgo = (iso) => Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
 
@@ -3730,7 +3744,7 @@ async function pollEmergencies() {
     notifiedEmergencies.add(e.id);
     if (window.Notification?.permission === 'granted') {
       try {
-        const n = new Notification(`EMERGENCY: ${e.type}`, { body: `${e.callsign}${e.username ? ` (${e.username})` : ''} at ${new Date(e.started).toLocaleTimeString()}`, tag: e.id, requireInteraction: true });
+        const n = new Notification(isNotice(e) ? `${e.type.toUpperCase()}: ${e.callsign}` : `EMERGENCY: ${e.type}`, { body: `${e.callsign}${e.username ? ` (${e.username})` : ''} at ${new Date(e.started).toLocaleTimeString()}`, tag: e.id, requireInteraction: true });
         n.onclick = () => { window.focus(); n.close(); };
       } catch { /* notifications unavailable */ }
     }
@@ -3741,18 +3755,22 @@ async function pollEmergencies() {
 function renderEmergencies() {
   const banner = $('#emergency-banner');
   const unacked = emergencies.filter((e) => !e.acked);
+  const urgent = unacked.some((e) => !isNotice(e));
   banner.hidden = !emergencies.length;
-  document.title = unacked.length ? `🚨 EMERGENCY · ${baseTitle}` : baseTitle;
-  setAlarm(unacked.length > 0);
+  document.title = urgent ? `🚨 EMERGENCY · ${baseTitle}`
+    : unacked.length ? `${noticeIcon(unacked[0])} ${isFence(unacked[0]) ? 'GEOFENCE' : 'LOST CONTACT'} · ${baseTitle}` : baseTitle;
+  setAlarm(urgent ? 'urgent' : unacked.length ? 'gentle' : '');
   const muted = unacked.length && prefs.get('alerts.sound', true) && audioCtx?.state !== 'running';
   banner.classList.toggle('acked', !unacked.length);
+  banner.classList.toggle('lost-only', emergencies.every(isNotice));
   banner.innerHTML = emergencies.map((e) => {
     const pos = e.lat || e.lon ? `${e.lat.toFixed(5)}, ${e.lon.toFixed(5)}` : 'no position';
-    return `<div class="emergency-item${e.acked ? ' acked' : ''}">
-      <span class="em-icon" aria-hidden="true">🚨</span>
+    const since = isFence(e) ? 'at' : isLost(e) ? (e.type === 'No position' ? 'no position since' : 'last heard') : 'since';
+    return `<div class="emergency-item${e.acked ? ' acked' : ''}${isNotice(e) ? ' lost' : ''}">
+      <span class="em-icon" aria-hidden="true">${noticeIcon(e)}</span>
       <div class="em-text">
         <strong>${esc(e.type.toUpperCase())} · ${esc(e.callsign)}</strong>
-        <span>${e.username ? esc(e.username) + ' · ' : ''}since ${esc(new Date(e.started).toLocaleTimeString())} (${minutesAgo(e.started)} min) · ${esc(pos)}${e.acked ? ` · acknowledged by ${esc(e.acked_by)}` : ''}</span>
+        <span>${e.username ? esc(e.username) + ' · ' : ''}${since} ${esc(new Date(e.started).toLocaleTimeString())} (${minutesAgo(e.started)} min) · ${isLost(e) ? 'last position ' : ''}${esc(pos)}${e.acked ? ` · acknowledged by ${esc(e.acked_by)}` : ''}</span>
       </div>
       <div class="em-actions">
         ${e.lat || e.lon ? `<button type="button" class="small" data-em="map" data-id="${esc(e.id)}">Show on map</button>` : ''}
@@ -3761,6 +3779,7 @@ function renderEmergencies() {
       </div>
     </div>`;
   }).join('') + (muted ? '<div class="em-sound">🔇 Click anywhere on the page to hear the alarm.</div>' : '');
+  if (currentTab === 'settings') renderLostList();
   renderEmergencyMarkers();
 }
 
@@ -3770,9 +3789,9 @@ function renderEmergencyMarkers() {
   emergencyLayer.clearLayers();
   for (const e of emergencies) {
     if (!e.lat && !e.lon) continue;
-    const icon = L.divIcon({ className: 'emergency-icon', html: '<span class="em-pulse"></span><span class="em-dot"></span>', iconSize: [28, 28], iconAnchor: [14, 14] });
+    const icon = L.divIcon({ className: `emergency-icon${isNotice(e) ? ' lost' : ''}`, html: '<span class="em-pulse"></span><span class="em-dot"></span>', iconSize: [28, 28], iconAnchor: [14, 14] });
     L.marker([e.lat, e.lon], { icon, zIndexOffset: 2000 })
-      .bindTooltip(`🚨 ${esc(e.callsign)} · ${esc(e.type)}`, { permanent: true, direction: 'right', className: 'em-tooltip' })
+      .bindTooltip(`${noticeIcon(e)} ${esc(e.callsign)} · ${esc(e.type)}`, { permanent: true, direction: 'right', className: `em-tooltip${isNotice(e) ? ' lost' : ''}` })
       .addTo(emergencyLayer);
   }
 }
@@ -3799,7 +3818,9 @@ $('#emergency-banner').addEventListener('click', guard(async (ev) => {
       await api('POST', `api/emergencies/${encodeURIComponent(e.id)}/ack`);
       break;
     case 'dismiss':
-      if (!confirm(`Dismiss the ${e.type} from ${e.callsign}? Do this only when the device can't cancel it itself (for example it is off). The device's own alert is not changed.`)) return;
+      if (!confirm(isFence(e) ? `Dismiss the alert "${e.type}" for ${e.callsign}? It also ends by itself when the device crosses back.`
+        : isLost(e) ? `Dismiss the ${e.type.toLowerCase()} alert for ${e.callsign}? It won't alert again until the device is back in contact.`
+        : `Dismiss the ${e.type} from ${e.callsign}? Do this only when the device can't cancel it itself (for example it is off). The device's own alert is not changed.`)) return;
       await api('POST', `api/emergencies/${encodeURIComponent(e.id)}/dismiss`);
       toast('Alert dismissed');
       break;
@@ -3824,7 +3845,7 @@ async function loadEmergencyCard() {
       <td><strong>${esc(e.callsign)}</strong>${e.username ? `<div class="muted">${esc(e.username)}</div>` : ''}</td>
       <td class="mono">${e.lat || e.lon ? `${e.lat.toFixed(5)}, ${e.lon.toFixed(5)}` : '—'}</td>
       <td>${e.acked ? `${esc(new Date(e.acked).toLocaleTimeString())} <span class="muted">by ${esc(e.acked_by)}</span>` : '—'}</td>
-      <td>${e.ended ? `${esc(new Date(e.ended).toLocaleTimeString())} <span class="muted">${e.ended_by === 'device' ? 'cancelled on the device' : 'dismissed by ' + esc(e.ended_by)}</span>` : '—'}</td>
+      <td>${e.ended ? `${esc(new Date(e.ended).toLocaleTimeString())} <span class="muted">${e.ended_by === 'device' ? (isFence(e) ? 'crossed back' : isLost(e) ? 'back in contact' : 'cancelled on the device') : 'dismissed by ' + esc(e.ended_by)}</span>` : '—'}</td>
     </tr>`).join('') || emptyRow(6, 'No emergency alerts yet');
 }
 
@@ -3842,6 +3863,211 @@ $('#alarm-notify').addEventListener('click', guard(async () => {
   if (p === 'granted') new Notification('EdgeTAK', { body: 'Emergency alerts will show here.' });
   loadEmergencyCard();
 }));
+
+// ---------- geofences ----------
+//
+// Areas drawn on the map. Drawing: an area is clicked corner by corner and
+// finished with Finish (or a double-click); a circle is a click on its
+// center and one on its edge.
+
+function fenceLayerOf(g) {
+  const style = { color: g.color, weight: 2, fillOpacity: 0.12, dashArray: g.off ? '6 6' : null };
+  const l = g.shape === 'circle' ? L.circle(g.center, { ...style, radius: g.radius }) : L.polygon(g.points, style);
+  return l.bindTooltip(`🚧 ${esc(g.name)}`, { sticky: true });
+}
+
+function drawFences() {
+  if (!fenceLayer) return;
+  fenceLayer.clearLayers();
+  for (const g of geofences) fenceLayerOf(g).addTo(fenceLayer);
+}
+
+function renderGeofences(list) {
+  geofences = list;
+  drawFences();
+  const trig = { enter: 'entering', exit: 'leaving', both: 'entering or leaving' };
+  $('#fence-list tbody').innerHTML = list.map((g) => `<tr>
+    <td><span class="fence-swatch" style="background:${esc(g.color)}"></span> <strong>${esc(g.name)}</strong>${g.off ? ' <span class="pill">alerts off</span>' : ''}</td>
+    <td>${g.shape === 'circle' ? `circle, ${g.radius >= 1000 ? (g.radius / 1000).toFixed(1) + ' km' : Math.round(g.radius) + ' m'}` : `area, ${g.points.length} corners`}</td>
+    <td>${esc(trig[g.trigger])}</td>
+    <td>${g.groups.length ? groupPills(g.groups) : '<span class="muted">every device</span>'}</td>
+    <td>${g.inside}</td>
+    <td>${g.devices ? 'yes' : 'no'}</td>
+    <td class="actions"><button class="small" data-fence-show="${esc(g.id)}">Show</button>
+      <button class="small" data-fence-edit="${esc(g.id)}">Edit</button>
+      <button class="small danger" data-fence-del="${esc(g.id)}">Delete</button></td></tr>`).join('')
+    || emptyRow(7, 'No geofences yet: draw one on the map');
+}
+
+async function loadGeofences() {
+  if (!allGroups.length) allGroups = await api('GET', 'api/groups');
+  renderGeofences(await api('GET', 'api/geofences'));
+}
+
+let drawing = null; // { shape, points, center, preview, hint }
+
+function stopDrawing() {
+  if (!drawing) return;
+  map.off('click', drawing.onClick).off('mousemove', drawing.onMove).off('dblclick', drawing.onDbl);
+  map.doubleClickZoom.enable();
+  drawing.preview?.remove();
+  drawing.hint.remove();
+  $('#map').classList.remove('drawing');
+  drawing = null;
+}
+
+function startDrawing(shape) {
+  setMapVisible(true);
+  if (!map) return;
+  stopDrawing();
+  fenceLayer.addTo(map);
+  const hint = L.control({ position: 'topleft' });
+  hint.onAdd = () => {
+    const d = L.DomUtil.create('div', 'draw-hint');
+    d.innerHTML = shape === 'circle'
+      ? '<span>Click the center, then the edge of the circle.</span> <button type="button" class="small" data-draw="cancel">Cancel</button>'
+      : '<span>Click the corners of the area.</span> <button type="button" class="small primary" data-draw="finish">Finish</button> <button type="button" class="small" data-draw="undo">Undo</button> <button type="button" class="small" data-draw="cancel">Cancel</button>';
+    L.DomEvent.disableClickPropagation(d);
+    d.addEventListener('click', (ev) => {
+      const act = ev.target.dataset.draw;
+      if (act === 'cancel') stopDrawing();
+      if (act === 'undo') { drawing.points.pop(); redraw(); }
+      if (act === 'finish') finish();
+    });
+    return d;
+  };
+  hint.addTo(map);
+  map.doubleClickZoom.disable();
+  $('#map').classList.add('drawing');
+  const style = { color: '#F29900', weight: 2, dashArray: '4 4', fillOpacity: 0.1 };
+  const redraw = (cursor) => {
+    drawing.preview?.remove();
+    if (shape === 'circle') {
+      if (drawing.center && cursor) drawing.preview = L.circle(drawing.center, { ...style, radius: map.distance(drawing.center, cursor) }).addTo(map);
+      return;
+    }
+    const pts = cursor ? [...drawing.points, cursor] : drawing.points;
+    if (pts.length) drawing.preview = (pts.length > 2 ? L.polygon(pts, style) : L.polyline(pts, style)).addTo(map);
+  };
+  const finish = (edge) => {
+    if (shape === 'circle') {
+      const radius = map.distance(drawing.center, edge);
+      const center = [drawing.center.lat, drawing.center.lng];
+      stopDrawing();
+      openFenceDialog({ shape: 'circle', center, radius });
+      return;
+    }
+    if (drawing.points.length < 3) { toast('An area needs at least 3 corners', true); return; }
+    const points = drawing.points.map((p) => [p.lat, p.lng]);
+    stopDrawing();
+    openFenceDialog({ shape: 'polygon', points });
+  };
+  drawing = {
+    shape, points: [], center: null, preview: null, hint,
+    onClick: (ev) => {
+      if (shape === 'circle') {
+        if (!drawing.center) drawing.center = ev.latlng;
+        else finish(ev.latlng);
+        return;
+      }
+      drawing.points.push(ev.latlng);
+      redraw();
+    },
+    onMove: (ev) => redraw(ev.latlng),
+    onDbl: () => { if (shape !== 'circle') finish(); },
+  };
+  map.on('click', drawing.onClick).on('mousemove', drawing.onMove).on('dblclick', drawing.onDbl);
+}
+
+let editingFence = null;
+
+function openFenceDialog(g) {
+  editingFence = g;
+  const f = $('#fence-form');
+  $('#fence-dialog-title').textContent = g.id ? `Edit ${g.name}` : 'New geofence';
+  f.name.value = g.name || '';
+  f.trigger.value = g.trigger || 'exit';
+  f.color.value = g.color || '#F29900';
+  f.devices.checked = g.id ? g.devices : true;
+  f.alerts.checked = !g.off;
+  renderChips('#fence-groups', g.groups || []);
+  $('#fence-error').textContent = '';
+  $('#fence-dialog').showModal();
+}
+
+$('#fence-form').addEventListener('submit', async (e) => {
+  if (e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  const f = e.target, g = editingFence;
+  const body = { ...g, name: f.name.value, trigger: f.trigger.value, color: f.color.value, devices: f.devices.checked, off: !f.alerts.checked, groups: checkedIn('#fence-groups') };
+  try {
+    renderGeofences(await api(g.id ? 'PUT' : 'POST', g.id ? `api/geofences/${encodeURIComponent(g.id)}` : 'api/geofences', body));
+    $('#fence-dialog').close();
+    toast(g.id ? 'Geofence saved' : 'Geofence added');
+  } catch (ex) {
+    $('#fence-error').textContent = ex.message;
+  }
+});
+
+$('#fence-draw-area').addEventListener('click', () => startDrawing('polygon'));
+$('#fence-draw-circle').addEventListener('click', () => startDrawing('circle'));
+
+$('#fence-list').addEventListener('click', guard(async (e) => {
+  const { fenceShow, fenceEdit, fenceDel } = e.target.dataset;
+  const g = geofences.find((x) => x.id === (fenceShow || fenceEdit || fenceDel));
+  if (!g) return;
+  if (fenceShow) {
+    setMapVisible(true);
+    if (!map) return;
+    fenceLayer.addTo(map);
+    map.fitBounds(fenceLayerOf(g).addTo(map).getBounds(), { padding: [30, 30] });
+    drawFences();
+  }
+  if (fenceEdit) openFenceDialog(g);
+  if (fenceDel && confirm(`Delete the geofence ${g.name}? Its open alerts end, and it is removed from devices' maps.`)) {
+    renderGeofences(await api('DELETE', `api/geofences/${encodeURIComponent(g.id)}`));
+  }
+}));
+
+// ---------- lost contact ----------
+
+let lostView = { offline: [] };
+
+async function loadLostContact() {
+  if (!allGroups.length) allGroups = await api('GET', 'api/groups');
+  lostView = await api('GET', 'api/lost-contact');
+  const f = $('#lost-form'), set = lostView.settings;
+  f.on.checked = !set.off;
+  f.grace.value = set.grace_minutes;
+  f.nopos.value = set.no_position_minutes > 0 ? set.no_position_minutes : 0;
+  renderChips('#lost-groups', set.groups);
+  renderLostList();
+}
+
+function renderLostList() {
+  const alerted = new Set(emergencies.filter(isLost).map((e) => e.device_uid));
+  $('#lost-list tbody').innerHTML = lostView.offline.map((d) => `<tr>
+    <td><strong>${esc(d.callsign)}</strong>${d.username ? `<div class="muted">${esc(d.username)}</div>` : ''}</td>
+    <td>${d.signed_off ? '<span class="pill">signed off</span>' : alerted.has(d.uid) ? '<span class="pill warn">lost contact</span>' : '<span class="pill">connection dropped</span>'}</td>
+    <td>${esc(date(d.last_seen))} <span class="muted">(${esc(ago(d.last_seen))})</span></td>
+    <td class="mono">${d.lat || d.lon ? `${d.lat.toFixed(5)}, ${d.lon.toFixed(5)}` : '—'}</td>
+    <td class="actions">${d.lat || d.lon ? `<button class="small" data-lost-map="${esc(d.uid)}">Show on map</button>` : ''}</td></tr>`).join('')
+    || emptyRow(5, 'Every device that has connected is still connected');
+}
+
+$('#lost-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  lostView = await api('PUT', 'api/lost-contact', { off: !f.on.checked, grace_minutes: Number(f.grace.value) || 5,
+    no_position_minutes: Number(f.nopos.value) || 0, groups: checkedIn('#lost-groups') });
+  renderLostList();
+  toast('Lost contact settings saved');
+}));
+
+$('#lost-list').addEventListener('click', (e) => {
+  const d = lostView.offline.find((x) => x.uid === e.target.dataset.lostMap);
+  if (d) showEmergencyOnMap({ lat: d.lat, lon: d.lon });
+});
 
 let emergencyTimer = null;
 function watchEmergencies() {

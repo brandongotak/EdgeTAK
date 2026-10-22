@@ -183,6 +183,50 @@
           <tbody></tbody>
         </table></div>
       </div>
+      <div class="card" id="lost-card">
+        <h2>Lost contact alerts</h2>
+        <p class="muted">An amber alert, with the last known position, when a device stops reporting: its connection went silent or dropped, or it stays connected without sending a position. A device that signs off (turns its server connection off, quits ATAK, shuts down) closes its connection itself, so it doesn't alert and is only listed below. A device that comes back within the grace period (switching networks) doesn't alert either, and alerts end by themselves when the device is back.</p>
+        <form id="lost-form" class="stack">
+          <label class="check"><input type="checkbox" name="on"> Alert when contact is lost</label>
+          <label class="inline-label">Alert after <input type="number" name="grace" min="1" max="1440" class="days-input"> minutes without contact</label>
+          <label class="inline-label">or after <input type="number" name="nopos" min="0" max="1440" class="days-input"> minutes connected without a position <span class="muted">(0 = off)</span></label>
+          <div class="muted picker-label">Only for devices in these groups (none selected = every device)</div>
+          <div id="lost-groups" class="group-picker"></div>
+          <div class="inline-form"><button class="primary" type="submit">Save</button></div>
+        </form>
+        <h3>Devices offline</h3>
+        <div class="table-wrap"><table id="lost-list">
+          <thead><tr><th>Device</th><th>How</th><th>Last heard</th><th>Last position</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <div class="card" id="fence-card">
+        <div class="card-head"><h2>Geofences</h2>
+          <div class="inline-form"><button type="button" class="small primary" id="fence-draw-area">Draw an area</button> <button type="button" class="small" id="fence-draw-circle">Draw a circle</button></div></div>
+        <p class="muted">Areas on the map that alert (in amber) when a device enters or leaves them, with its position. The alert ends by itself when the device crosses back. A device's first position only notes where it is, so drawing an area doesn't alert for everyone already inside. Areas can also be drawn on devices' maps.</p>
+        <div class="table-wrap"><table id="fence-list">
+          <thead><tr><th>Area</th><th>Shape</th><th>Alerts on</th><th>Devices watched</th><th>Inside now</th><th>On devices</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <dialog id="fence-dialog" class="card dialog">
+        <form method="dialog" id="fence-form" class="stack">
+          <div class="card-head"><h2 id="fence-dialog-title">New geofence</h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
+          <label>Name <input name="name" required maxlength="80" placeholder="e.g. Training area"></label>
+          <label>Alert when a device
+            <select name="trigger"><option value="exit">leaves it</option><option value="enter">enters it</option><option value="both">enters or leaves it</option></select>
+          </label>
+          <div class="muted picker-label">Watch devices in these groups (none selected = every device)</div>
+          <div id="fence-groups" class="group-picker"></div>
+          <div class="inline-form">
+            <label class="inline-label">Color <input type="color" name="color" value="#F29900"></label>
+            <label class="check"><input type="checkbox" name="devices" checked> Draw it on devices' maps</label>
+            <label class="check"><input type="checkbox" name="alerts" checked> Alerts on</label>
+          </div>
+          <p class="error" id="fence-error" role="alert"></p>
+          <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
+        </form>
+      </dialog>
       <div class="card" id="retention-card">
         <div class="card-head"><h2>Data retention</h2><span class="muted" id="retention-last"></span></div>
         <p class="muted">How long to keep each kind of data, in days (0 = keep forever). Rules run every hour. The right column shows what a rule would remove right now.</p>

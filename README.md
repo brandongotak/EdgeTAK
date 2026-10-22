@@ -115,6 +115,25 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   and the Dashboard. The alert stays until the device cancels it or an admin
   dismisses it, even if the device goes offline. The log is on the Settings
   tab.
+- **Lost contact alerts** (Settings tab): an amber alert with the last known
+  position when a device stops reporting. EdgeTAK tells a deliberate
+  sign-off from lost contact by how the connection ends: turning the server
+  connection off in ATAK, quitting ATAK or shutting the phone down closes it
+  cleanly, and is only listed under **Devices offline**; a connection that
+  goes silent or is cut (out of coverage, flat battery, crashed app) raises
+  the alert after a grace period (5 minutes by default), unless the device
+  is back first, as when a phone switches networks. A device that stays
+  connected without sending a position (10 minutes by default) alerts too.
+  Alerts end by themselves when the device is back; they can be limited to
+  chosen groups. A device whose user quits ATAK on purpose because something
+  is wrong looks like a sign-off.
+- **Geofences** (Settings tab): draw an area (corner by corner) or a circle
+  on the console map, and get an amber alert with the device's position
+  when a device enters it, leaves it, or both, for every device or chosen
+  groups. The alert ends by itself when the device crosses back. A device's
+  first position only notes where it is, so drawing an area doesn't alert
+  for everyone already in it. Areas can also be drawn on devices' maps (as
+  ATAK shapes), and show on the console map as the **Geofences** layer.
 - **Chat log** (optional, off by default): records GeoChat messages sent
   through the server (All Chat Rooms, team and group chats, one-to-one
   messages and the console's own), with search, filters by conversation,

@@ -288,6 +288,19 @@ dd.fp, td.fp, div.fp { word-break: break-all; font-size: 12px; }
 .emergency-item button.primary { background: #ffd54f; color: #3b2a00; border-color: #ffd54f; font-weight: 700; }
 .emergency-banner .em-sound { font-size: 13px; }
 @keyframes em-flash { 50% { background: #d93025; } }
+.emergency-banner.lost-only { background: #b26a00; animation: none; }
+.emergency-banner.lost-only.acked { background: #8a5300; }
+.emergency-item.lost { background: #b26a00; margin: -4px -6px; padding: 4px 6px; border-radius: 8px; }
+.emergency-item.lost button { color: #6b4000; }
+.emergency-icon.lost .em-dot { background: #f29900; }
+.emergency-icon.lost .em-pulse { background: #f2990066; }
+.leaflet-tooltip.em-tooltip.lost { background: #b26a00; border-color: #b26a00; }
+.leaflet-tooltip.em-tooltip.lost::before { border-right-color: #b26a00; }
+#lost-card h3 { margin: 16px 0 6px; font-size: 14px; }
+.fence-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; }
+.draw-hint { background: var(--panel); color: var(--text); padding: 6px 10px; border-radius: 8px; box-shadow: 0 1px 4px #0005; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; max-width: 360px; }
+#map.drawing { cursor: crosshair; }
+#map.drawing .leaflet-interactive { cursor: crosshair; }
 @media (prefers-reduced-motion: reduce) { .emergency-banner, .emergency-icon .em-pulse { animation: none; } }
 tr.emergency-row td { background: color-mix(in srgb, #d93025 18%, transparent); }
 .emergency-icon { position: relative; }

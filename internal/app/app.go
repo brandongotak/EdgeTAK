@@ -58,6 +58,8 @@ type App struct {
 	Dial func(address string) (net.Conn, error)
 	// Federation runs TAK Server federation (set by Start).
 	Federation *federation.Manager
+	// Web is the HTTP side (set by Start).
+	Web *web.Server
 	// ConfigPath is the configuration file (for backups); Restart stops
 	// EdgeTAK for its service manager to start again (after a restore).
 	ConfigPath string
@@ -218,6 +220,8 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		PackageDir: filepath.Join(a.DataDir, "packages"), NodeID: a.nodeID, Version: a.Version, Started: time.Now(),
 		DataDir: a.DataDir, ConfigPath: a.ConfigPath, Restart: a.Restart, Maps: &maps.Library{Dir: filepath.Join(a.DataDir, "maps")},
 	}
+	st.Ended = ws.ClientEnded
+	a.Web = ws
 	if err := ws.Maps.Scan(); err != nil {
 		a.Log.Warn("offline maps", "err", err)
 	}

@@ -70,6 +70,8 @@ type Server struct {
 	selfUpdate    selfUpdateState
 	retention     retentionState
 	account       accountState
+	lost          lostState
+	fences        geofenceState
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -132,6 +134,8 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.appRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
+	s.lostContactRoutes(mux)
+	s.geofenceRoutes(mux)
 	s.federationRoutes(mux)
 	s.accountRoutes(mux)
 

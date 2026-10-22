@@ -190,6 +190,10 @@ type db struct {
 	Backups BackupSettings `json:"backups"`
 
 	OfflineMaps map[string]OfflineMap `json:"offline_maps"` // by file name in the maps folder
+
+	LostContact LostContactSettings `json:"lost_contact"`
+
+	Geofences map[string]*Geofence `json:"geofences"` // by id
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -338,7 +342,7 @@ type Store struct {
 // Open loads the store at path, creating an empty one if needed.
 func Open(path string) (*Store, error) {
 	s := &Store{path: path, db: db{Users: map[string]*User{}, Certs: map[string]*Cert{}, Packages: map[string]*Package{}, Groups: map[string]*Group{},
-		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, DeviceProfiles: map[string]*DeviceProfile{}, Apps: map[string]*App{}, NextSeq: 1}}
+		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, DeviceProfiles: map[string]*DeviceProfile{}, Apps: map[string]*App{}, Geofences: map[string]*Geofence{}, NextSeq: 1}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, s.save()
@@ -375,6 +379,9 @@ func Open(path string) (*Store, error) {
 	}
 	if s.db.Apps == nil {
 		s.db.Apps = map[string]*App{}
+	}
+	if s.db.Geofences == nil {
+		s.db.Geofences = map[string]*Geofence{}
 	}
 	// Groups used to exist only as names on users; give them records.
 	for _, u := range s.db.Users {
@@ -1350,7 +1357,8 @@ const maxEmergencies = 500
 // the device cancels it or an admin dismisses it.
 type Emergency struct {
 	ID        string     `json:"id"`
-	EventUID  string     `json:"event_uid"` // the alert's CoT UID (<device uid>-9-1-1)
+	Kind      string     `json:"kind,omitempty"` // "" for ATAK's emergency button, "lost" for lost contact
+	EventUID  string     `json:"event_uid"`      // the alert's CoT UID (<device uid>-9-1-1)
 	DeviceUID string     `json:"device_uid"`
 	Callsign  string     `json:"callsign"`
 	Username  string     `json:"username,omitempty"`
@@ -1363,7 +1371,7 @@ type Emergency struct {
 	Acked     *time.Time `json:"acked,omitempty"`
 	AckedBy   string     `json:"acked_by,omitempty"`
 	Ended     *time.Time `json:"ended,omitempty"`
-	EndedBy   string     `json:"ended_by,omitempty"` // "device" or the admin who dismissed it
+	EndedBy   string     `json:"ended_by,omitempty"` // "device" (cancelled, or back in contact) or the admin who dismissed it
 }
 
 func (e *Emergency) Active() bool { return e.Ended == nil }
@@ -1610,6 +1618,103 @@ func (s *Store) SetUpdateServer(v UpdateServerSettings) error {
 	defer s.mu.Unlock()
 	s.db.AppSettings = v
 	return s.save()
+}
+
+// ---- lost contact ----
+
+// LostContactSettings: when a device that did not sign off goes quiet for
+// GraceMinutes, or stays connected without a position for
+// NoPositionMinutes, an alert is raised. Groups limits it to devices in
+// those groups (none = every device).
+type LostContactSettings struct {
+	Off               bool     `json:"off,omitempty"`
+	GraceMinutes      int      `json:"grace_minutes"`       // 0 = 5
+	NoPositionMinutes int      `json:"no_position_minutes"` // 0 = 10; -1 = off
+	Groups            []string `json:"groups"`
+}
+
+func (s *Store) LostContact() LostContactSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	l := s.db.LostContact
+	l.Groups = slices.Clone(l.Groups)
+	if l.GraceMinutes <= 0 {
+		l.GraceMinutes = 5
+	}
+	if l.NoPositionMinutes == 0 {
+		l.NoPositionMinutes = 10
+	}
+	if l.Groups == nil {
+		l.Groups = []string{}
+	}
+	return l
+}
+
+func (s *Store) SetLostContact(l LostContactSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.LostContact = l
+	return s.save()
+}
+
+// ---- geofences ----
+
+// Geofence is an area drawn on the console map: a polygon (Points, as lat,
+// lon pairs) or a circle (Center and Radius in meters). Devices in Groups
+// (none = every device) raise an alert when they enter or leave it, per
+// Trigger: "enter", "exit" or "both".
+type Geofence struct {
+	ID      string       `json:"id"`
+	Name    string       `json:"name"`
+	Shape   string       `json:"shape"` // "polygon" or "circle"
+	Points  [][2]float64 `json:"points,omitempty"`
+	Center  [2]float64   `json:"center"`
+	Radius  float64      `json:"radius,omitempty"`
+	Trigger string       `json:"trigger"`
+	Groups  []string     `json:"groups"`
+	Color   string       `json:"color"`         // #RRGGBB
+	Devices bool         `json:"devices"`       // also drawn on devices' maps
+	Off     bool         `json:"off,omitempty"` // no alerts
+	Created time.Time    `json:"created"`
+	Updated time.Time    `json:"updated"`
+}
+
+func cloneGeofence(g *Geofence) Geofence {
+	c := *g
+	c.Points = slices.Clone(g.Points)
+	c.Groups = slices.Clone(g.Groups)
+	return c
+}
+
+// Geofences returns the geofences by name.
+func (s *Store) Geofences() []Geofence {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Geofence, 0, len(s.db.Geofences))
+	for _, g := range s.db.Geofences {
+		out = append(out, cloneGeofence(g))
+	}
+	slices.SortFunc(out, func(a, b Geofence) int { return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)) })
+	return out
+}
+
+func (s *Store) PutGeofence(g Geofence) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := cloneGeofence(&g)
+	s.db.Geofences[g.ID] = &c
+	return s.save()
+}
+
+func (s *Store) DeleteGeofence(id string) (Geofence, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	g, ok := s.db.Geofences[id]
+	if !ok {
+		return Geofence{}, ErrNotFound
+	}
+	delete(s.db.Geofences, id)
+	return cloneGeofence(g), s.save()
 }
 
 // ---- offline maps ----
