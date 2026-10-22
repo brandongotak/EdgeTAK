@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
@@ -358,6 +359,16 @@ func (s *Server) content(w http.ResponseWriter, r *http.Request, id *identity) {
 	hash := strings.ToLower(firstNonEmpty(r.URL.Query().Get("hash"), r.URL.Query().Get("uid")))
 	p, ok := s.visiblePackage(hash, id)
 	if !ok || !validHash(p.Hash) {
+		if o, ok := s.overlayByHash(hash, id); ok && hash != "" {
+			s.serveOverlay(w, r, o)
+			return
+		}
+		if f, ok := s.pushed.get(hash, id); ok {
+			w.Header().Set("Content-Type", "application/zip")
+			w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": f.name}))
+			http.ServeContent(w, r, "", f.at, bytes.NewReader(f.data))
+			return
+		}
 		http.Error(w, "File not found", http.StatusNotFound)
 		return
 	}

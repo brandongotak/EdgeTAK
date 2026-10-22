@@ -54,6 +54,10 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   maps like ATAK's: Streets, Satellite, Hybrid, Google Hybrid, Topo, USGS Topo, USGS
   Imagery Topo and Dark. Add your own tile sources or import ATAK map source
   `.xml` files; overlays for devices, callsigns and the server contact.
+  **Map sources to devices:** tick *Send to ATAK devices* on a source (or
+  pick a built-in one such as Google Hybrid) and it is added to ATAK's map
+  list on the devices in the chosen groups: straight away for connected
+  devices, in their connection profile for the others.
   **Weather and terrain** overlays: weather radar worldwide (RainViewer,
   coarse past zoom 7) and detailed over the US (NEXRAD, from the Iowa
   Environmental Mesonet), refreshed every 5 minutes with its age shown, and
@@ -114,6 +118,9 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   as it connects, so phones that were off get them too; editing or deleting
   one updates devices. EdgeTAK's copy is the reference: changes made on a
   device are replaced the next time it connects.
+- **Overlays** (Data → Overlays): import a KML, KMZ or GeoJSON file once
+  and every device in the chosen groups gets it as a map overlay, including
+  devices that connect later. See [Overlays](#overlays).
 - **Offline maps** (Maps tab): MBTiles maps served by EdgeTAK, on the
   console map and in ATAK (as map sources in device profiles), with no
   internet access. See [Offline maps](#offline-maps).
@@ -350,7 +357,7 @@ current section's pages in the row below:
 |---|---|
 | Dashboard | Dashboard, Health |
 | People | Users, Groups, Sign-ups, Certificates |
-| Data | Data Packages, Missions, Maps, Plugins, Video |
+| Data | Data Packages, Missions, Maps, Overlays, Plugins, Video |
 | Messages | Send, Chat log |
 | Server | Connect, Federation, Settings |
 
@@ -521,6 +528,29 @@ maps where there is no internet.
 
 Maps are left out of backups unless **Offline maps** is ticked, since they
 can be large and usually can be made again.
+
+### Overlays
+
+The **Overlays** page sends map overlays (boundaries, search sectors,
+routes, points) to devices without passing data packages around by hand:
+
+1. **Import** a KML, KMZ or GeoJSON file, name it, and pick the groups
+   whose devices get it (none = every device). GeoJSON, which ATAK doesn't
+   read, is converted to KML, keeping names, descriptions (or the other
+   properties) and [simplestyle](https://github.com/mapbox/simplestyle-spec)
+   colors.
+2. EdgeTAK offers it to the connected devices in those groups as a data
+   package, which ATAK imports as one overlay to show or hide in its Overlay
+   Manager. Devices that were off get it when they next connect (once
+   they've sent their position); each device is sent each version once.
+3. **Replace file** (or a rename) makes a new version: devices get it again
+   and it replaces the old one. **Edit** changes the name and groups; newly
+   included devices get it straight away. **Send again** re-offers it to
+   every connected device that should have it; **Stop sending** pauses it.
+
+**Show on map** draws it on the console map. ATAK has no way to be told to
+remove an overlay, so **Delete** only stops EdgeTAK sending it; people
+remove it on their device in ATAK's Overlay Manager or Data Packages.
 
 ### Plugins
 
@@ -799,6 +829,7 @@ internal/router/    client registry, group routing (IN/OUT, live changes), hooks
 internal/federation/ TAK Server Federation v2 (gRPC): federates, listener, CoT and contacts
 internal/apps/      ATAK update server: APK reading, product.inf(z) indexes
 internal/maps/      offline maps: MBTiles reading and tiles
+internal/overlay/   map overlays: KML/KMZ checks, GeoJSON to KML, data packages
 internal/backup/    backup files, checking, staged restore
 internal/stream/    TCP/TLS stream sessions and protocol negotiation
 internal/web/       Marti API, enrollment, OAuth, groups/channels, admin console (embedded)

@@ -10,6 +10,31 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.17.0 (2026-10-22)
+
+### Added
+- **Overlays** (Data → Overlays): import a KML, KMZ or GeoJSON file once
+  and every device in the chosen groups (or every device) gets it as a map
+  overlay ATAK can show or hide.
+  - Sent as a data package ATAK imports on its own; devices that were off
+    get it when they next connect, and each device gets each version once.
+  - GeoJSON is converted to KML, keeping names, descriptions and
+    simplestyle colors.
+  - **Replace file** sends a new version that replaces the old one on
+    devices; **Edit** changes the name and groups; **Send again**, **Stop
+    sending**, **Download** and **Show on map** on the console.
+  - The list shows how many devices have the current version and how many
+    connected ones are still waiting for it.
+- **Map sources to devices** (map panel → Map sources): tick *Send to ATAK
+  devices* on a map source, or pick a built-in map such as Google Hybrid or
+  USGS Topo, and it is added to ATAK's map list on the devices in the
+  chosen groups (or every device). Connected devices get it straight away;
+  others get it in their connection profile when they next connect.
+
+### Fixed
+- **Show on map** for data packages opens the map panel again (broken
+  since v0.11.0).
+
 ## v0.16.1 (2026-10-22)
 
 ### Changed

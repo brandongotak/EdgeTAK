@@ -146,6 +146,7 @@ const loaders = {
   packages: loadPackages,
   plugins: () => Promise.all([loadApps(), loadTakGov()]),
   maps: () => Promise.all([loadDrawings(), loadOfflineMaps()]),
+  overlays: loadOverlays,
   missions: loadMissions,
   video: loadVideo,
   send: loadSend,
@@ -1193,11 +1194,19 @@ async function loadMapSources() {
 }
 
 function renderMapSources() {
-  $('#map-sources-list').innerHTML = mapSources.map((s, i) => `<div class="source-row">
-      <div class="grow"><strong>${esc(s.name)}</strong> ${s.overlay ? '<span class="pill">overlay</span>' : '<span class="pill">base map</span>'}
+  $('#map-sources-list').innerHTML = mapSources.map((s, i) => `<div class="source-block">
+    <div class="source-row">
+      <div class="grow"><strong>${esc(s.name)}</strong> ${s.overlay ? '<span class="pill">overlay</span>' : '<span class="pill">base map</span>'}${s.devices ? ' <span class="pill ok">on devices</span>' : ''}
         <div class="muted mono grow" title="${esc(s.url)}">${esc(s.url)}</div></div>
       <button type="button" class="small danger" data-remove-source="${i}">Remove</button>
+    </div>
+    <label class="check"><input type="checkbox" data-source-devices="${i}"${s.devices ? ' checked' : ''}> Send to ATAK devices</label>
+    ${s.devices ? `<div class="muted picker-label">Devices in these groups (none selected = every device)</div>
+      <div class="group-picker" data-source-groups="${i}">${allGroups.map((g) => `<label class="chip"><input type="checkbox" value="${esc(g.name)}"${(s.groups || []).includes(g.name) ? ' checked' : ''}>${esc(g.name)}</label>`).join('')}</div>` : ''}
     </div>`).join('') || '<p class="muted">No custom sources yet. The built-in ones are Streets, Satellite, Hybrid, Google Hybrid, Topo, USGS Topo, USGS Imagery Topo and Dark.</p>';
+  // Built-in maps made of one tile layer can go to devices as they are.
+  $('#ms-builtin').innerHTML = '<option value="">Choose…</option>' + BASEMAPS.filter(([name, layers]) => layers.length === 1 && !mapSources.some((s) => s.name === name))
+    .map(([name]) => `<option>${esc(name)}</option>`).join('');
 }
 
 async function saveMapSources(list) {
@@ -1206,10 +1215,36 @@ async function saveMapSources(list) {
   renderMapSources();
 }
 
-$('#map-sources-open').addEventListener('click', () => {
+$('#map-sources-open').addEventListener('click', guard(async () => {
+  if (!allGroups.length) allGroups = await api('GET', 'api/groups');
   renderMapSources();
   $('#map-sources-dialog').showModal();
-});
+}));
+
+$('#map-sources-list').addEventListener('change', guard(async (e) => {
+  const t = e.target;
+  if (t.dataset.sourceDevices !== undefined) {
+    const i = Number(t.dataset.sourceDevices);
+    await saveMapSources(mapSources.map((s, j) => (j === i ? { ...s, devices: t.checked, groups: t.checked ? s.groups : [] } : s)));
+    toast(t.checked ? `${mapSources[i].name} sent to devices` : `${mapSources[i].name} is no longer sent to devices (devices that have it keep it)`);
+    return;
+  }
+  const picker = t.closest('[data-source-groups]');
+  if (!picker) return;
+  const i = Number(picker.dataset.sourceGroups);
+  const groups = [...picker.querySelectorAll('input:checked')].map((x) => x.value);
+  await saveMapSources(mapSources.map((s, j) => (j === i ? { ...s, groups } : s)));
+  toast(`${mapSources[i].name}: sent to ${groups.length ? groups.join(', ') : 'every device'}`);
+}));
+
+$('#ms-builtin').addEventListener('change', guard(async (e) => {
+  const entry = BASEMAPS.find(([name]) => name === e.target.value);
+  if (!entry) return;
+  const [name, [[url, opts]]] = entry;
+  await saveMapSources([...mapSources, { name, url: url.replace('{r}', ''), max_zoom: opts.maxNativeZoom || 19, subdomains: opts.subdomains || '',
+    attribution: (opts.attribution || '').replace(/<[^>]+>/g, '').replace('&copy;', '©'), devices: true, groups: [] }]);
+  toast(`${name} sent to every device; pick groups to narrow it`);
+}));
 
 $('#map-sources-list').addEventListener('click', guard(async (e) => {
   const i = e.target.dataset.removeSource;
@@ -1443,6 +1478,7 @@ $('#replay-close').addEventListener('click', closeReplay);
 
 const packageLayers = new Map(); // hash -> { name, layer }
 let packagesByHash = {};
+let overlaysByHash = {}; // overlays' data packages, labelled as overlays on the map
 
 function rememberPackages() {
   prefs.set('map.packages', [...packageLayers.keys()]);
@@ -1470,7 +1506,7 @@ async function showPackage(hash, { quiet = false } = {}) {
   }
   const r = await fetch(`/Marti/sync/content?hash=${encodeURIComponent(hash)}`);
   if (!r.ok) throw new Error(`Could not fetch the package (${r.status})`);
-  const meta = packagesByHash[hash];
+  const meta = overlaysByHash[hash] || packagesByHash[hash];
   const fileName = meta?.name || r.headers.get('content-disposition')?.match(/filename="?([^";]+)"?/)?.[1] || hash.slice(0, 12);
   const layer = L.featureGroup();
   await loadMilsymbol().catch(() => {}); // without it, units are drawn as coloured dots
@@ -1480,7 +1516,7 @@ async function showPackage(hash, { quiet = false } = {}) {
     forgetPackage(hash);
     return;
   }
-  let name = `Package: ${fileName}`;
+  let name = meta?.label || `Package: ${fileName}`;
   if (Object.prototype.hasOwnProperty.call(overlayLayers, name)) name += ` (${hash.slice(0, 6)})`;
   packageLayers.set(hash, { name, layer });
   overlayLayers[name] = layer;
@@ -1489,7 +1525,7 @@ async function showPackage(hash, { quiet = false } = {}) {
   rememberPackages();
   if (!quiet) {
     fitLayer(layer);
-    toast(`${fileName}: ${count} item${count === 1 ? '' : 's'} on the map`);
+    toast(`${meta?.label ? meta.label.replace(/^Overlay: /, '') : fileName}: ${count} item${count === 1 ? '' : 's'} on the map`);
   }
 }
 
@@ -4053,8 +4089,8 @@ function fenceLayerOf(g) {
   return l.bindTooltip(`🚧 ${esc(g.name)}`, { sticky: true });
 }
 
-// fitLayer zooms to a shape (a circle can only be measured on the map).
-function fitLayer(l) {
+// fitShape zooms to a shape (a circle can only be measured on the map).
+function fitShape(l) {
   l.addTo(map);
   const b = l.getBounds();
   l.remove();
@@ -4217,7 +4253,7 @@ $('#fence-list').addEventListener('click', guard(async (e) => {
     setMapVisible(true);
     if (!map) return;
     fenceLayer.addTo(map);
-    fitLayer(fenceLayerOf(g));
+    fitShape(fenceLayerOf(g));
   }
   if (fenceEdit) openFenceDialog(g);
   if (fenceDel && confirm(`Delete the geofence ${g.name}? Its open alerts end, and it is removed from devices' maps.`)) {
@@ -4319,12 +4355,126 @@ $('#drawing-list').addEventListener('click', guard(async (e) => {
     if (!map) return;
     drawingLayer.addTo(map);
     if (d.kind === 'marker') map.setView(d.center, Math.max(map.getZoom(), 15));
-    else fitLayer(drawingLayerOf(d));
+    else fitShape(drawingLayerOf(d));
   }
   if (drawEdit) openDrawingDialog(d);
   if (drawDel && confirm(`Delete ${d.name}? It is removed from devices' maps too.`)) {
     renderDrawings(await api('DELETE', `api/drawings/${encodeURIComponent(d.id)}`));
   }
+}));
+
+// ---------- overlays ----------
+
+let overlays = [];
+
+function renderOverlays(list) {
+  overlays = list;
+  // A replaced overlay's old version comes off the console map.
+  overlaysByHash = Object.fromEntries(list.map((o) => [o.hash, { name: `${o.name}.zip`, label: `Overlay: ${o.name}` }]));
+  for (const [hash, p] of packageLayers) {
+    if (p.name.startsWith('Overlay: ') && !list.some((o) => o.hash === hash)) forgetPackage(hash);
+  }
+  const fmt = { kml: 'KML', kmz: 'KMZ', geojson: 'GeoJSON (sent as KML)' };
+  $('#overlay-table tbody').innerHTML = list.map((o) => `<tr${o.paused ? ' class="dim"' : ''}>
+    <td><div><strong>${esc(o.name)}</strong>${o.paused ? ' <span class="pill warn">not sent</span>' : ''}
+      <div class="muted">${esc(fmt[o.format] || o.format)} · ${plural(o.items, 'item')} · ${bytes(o.size)}</div>
+      <div class="muted">version ${o.version}, ${esc(date(o.updated))} by ${esc(o.author)}</div>
+      <div class="muted mono">${esc(o.file_name)}</div></div></td>
+    <td>${o.groups.length ? o.groups.map((g) => `<span class="pill">${esc(g)}</span>`).join(' ') : '<span class="muted">every device</span>'}</td>
+    <td>${o.delivered} sent${o.waiting ? ` · <span class="pill warn" title="Connected devices that should have it and haven't been sent this version">${o.waiting} waiting</span>` : ''}</td>
+    <td class="actions wrap-actions">
+      <button class="small" data-ov-map="${esc(o.id)}">${packageLayers.has(o.hash) && map?.hasLayer(packageLayers.get(o.hash).layer) ? 'Hide on map' : 'Show on map'}</button>
+      <button class="small" data-ov-edit="${esc(o.id)}">Edit</button>
+      <button class="small" data-ov-file="${esc(o.id)}" title="Upload a new version of the file">Replace file</button>
+      ${o.paused ? '' : `<button class="small" data-ov-send="${esc(o.id)}" title="Send it again to every connected device that should have it">Send again</button>`}
+      <button class="small" data-ov-pause="${esc(o.id)}">${o.paused ? 'Resume sending' : 'Stop sending'}</button>
+      <a class="button small" href="api/overlays/${esc(o.id)}/file">Download</a>
+      <button class="small danger" data-ov-del="${esc(o.id)}">Delete</button></td></tr>`).join('') || emptyRow(4, 'No overlays yet');
+}
+
+async function loadOverlays() {
+  const [list, groups] = await Promise.all([api('GET', 'api/overlays'), allGroups.length ? allGroups : api('GET', 'api/groups')]);
+  allGroups = groups;
+  if (!$('#overlay-groups').children.length) renderChips('#overlay-groups', []);
+  renderOverlays(list);
+}
+
+$('#overlay-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const file = f.file.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  if (f.name.value.trim()) fd.append('name', f.name.value.trim());
+  fd.append('groups', JSON.stringify(checkedIn('#overlay-groups')));
+  fd.append('file', file, file.name);
+  $('#overlay-state').textContent = 'Importing…';
+  try {
+    renderOverlays(await api('POST', 'api/overlays', fd));
+    f.reset();
+    renderChips('#overlay-groups', []);
+    toast('Overlay imported and sent to connected devices');
+  } finally {
+    $('#overlay-state').textContent = '';
+  }
+}));
+
+let editingOverlay = null;
+let replacingOverlay = '';
+const overlayPicker = Object.assign(document.createElement('input'), { type: 'file', accept: '.kml,.kmz,.geojson,.json' });
+overlayPicker.addEventListener('change', guard(async () => {
+  const file = overlayPicker.files[0];
+  overlayPicker.value = '';
+  if (!file || !replacingOverlay) return;
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  renderOverlays(await api('PUT', `api/overlays/${encodeURIComponent(replacingOverlay)}/file`, fd));
+  toast('New version sent to connected devices');
+}));
+
+$('#overlay-table').addEventListener('click', guard(async (e) => {
+  const d = e.target.dataset;
+  const o = overlays.find((x) => x.id === (d.ovMap || d.ovEdit || d.ovFile || d.ovSend || d.ovPause || d.ovDel));
+  if (!o) return;
+  if (d.ovMap) {
+    const p = packageLayers.get(o.hash);
+    if (p && map?.hasLayer(p.layer)) forgetPackage(o.hash);
+    else await showPackage(o.hash);
+    renderOverlays(overlays);
+  }
+  if (d.ovEdit) {
+    editingOverlay = o;
+    $('#overlay-dialog-title').textContent = `Edit ${o.name}`;
+    $('#overlay-edit').name.value = o.name;
+    renderChips('#overlay-edit-groups', o.groups);
+    $('#overlay-dialog').showModal();
+  }
+  if (d.ovFile) {
+    replacingOverlay = o.id;
+    overlayPicker.click();
+  }
+  if (d.ovSend) {
+    const r = await api('POST', `api/overlays/${encodeURIComponent(o.id)}/send`);
+    renderOverlays(r.overlays);
+    toast(r.sent ? `Sent to ${plural(r.sent, 'device')}` : 'No connected device should have it');
+  }
+  if (d.ovPause) {
+    renderOverlays(await api('PATCH', `api/overlays/${encodeURIComponent(o.id)}`, { paused: !o.paused }));
+    toast(o.paused ? 'Sending again' : 'No longer sent to devices');
+  }
+  if (d.ovDel && confirm(`Delete ${o.name}? It is no longer sent; devices that have it keep it until it is removed in ATAK.`)) {
+    forgetPackage(o.hash);
+    renderOverlays(await api('DELETE', `api/overlays/${encodeURIComponent(o.id)}`));
+  }
+}));
+
+$('#overlay-edit').addEventListener('submit', guard(async (e) => {
+  if (e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  renderOverlays(await api('PATCH', `api/overlays/${encodeURIComponent(editingOverlay.id)}`,
+    { name: e.target.name.value, groups: checkedIn('#overlay-edit-groups') }));
+  $('#overlay-dialog').close();
+  toast('Overlay saved');
 }));
 
 // ---------- events ----------

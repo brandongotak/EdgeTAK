@@ -40,6 +40,7 @@ func (s *Server) Start(ctx context.Context) {
 	s.lostStart(ctx)
 	s.geofenceStart()
 	s.drawingsStart()
+	s.overlaysStart()
 	s.ldapSyncStart(ctx)
 	s.eventsStart(ctx)
 	s.certWatchStart(ctx)

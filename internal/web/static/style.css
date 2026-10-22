@@ -136,6 +136,9 @@ main { padding: 16px; max-width: 1400px; margin: 0 auto; display: flex; flex-dir
 .leaflet-tooltip-right::before { border-right-color: var(--line); }
 .callsign-link { cursor: pointer; text-decoration: underline dotted; }
 fieldset.plain { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0; }
+.source-block { border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.source-block .source-row { border-bottom: none; }
+.source-block .group-picker { margin-top: 4px; }
 .source-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 .source-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 1000px) {
@@ -162,6 +165,8 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: upp
 tbody tr:hover { background: var(--panel-2); }
 td.actions { text-align: right; white-space: nowrap; }
 td.actions > * + * { margin-left: 6px; }
+td.wrap-actions { white-space: normal; min-width: 220px; max-width: 300px; }
+td.wrap-actions > * { margin: 2px 0 2px 4px; }
 .empty td { color: var(--muted); text-align: center; padding: 20px; }
 .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); margin-right: 4px; }
 .pill.ok { color: var(--accent); border-color: currentColor; }

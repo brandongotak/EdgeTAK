@@ -78,6 +78,7 @@ type Server struct {
 	fences        geofenceState
 	ldap          ldapState
 	takgov        takGovState
+	pushed        pushedFiles
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -139,6 +140,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.profileRoutes(mux)
 	s.appRoutes(mux)
 	s.takGovRoutes(mux)
+	s.overlayRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)

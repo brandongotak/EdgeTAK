@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -218,6 +219,8 @@ type db struct {
 	Events map[string]*Event `json:"events"` // by id
 
 	TakGov TakGovLink `json:"takgov"`
+
+	Overlays map[string]*Overlay `json:"overlays"` // by id
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -293,6 +296,11 @@ type MapSource struct {
 	Overlay     bool   `json:"overlay"`              // drawn on top of the base map
 	Subdomains  string `json:"subdomains,omitempty"` // values for {s}, e.g. "abc" or "mt0,mt1"
 	Attribution string `json:"attribution,omitempty"`
+	// Devices: also sent to ATAK as a map source, to the devices in Groups
+	// (none = every device). Updated is when it last changed.
+	Devices bool      `json:"devices,omitempty"`
+	Groups  []string  `json:"groups,omitempty"`
+	Updated time.Time `json:"updated,omitzero"`
 }
 
 // RegistrationSettings controls sign-up without an invite: "off" (default),
@@ -367,7 +375,7 @@ type Store struct {
 // Open loads the store at path, creating an empty one if needed.
 func Open(path string) (*Store, error) {
 	s := &Store{path: path, db: db{Users: map[string]*User{}, Certs: map[string]*Cert{}, Packages: map[string]*Package{}, Groups: map[string]*Group{},
-		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, DeviceProfiles: map[string]*DeviceProfile{}, Apps: map[string]*App{}, Geofences: map[string]*Geofence{}, Drawings: map[string]*Drawing{}, Events: map[string]*Event{}, NextSeq: 1}}
+		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, DeviceProfiles: map[string]*DeviceProfile{}, Apps: map[string]*App{}, Geofences: map[string]*Geofence{}, Drawings: map[string]*Drawing{}, Overlays: map[string]*Overlay{}, Events: map[string]*Event{}, NextSeq: 1}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, s.save()
@@ -407,6 +415,9 @@ func Open(path string) (*Store, error) {
 	}
 	if s.db.Geofences == nil {
 		s.db.Geofences = map[string]*Geofence{}
+	}
+	if s.db.Overlays == nil {
+		s.db.Overlays = map[string]*Overlay{}
 	}
 	if s.db.Drawings == nil {
 		s.db.Drawings = map[string]*Drawing{}
@@ -1970,6 +1981,98 @@ func (s *Store) DeleteDrawing(id string) (Drawing, error) {
 	}
 	delete(s.db.Drawings, id)
 	return cloneDrawing(d), s.save()
+}
+
+// ---- overlays ----
+
+// Overlay is a KML, KMZ or GeoJSON file sent to the devices in Groups (none
+// = every device) as a data package ATAK imports as a map overlay: when it
+// is added or replaced, and to each device as it connects until it has the
+// current version.
+type Overlay struct {
+	ID       string     `json:"id"`
+	Name     string     `json:"name"`
+	Groups   []string   `json:"groups"`
+	Format   string     `json:"format"`    // kml, kmz or geojson (as uploaded)
+	FileName string     `json:"file_name"` // as uploaded
+	Hash     string     `json:"hash"`      // sha256 of the data package
+	Size     int64      `json:"size"`      // of the data package
+	Items    int        `json:"items"`     // placemarks
+	Bounds   [4]float64 `json:"bounds"`    // south, west, north, east
+	Version  int        `json:"version"`
+	Author   string     `json:"author"`
+	Created  time.Time  `json:"created"`
+	Updated  time.Time  `json:"updated"`
+	Paused   bool       `json:"paused,omitempty"` // not sent to devices
+	// Delivered is the version each device (by UID) was last sent.
+	Delivered map[string]int `json:"delivered,omitempty"`
+}
+
+func cloneOverlay(o *Overlay) Overlay {
+	c := *o
+	c.Groups = slices.Clone(o.Groups)
+	c.Delivered = maps.Clone(o.Delivered)
+	return c
+}
+
+// Overlays returns the overlays, newest first.
+func (s *Store) Overlays() []Overlay {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Overlay, 0, len(s.db.Overlays))
+	for _, o := range s.db.Overlays {
+		out = append(out, cloneOverlay(o))
+	}
+	slices.SortFunc(out, func(a, b Overlay) int { return b.Created.Compare(a.Created) })
+	return out
+}
+
+func (s *Store) Overlay(id string) (Overlay, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	o, ok := s.db.Overlays[id]
+	if !ok {
+		return Overlay{}, false
+	}
+	return cloneOverlay(o), true
+}
+
+// PutOverlay saves an overlay, keeping the delivery record it has.
+func (s *Store) PutOverlay(o Overlay) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := cloneOverlay(&o)
+	if old, ok := s.db.Overlays[o.ID]; ok {
+		c.Delivered = old.Delivered
+	}
+	s.db.Overlays[o.ID] = &c
+	return s.save()
+}
+
+// OverlayDelivered records that a device was sent an overlay's version.
+func (s *Store) OverlayDelivered(id, uid string, version int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	o, ok := s.db.Overlays[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if o.Delivered == nil {
+		o.Delivered = map[string]int{}
+	}
+	o.Delivered[uid] = version
+	return s.save()
+}
+
+func (s *Store) DeleteOverlay(id string) (Overlay, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	o, ok := s.db.Overlays[id]
+	if !ok {
+		return Overlay{}, ErrNotFound
+	}
+	delete(s.db.Overlays, id)
+	return cloneOverlay(o), s.save()
 }
 
 // ---- offline maps ----

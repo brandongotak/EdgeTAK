@@ -167,6 +167,7 @@ func (s *Server) deviceProfile(kind string) handlerFunc {
 			}
 		}
 		entries = append(entries, s.mapSourceEntries(host, since)...)
+		entries = append(entries, s.customMapSourceEntries(append(slices.Clone(id.Groups), id.OutGroups...), since)...)
 		var sent []string
 		for _, p := range s.Store.DeviceProfiles() {
 			wanted := p.OnConnect

@@ -43,6 +43,7 @@
       <button data-tab="packages" data-section="data">Data Packages</button>
       <button data-tab="missions" data-section="data">Missions</button>
       <button data-tab="maps" data-section="data">Maps</button>
+      <button data-tab="overlays" data-section="data">Overlays</button>
       <button data-tab="plugins" data-section="data">Plugins</button>
       <button data-tab="video" data-section="data">Video</button>
       <button data-tab="send" data-section="messages">Send</button>
@@ -671,6 +672,40 @@
       </div>
     </section>
 
+    <section id="tab-overlays" class="tab" hidden>
+      <div class="card">
+        <h2>Import an overlay</h2>
+        <p class="muted">Import a KML, KMZ or GeoJSON file once (boundaries, search sectors, routes, points) and every device in the chosen groups gets it as a map overlay it can show or hide in ATAK's Overlay Manager. Devices that are off get it when they next connect. Replacing the file sends the new version, which replaces the old one on devices.</p>
+        <form id="overlay-form" class="stack">
+          <div class="inline-form">
+            <label>File <input type="file" name="file" accept=".kml,.kmz,.geojson,.json,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz,application/geo+json" required></label>
+            <label>Name <input name="name" maxlength="80" placeholder="the file's name"></label>
+          </div>
+          <div class="muted picker-label">Send to devices in these groups (none selected = every device)</div>
+          <div id="overlay-groups" class="group-picker"></div>
+          <div class="inline-form"><button class="primary" type="submit">Import and send</button> <span class="muted" id="overlay-state"></span></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Overlays</h2>
+        <div class="table-wrap"><table id="overlay-table">
+          <thead><tr><th>Overlay</th><th>Groups</th><th>Devices</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p class="muted">ATAK can't be told to remove an overlay: deleting one here stops it being sent, and people remove it from their device in ATAK's Overlay Manager (or Data Packages).</p>
+      </div>
+      <dialog id="overlay-dialog" class="card dialog">
+        <form method="dialog" id="overlay-edit" class="stack">
+          <div class="card-head"><h2 id="overlay-dialog-title">Edit overlay</h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
+          <label>Name <input name="name" required maxlength="80"></label>
+          <div class="muted picker-label">Send to devices in these groups (none selected = every device)</div>
+          <div id="overlay-edit-groups" class="group-picker"></div>
+          <p class="muted">Renaming sends a new version to every device.</p>
+          <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
+        </form>
+      </dialog>
+    </section>
+
     <section id="tab-maps" class="tab" hidden>
       <div class="card">
         <div class="card-head"><h2>Drawings</h2>
@@ -1014,8 +1049,11 @@
   <dialog id="map-sources-dialog" class="card dialog">
     <form method="dialog" class="stack wide" id="map-sources-form">
       <h2>Map sources</h2>
-      <p class="muted">Extra base maps and overlays for this console, shared by all administrators. Import ATAK map source files (<code>.xml</code>) or enter a tile URL.</p>
+      <p class="muted">Extra base maps and overlays for this console, shared by all administrators. Import ATAK map source files (<code>.xml</code>) or enter a tile URL. Tick <strong>Send to ATAK devices</strong> to add one to ATAK's map list too: connected devices get it straight away, others when they next connect.</p>
       <div id="map-sources-list" class="group-rows"></div>
+      <div class="inline-form">
+        <label>Send a built-in map to devices <select id="ms-builtin"><option value="">Choose…</option></select></label>
+      </div>
       <label>Import ATAK map source (.xml) <input type="file" id="map-source-file" accept=".xml,text/xml" multiple></label>
       <fieldset class="stack wide plain">
         <legend class="muted">Or add one by URL</legend>
