@@ -49,6 +49,7 @@ type Manifest struct {
 	Created    time.Time `json:"created"`
 	History    bool      `json:"history"`    // position history included
 	Recordings bool      `json:"recordings"` // video recordings included
+	Maps       bool      `json:"maps"`       // offline maps included
 }
 
 // Source is the running server to back up.
@@ -68,6 +69,7 @@ type Source struct {
 type Options struct {
 	History    bool
 	Recordings bool
+	Maps       bool
 }
 
 // skipped reports whether a top-level data entry stays out of backups:
@@ -81,6 +83,8 @@ func skipped(name string, opt Options) bool {
 		return !opt.History
 	case "recordings":
 		return !opt.Recordings
+	case "maps":
+		return !opt.Maps
 	}
 	return strings.HasSuffix(name, ".tmp")
 }
@@ -110,7 +114,7 @@ func Write(w io.Writer, src Source, opt Options) error {
 		return err
 	}
 	m, _ := json.MarshalIndent(Manifest{Format: format, Version: src.Version, ServerName: src.ServerName, NodeID: src.NodeID,
-		Created: now, History: opt.History, Recordings: opt.Recordings}, "", " ")
+		Created: now, History: opt.History, Recordings: opt.Recordings, Maps: opt.Maps}, "", " ")
 	if err := add(manifestName, m, 0o644); err != nil {
 		return err
 	}
@@ -367,7 +371,7 @@ func ApplyPending(dataDir, configPath string) (bool, error) {
 		switch name {
 		case stagingDir, previousDir, pendingFile, BackupsDir, "mediamtx", "update":
 			continue // never replaced
-		case "history", "recordings":
+		case "history", "recordings", "maps":
 			if !incoming[name] {
 				continue // not in this backup: keep the current ones
 			}

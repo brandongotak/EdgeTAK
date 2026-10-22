@@ -29,6 +29,7 @@
       <button data-tab="certs">Certificates</button>
       <button data-tab="packages">Data Packages</button>
       <button data-tab="plugins">Plugins</button>
+      <button data-tab="maps">Maps</button>
       <button data-tab="missions">Missions</button>
       <button data-tab="video">Video</button>
       <button data-tab="send">Send</button>
@@ -199,6 +200,7 @@
         <div class="inline-form">
           <label class="check"><input type="checkbox" id="backup-history" checked> Position history</label>
           <label class="check"><input type="checkbox" id="backup-recordings"> Video recordings (can be large)</label>
+          <label class="check"><input type="checkbox" id="backup-maps"> Offline maps (can be large)</label>
           <button class="primary" type="button" id="backup-download">Download a backup</button>
         </div>
         <h3>Automatic backups</h3>
@@ -510,6 +512,26 @@
       <div class="card">
         <div class="table-wrap"><table id="apk-table">
           <thead><tr><th></th><th>Name</th><th>Version</th><th>For</th><th>Android</th><th>Size</th><th>Uploaded</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section id="tab-maps" class="tab" hidden>
+      <div class="card">
+        <h2>Offline maps</h2>
+        <p class="muted">Maps this server serves without internet access, from MBTiles files (raster: PNG, JPEG or WebP tiles), made with QGIS, MOBAC, TileMill, gdal2tiles and similar tools. They appear on the console map, and devices get each one as an ATAK map source in their device profile when they enroll or connect, loading the tiles from this server.</p>
+        <form id="map-upload-form" class="inline-form">
+          <input type="file" name="file" accept=".mbtiles" required>
+          <button class="primary" type="submit">Upload</button>
+          <progress id="map-upload-progress" max="1" value="0" hidden></progress>
+          <span class="muted" id="map-upload-state"></span>
+        </form>
+        <p class="muted">Large maps can be copied straight into <code id="maps-folder"></code> (over SSH or from a USB drive); then click <button type="button" class="small" id="maps-rescan">Rescan the folder</button></p>
+      </div>
+      <div class="card">
+        <div class="table-wrap"><table id="maps-table">
+          <thead><tr><th>Map</th><th>Tiles</th><th>Zoom</th><th>Size</th><th>Devices</th><th></th></tr></thead>
           <tbody></tbody>
         </table></div>
       </div>

@@ -166,6 +166,7 @@ func (s *Server) deviceProfile(kind string) handlerFunc {
 				since = time.Now().Add(-time.Duration(secs) * time.Second)
 			}
 		}
+		entries = append(entries, s.mapSourceEntries(host, since)...)
 		var sent []string
 		for _, p := range s.Store.DeviceProfiles() {
 			wanted := p.OnConnect

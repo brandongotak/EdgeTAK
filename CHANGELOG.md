@@ -10,6 +10,21 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.10.0 (2026-10-21)
+
+### Added
+- **Offline maps** (Maps tab): EdgeTAK serves maps from MBTiles files, so the
+  console and ATAK have maps without internet access.
+  - **Add maps** by uploading them, or by copying large files into the
+    server's `maps` folder and clicking **Rescan the folder**. Raster tiles
+    (PNG, JPEG, WebP) are supported; vector tiles are not.
+  - **Console:** each map appears in the map's layer list as "... (offline)";
+    **Show on map** zooms to it.
+  - **Devices** get each map as an ATAK map source in their device profile
+    when they enroll or connect (per map, on by default), loading tiles from
+    EdgeTAK's HTTPS port with their certificate.
+  - Backups can include the maps (**Offline maps**, off by default).
+
 ## v0.9.0 (2026-10-21)
 
 ### Added

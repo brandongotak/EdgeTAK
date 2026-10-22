@@ -22,6 +22,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/federation"
 	"github.com/brandongotak/EdgeTAK/internal/health"
 	"github.com/brandongotak/EdgeTAK/internal/history"
+	"github.com/brandongotak/EdgeTAK/internal/maps"
 	"github.com/brandongotak/EdgeTAK/internal/mediamtx"
 	"github.com/brandongotak/EdgeTAK/internal/mission"
 	"github.com/brandongotak/EdgeTAK/internal/pki"
@@ -57,6 +58,8 @@ type Server struct {
 	DataDir    string
 	ConfigPath string
 	Restart    func()
+	// Maps are the offline maps (MBTiles) in <data>/maps.
+	Maps *maps.Library
 	// Addrs maps listener names (tcp, tls, https, enroll, http) to their
 	// bound addresses. It is set before serving starts and not modified.
 	Addrs map[string]string
@@ -128,6 +131,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.profileRoutes(mux)
 	s.appRoutes(mux)
 	s.backupRoutes(mux)
+	s.offlineMapRoutes(mux)
 	s.federationRoutes(mux)
 	s.accountRoutes(mux)
 

@@ -92,6 +92,9 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   between servers, in either direction, with certificate or token sign-in,
   approval of servers that connect, and per-federate group sharing. See
   [Federation](#federation).
+- **Offline maps** (Maps tab): MBTiles maps served by EdgeTAK, on the
+  console map and in ATAK (as map sources in device profiles), with no
+  internet access. See [Offline maps](#offline-maps).
 - **Plugins** (update server): upload ATAK plugin and app APKs, and devices
   install and update them from ATAK's **Plugins** screen. Names, versions,
   icons and the ATAK version each plugin is built for are read from the
@@ -412,6 +415,30 @@ External cameras or media servers can be added with their own URL (`rtsp://`,
 cannot play them. Bandwidth is the main limit: every viewer receives a full
 copy of the stream, about 2 to 4 Mbit/s for 1080p.
 
+### Offline maps
+
+The **Maps** tab serves maps from MBTiles files, so the console and ATAK have
+maps where there is no internet.
+
+1. **Make or get an MBTiles file** with raster tiles (PNG, JPEG or WebP):
+   QGIS (*Generate XYZ tiles (MBTiles)*), MOBAC, TileMill, gdal2tiles,
+   `gdal_translate -of MBTiles`, or downloads from map providers. Vector
+   tiles (`pbf`) are not supported.
+2. **Add it:** upload it on the Maps tab, or copy large files straight into
+   the server's `maps` folder (shown on the tab, e.g.
+   `/var/lib/edgetak/maps`; readable by the `edgetak` user) and click
+   **Rescan the folder**.
+3. **Console:** each map is a base map (or an overlay, if its metadata says
+   so) named "... (offline)" in the map's layer list; **Show on map** zooms
+   to it.
+4. **Devices** get each map as an ATAK map source in their device profile
+   when they enroll or connect (turn it off per map). ATAK loads the tiles
+   from EdgeTAK's HTTPS port with its certificate, and caches what it has
+   seen. The map is in ATAK's map layers under its name.
+
+Maps are left out of backups unless **Offline maps** is ticked, since they
+can be large and usually can be made again.
+
 ### Plugins
 
 The **Plugins** tab is an update server for ATAK, like the one ATAK's
@@ -548,7 +575,7 @@ authentication. These clients are anonymous and only see `__ANON__`.
   everything needed to bring the server back: users, groups, the CA and
   certificates, settings, device profiles, federation, data packages,
   missions, plugins and the chat log, plus the configuration; position
-  history and video recordings are optional. `certs/ca-key.pem` is the key
+  history, video recordings and offline maps are optional. `certs/ca-key.pem` is the key
   every enrolled device trusts, so a restored server is the same server to
   them: devices reconnect without enrolling again. The backup holds that key
   and password hashes: keep it as safe as the server, and somewhere else.
@@ -661,6 +688,8 @@ internal/cot/       CoT event model, XML <-> TAK protobuf codec, stream framing
 internal/router/    client registry, group routing (IN/OUT, live changes), hooks
 internal/federation/ TAK Server Federation v2 (gRPC): federates, listener, CoT and contacts
 internal/apps/      ATAK update server: APK reading, product.inf(z) indexes
+internal/maps/      offline maps: MBTiles reading and tiles
+internal/backup/    backup files, checking, staged restore
 internal/stream/    TCP/TLS stream sessions and protocol negotiation
 internal/web/       Marti API, enrollment, OAuth, groups/channels, admin console (embedded)
 internal/mission/   Data Sync missions: roles, contents, change feed, notifications
@@ -713,6 +742,7 @@ licenses, all compatible with the AGPL:
 | [grpc-go](https://pkg.go.dev/google.golang.org/grpc), genproto | federation | Apache-2.0 |
 | [go-pkcs12](https://pkg.go.dev/software.sslmate.com/src/go-pkcs12) | client certificates | BSD-3-Clause |
 | [androidbinary](https://github.com/shogo82148/androidbinary) | reading APKs (Plugins) | MIT |
+| [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) | reading MBTiles maps | BSD-3-Clause |
 | [golang.org/x/image](https://pkg.go.dev/golang.org/x/image) | WebP plugin icons | BSD-3-Clause |
 | [Leaflet](https://leafletjs.com/) 1.9.4 | console map | BSD-2-Clause |
 | [milsymbol](https://github.com/spatialillusions/milsymbol) 2.2.0 | MIL-STD-2525 symbols | MIT |

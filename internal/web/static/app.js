@@ -131,6 +131,7 @@ const loaders = {
   certs: loadCerts,
   packages: loadPackages,
   plugins: loadApps,
+  maps: loadOfflineMaps,
   missions: loadMissions,
   video: loadVideo,
   send: loadSend,
@@ -592,7 +593,7 @@ async function loadBackups() {
 }
 
 $('#backup-download').addEventListener('click', () => {
-  const q = new URLSearchParams({ history: $('#backup-history').checked ? '1' : '0', recordings: $('#backup-recordings').checked ? '1' : '0' });
+  const q = new URLSearchParams({ history: $('#backup-history').checked ? '1' : '0', recordings: $('#backup-recordings').checked ? '1' : '0', maps: $('#backup-maps').checked ? '1' : '0' });
   location.href = `api/backup/download?${q}`;
 });
 
@@ -857,6 +858,7 @@ let trailsTimer = null;
 let videoLayer = null;
 let weather = null; // radar and hillshade overlays, see initWeather
 let mapSources = [];
+let offlineMaps = []; // MBTiles maps served by this server
 let mapTimer = null;
 let latestClients = [];
 
@@ -934,6 +936,7 @@ function initMap() {
   });
   buildLayers();
   guard(loadMapSources)();
+  api('GET', 'api/maps').then((r) => { offlineMaps = r.maps; buildLayers(); }).catch(() => {});
   renderEmergencyMarkers();
   if (view) fittedOnce = true;
   // Bring back the packages this viewer had on the map.
@@ -1024,6 +1027,12 @@ function buildLayers() {
   overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer,
     'Weather radar': weather.radar, 'Weather radar (US, detailed)': weather.nexrad, Hillshade: weather.hillshade };
   for (const p of packageLayers.values()) overlayLayers[p.name] = p.layer;
+  for (const m of offlineMaps) {
+    if (m.error) continue;
+    const layer = tileLayer(m.url, { minNativeZoom: m.min_zoom, maxNativeZoom: m.max_zoom, attribution: esc(m.attribution || ''),
+      bounds: [[m.bounds[1], m.bounds[0]], [m.bounds[3], m.bounds[2]]] });
+    (m.overlay ? overlayLayers : baseLayers)[`${m.name} (offline)`] = layer;
+  }
   for (const s of mapSources) {
     const layer = tileLayer(s.url, {
       minZoom: 0, maxNativeZoom: s.max_zoom || 19, attribution: esc(s.attribution || ''),
@@ -2366,6 +2375,88 @@ async function loadPackages() {
       <button class="small danger" data-del="${esc(p.hash)}" data-name="${esc(p.name)}">Delete</button>
     </td></tr>`).join('') || emptyRow(7, 'No data packages');
 }
+
+// ---------- offline maps ----------
+
+function renderOfflineMaps(r) {
+  offlineMaps = r.maps;
+  $('#maps-folder').textContent = r.folder;
+  $('#maps-table tbody').innerHTML = r.maps.map((m) => `<tr>
+    <td><strong>${esc(m.name)}</strong> ${m.overlay ? '<span class="pill">overlay</span>' : ''}<div class="muted mono">${esc(m.file)}</div>
+      ${m.error ? `<div class="error">${esc(m.error)}</div>` : m.description ? `<div class="muted">${esc(m.description)}</div>` : ''}</td>
+    <td>${esc((m.format || '').toUpperCase())}</td>
+    <td>${m.error ? '' : `${m.min_zoom}–${m.max_zoom}`}</td>
+    <td>${bytes(m.size)}</td>
+    <td>${m.error ? '' : `<label class="check"><input type="checkbox" data-map-devices="${esc(m.file)}" ${m.devices ? 'checked' : ''}> as an ATAK map source</label>`}</td>
+    <td class="actions">${m.error ? '' : `<button class="small" data-map-show="${esc(m.file)}">Show on map</button>`}
+      <button class="small danger" data-map-del="${esc(m.file)}" data-name="${esc(m.name)}">Delete</button></td></tr>`).join('')
+    || emptyRow(6, 'No offline maps yet');
+  if (map) buildLayers();
+}
+
+async function loadOfflineMaps() {
+  renderOfflineMaps(await api('GET', 'api/maps'));
+}
+
+$('#map-upload-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const file = e.target.file.files[0];
+  if (!file) return;
+  const bar = $('#map-upload-progress');
+  bar.hidden = false;
+  $('#map-upload-state').textContent = `Uploading ${bytes(file.size)}…`;
+  // XMLHttpRequest, for upload progress on large maps.
+  const r = await new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open('POST', `api/maps?name=${encodeURIComponent(file.name)}`);
+    x.setRequestHeader('X-EdgeTAK', '1');
+    x.upload.onprogress = (ev) => { if (ev.lengthComputable) bar.value = ev.loaded / ev.total; };
+    x.upload.onload = () => { $('#map-upload-state').textContent = 'Checking the map…'; };
+    x.onload = () => {
+      let body = {};
+      try { body = JSON.parse(x.responseText); } catch { /* not JSON */ }
+      if (x.status === 200) resolve(body); else reject(new Error(body.error || `HTTP ${x.status}`));
+    };
+    x.onerror = () => reject(new Error('the upload failed'));
+    x.send(file);
+  }).finally(() => { bar.hidden = true; bar.value = 0; $('#map-upload-state').textContent = ''; });
+  e.target.reset();
+  renderOfflineMaps(r);
+  toast(`${file.name} added`);
+}));
+
+$('#maps-rescan').addEventListener('click', guard(async () => {
+  renderOfflineMaps(await api('POST', 'api/maps/rescan'));
+  toast('Maps folder read again');
+}));
+
+$('#maps-table').addEventListener('change', guard(async (e) => {
+  const file = e.target.dataset.mapDevices;
+  if (!file) return;
+  renderOfflineMaps(await api('PUT', `api/maps/${encodeURIComponent(file)}`, { devices: e.target.checked }));
+  toast(e.target.checked ? 'Devices get this map when they next connect' : 'No longer sent to devices (devices that have it keep it)');
+}));
+
+$('#maps-table').addEventListener('click', guard(async (e) => {
+  const { mapShow, mapDel } = e.target.dataset;
+  if (mapDel && confirm(`Delete the map ${e.target.dataset.name}? Devices using it as a map source lose its tiles.`)) {
+    renderOfflineMaps(await api('DELETE', `api/maps/${encodeURIComponent(mapDel)}`));
+  }
+  if (mapShow) {
+    const m = offlineMaps.find((x) => x.file === mapShow);
+    if (!m) return;
+    setMapVisible(true);
+    const name = `${m.name} (offline)`;
+    if (m.overlay) overlayLayers[name]?.addTo(map);
+    else {
+      for (const l of Object.values(baseLayers)) map.removeLayer(l);
+      baseLayers[name]?.addTo(map);
+      $('#basemap').value = name;
+      prefs.set('map.base', name);
+    }
+    map.fitBounds([[m.bounds[1], m.bounds[0]], [m.bounds[3], m.bounds[2]]]);
+  }
+}));
 
 // ---------- plugins (update server) ----------
 

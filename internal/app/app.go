@@ -23,6 +23,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/federation"
 	"github.com/brandongotak/EdgeTAK/internal/health"
 	"github.com/brandongotak/EdgeTAK/internal/history"
+	"github.com/brandongotak/EdgeTAK/internal/maps"
 	"github.com/brandongotak/EdgeTAK/internal/mediamtx"
 	"github.com/brandongotak/EdgeTAK/internal/mission"
 	"github.com/brandongotak/EdgeTAK/internal/pki"
@@ -215,7 +216,10 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	ws := &web.Server{
 		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, History: a.History, Chat: a.Chat, Log: a.Log,
 		PackageDir: filepath.Join(a.DataDir, "packages"), NodeID: a.nodeID, Version: a.Version, Started: time.Now(),
-		DataDir: a.DataDir, ConfigPath: a.ConfigPath, Restart: a.Restart,
+		DataDir: a.DataDir, ConfigPath: a.ConfigPath, Restart: a.Restart, Maps: &maps.Library{Dir: filepath.Join(a.DataDir, "maps")},
+	}
+	if err := ws.Maps.Scan(); err != nil {
+		a.Log.Warn("offline maps", "err", err)
 	}
 
 	// Bind every listener before serving any, so a port conflict fails
@@ -332,6 +336,8 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	go func() { defer wg.Done(); a.History.Run(ctx) }()
 	wg.Add(1)
 	go func() { defer wg.Done(); <-ctx.Done(); a.Chat.Close() }()
+	wg.Add(1)
+	go func() { defer wg.Done(); <-ctx.Done(); ws.Maps.Close() }()
 	wg.Add(1)
 	go func() { defer wg.Done(); ws.Health.Run(ctx) }()
 	if ws.MediaMTX != nil {

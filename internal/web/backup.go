@@ -180,7 +180,7 @@ func (s *Server) backupRoutes(mux *http.ServeMux) {
 		}
 		defer backupBusy.Unlock()
 		q := r.URL.Query()
-		opt := backup.Options{History: q.Get("history") == "1", Recordings: q.Get("recordings") == "1"}
+		opt := backup.Options{History: q.Get("history") == "1", Recordings: q.Get("recordings") == "1", Maps: q.Get("maps") == "1"}
 		w.Header().Set("Content-Type", "application/gzip")
 		w.Header().Set("Content-Disposition", `attachment; filename="`+s.backupFileName(time.Now())+`"`)
 		w.Header().Set("Cache-Control", "no-store")

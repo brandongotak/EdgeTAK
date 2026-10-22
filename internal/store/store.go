@@ -188,6 +188,8 @@ type db struct {
 	AppSettings UpdateServerSettings `json:"app_settings"`
 
 	Backups BackupSettings `json:"backups"`
+
+	OfflineMaps map[string]OfflineMap `json:"offline_maps"` // by file name in the maps folder
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -1607,6 +1609,39 @@ func (s *Store) SetUpdateServer(v UpdateServerSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.AppSettings = v
+	return s.save()
+}
+
+// ---- offline maps ----
+
+// OfflineMap is how an MBTiles map is offered. Maps are sent to devices as
+// ATAK map sources unless NoDevices is set.
+type OfflineMap struct {
+	NoDevices bool      `json:"no_devices,omitempty"`
+	Updated   time.Time `json:"updated"`
+}
+
+func (s *Store) OfflineMap(file string) OfflineMap {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.OfflineMaps[file]
+}
+
+func (s *Store) SetOfflineMap(file string, m OfflineMap) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db.OfflineMaps == nil {
+		s.db.OfflineMaps = map[string]OfflineMap{}
+	}
+	m.Updated = time.Now().UTC()
+	s.db.OfflineMaps[file] = m
+	return s.save()
+}
+
+func (s *Store) DeleteOfflineMap(file string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.db.OfflineMaps, file)
 	return s.save()
 }
 
