@@ -139,6 +139,7 @@ const loaders = {
   dashboard: loadDashboard,
   health: loadHealth,
   users: () => Promise.all([loadUsers(), loadLDAP()]),
+  events: loadEvents,
   groups: () => Promise.all([loadGroups(), loadProfiles()]),
   signups: loadSignups,
   certs: loadCerts,
@@ -1810,7 +1811,7 @@ async function loadUsers() {
   usersByName = Object.fromEntries(users.map((u) => [u.username, u]));
   renderNewUserPicker();
   $('#users-table tbody').innerHTML = users.map((u) => `<tr${u.disabled ? ' class="dim"' : ''}>
-    <td><strong>${esc(u.username)}</strong>${u.disabled ? ` <span class="pill bad" title="Disabled${u.disabled_by ? ' by ' + esc(u.disabled_by) : ''}${u.disabled_at ? ' on ' + esc(date(u.disabled_at)) : ''}">disabled</span>` : ''}${u.source === 'ldap' ? ` <span class="pill" title="Signs in with the directory password; groups come from the directory">directory</span>` : ''}${u.directory_missing ? ' <span class="pill warn" title="Not found in the directory at the last sync. Its certificates still work: revoke them if the person left.">not in directory</span>' : ''}</td>
+    <td><strong>${esc(u.username)}</strong>${u.disabled ? ` <span class="pill bad" title="Disabled${u.disabled_by ? ' by ' + esc(u.disabled_by) : ''}${u.disabled_at ? ' on ' + esc(date(u.disabled_at)) : ''}">disabled</span>` : ''}${u.source === 'ldap' ? ` <span class="pill" title="Signs in with the directory password; groups come from the directory">directory</span>` : ''}${u.event ? ` <span class="pill" title="Event account: erased when the event ends (${esc(date(u.event_ends))})">event: ${esc(u.event)}</span>` : ''}${u.directory_missing ? ' <span class="pill warn" title="Not found in the directory at the last sync. Its certificates still work: revoke them if the person left.">not in directory</span>' : ''}</td>
     <td>${userGroupPills(u)}</td>
     <td>${u.admin ? '<span class="pill ok">admin</span>' : 'user'}${u.two_factor ? ' <span class="pill ok" title="Two-factor login is on">2FA</span>' : ''}</td>
     <td>${u.online ? `<span class="pill ok">${u.online} online</span>` : '<span class="muted">offline</span>'}</td>
@@ -4205,6 +4206,119 @@ $('#drawing-list').addEventListener('click', guard(async (e) => {
     renderDrawings(await api('DELETE', `api/drawings/${encodeURIComponent(d.id)}`));
   }
 }));
+
+// ---------- events ----------
+
+let events = [];
+
+function timeLeft(iso) {
+  const ms = new Date(iso) - Date.now();
+  if (ms <= 0) return 'now';
+  const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+  return h >= 48 ? `${Math.round(h / 24)} days` : h ? `${h} h ${m} min` : `${m} min`;
+}
+
+function renderEvents(list) {
+  events = list;
+  $('#event-list tbody').innerHTML = list.map((e) => {
+    const ended = !!e.ended;
+    return `<tr${ended ? ' class="dim"' : ''}>
+      <td><strong>${esc(e.name)}</strong>${ended ? ' <span class="pill">ended</span>' : ' <span class="pill ok">active</span>'}
+        <div class="muted">group ${esc(e.group)}${e.mission ? ` · mission ${esc(e.mission)}` : ''}</div></td>
+      <td>${e.mode === 'shared' ? `shared account <span class="mono">${esc(e.account)}</span>` : `each person signs up${e.max_people ? ` (at most ${e.max_people})` : ''}`}</td>
+      <td>${ended ? `${e.removed} erased` : `${e.joined} ${e.mode === 'shared' ? 'account' : 'joined'}${e.online ? ` · <span class="pill ok">${e.online} online</span>` : ''}`}</td>
+      <td>${ended ? `ended ${esc(date(e.ended))}<div class="muted">${e.ended_by === 'expired' ? 'expired' : 'by ' + esc(e.ended_by)}</div>` : `${esc(date(e.expires))}<div class="muted">in ${esc(timeLeft(e.expires))}</div>`}</td>
+      <td class="actions">${ended ? `<button class="small" data-event-del="${esc(e.id)}">Delete</button>` : `
+        <button class="small primary" data-event-qr="${esc(e.id)}">Join QR</button>
+        ${e.mode === 'shared' ? `<button class="small" data-event-pkg="${esc(e.account)}" title="Connection data package for the shared account">Package</button>` : ''}
+        <button class="small" data-event-extend="${esc(e.id)}">Change end</button>
+        <button class="small danger" data-event-end="${esc(e.id)}">End now</button>`}</td></tr>`;
+  }).join('') || emptyRow(5, 'No events yet');
+}
+
+async function loadEvents() {
+  renderEvents(await api('GET', 'api/events'));
+}
+
+const localInput = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+$('#event-form').addEventListener('change', (e) => {
+  if (e.target.name === 'mode') $('#event-max').hidden = e.target.value === 'shared';
+});
+
+$('#event-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const list = await api('POST', 'api/events', { name: f.name.value, mode: f.mode.value, expires: new Date(f.expires.value).toISOString(),
+    max_people: Number(f.max.value) || 0, mission: f.mission.checked });
+  renderEvents(list);
+  f.name.value = '';
+  toast('Event created');
+  const created = list.find((x) => !x.ended);
+  if (created) showEventQR(created);
+}));
+
+let qrEvent = null;
+
+function showEventQR(e) {
+  qrEvent = e;
+  const link = e.mode === 'shared' ? e.enroll_link : e.join_url;
+  $('#event-qr-title').textContent = `Join ${e.name}`;
+  const box = $('#event-qr');
+  box.innerHTML = '';
+  if (window.QRCode) new QRCode(box, { text: link, width: 260, height: 260, correctLevel: QRCode.CorrectLevel.M });
+  $('#event-qr-text').textContent = e.mode === 'shared'
+    ? `Scan with the phone's camera (ATAK installed): ATAK connects as ${e.account}. Until ${date(e.expires)}.`
+    : `Scan with the phone's camera: a sign-up page opens; pick a name and password, then scan the ATAK code it shows. Until ${date(e.expires)}.`;
+  $('#event-qr-dialog').showModal();
+}
+
+$('#event-qr-close').addEventListener('click', () => $('#event-qr-dialog').close());
+$('#event-copy').addEventListener('click', guard(async () => {
+  await navigator.clipboard.writeText(qrEvent.mode === 'shared' ? qrEvent.enroll_link : qrEvent.join_url);
+  toast('Link copied');
+}));
+
+// A printable sheet to post at the check-in point.
+$('#event-print').addEventListener('click', () => {
+  const e = qrEvent;
+  const img = $('#event-qr img')?.src || $('#event-qr canvas')?.toDataURL();
+  const steps = e.mode === 'shared'
+    ? ['Install ATAK (or iTAK) on your phone.', 'Scan this code with the phone\'s camera.', 'ATAK opens and connects you.']
+    : ['Install ATAK (or iTAK) on your phone.', 'Scan this code with the phone\'s camera.', 'Pick a username and password on the page that opens.', 'Scan the ATAK code it shows: ATAK connects you.'];
+  const w = window.open('', '_blank');
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(e.name)}</title>
+    <style>body{font:16px system-ui,sans-serif;text-align:center;padding:32px;color:#111}h1{margin:0 0 6px}img{width:320px;height:320px;margin:20px}ol{display:inline-block;text-align:left;font-size:18px}.muted{color:#555}</style></head>
+    <body><h1>${esc(e.name)}</h1><div class="muted">Join the team map</div><img src="${img}" alt="QR code"><ol>${steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
+    <p class="muted">Access ends ${esc(date(e.expires))}.</p><script>onload=()=>print()<\/script></body></html>`);
+  w.document.close();
+});
+
+$('#event-list').addEventListener('click', guard(async (ev) => {
+  const d = ev.target.dataset;
+  const e = events.find((x) => x.id === (d.eventQr || d.eventExtend || d.eventEnd || d.eventDel));
+  if (d.eventPkg) {
+    connectPick = d.eventPkg; // the Connect page builds packages; preselect the shared account
+    selectTab('connect');
+    return;
+  }
+  if (!e) return;
+  if (d.eventQr) showEventQR(e);
+  if (d.eventExtend) {
+    const v = prompt(`New end for ${e.name} (YYYY-MM-DD HH:MM)`, localInput(new Date(e.expires)).replace('T', ' '));
+    if (!v) return;
+    renderEvents(await api('PATCH', `api/events/${encodeURIComponent(e.id)}`, { expires: new Date(v.replace(' ', 'T')).toISOString() }));
+    toast('End changed');
+  }
+  if (d.eventEnd && confirm(`End ${e.name} now? Its ${e.joined} account(s) are erased and disconnected, and its group removed. Its mission is kept.`)) {
+    renderEvents(await api('POST', `api/events/${encodeURIComponent(e.id)}/end`));
+    toast('Event ended');
+  }
+  if (d.eventDel && confirm(`Delete the record of ${e.name}? Its mission stays.`)) renderEvents(await api('DELETE', `api/events/${encodeURIComponent(e.id)}`));
+}));
+
+// The end defaults to tomorrow at this time.
+$('#event-form').expires.value = localInput(new Date(Date.now() + 86400000));
 
 // ---------- directory sign-in (LDAP / Active Directory) ----------
 

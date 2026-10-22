@@ -10,6 +10,24 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.15.0 (2026-10-22)
+
+### Added
+- **Events** (People → Events): temporary operations, natively (no LDAP).
+  - Creating one makes its **group** and, optionally, its **Data Sync
+    mission** (visible to the group).
+  - **Joining with one QR code**, chosen per event: *each person signs up*
+    (the code opens the sign-up page, everyone gets their own account and
+    ATAK quick-connect code; optional people limit) or *one shared account*
+    (the code enrolls ATAK straight away). **Print a join sheet** for the
+    check-in point.
+  - **At the end time** every event account is erased (certificates
+    revoked, devices disconnected), the group and invite removed, and the
+    mission kept for review. **Change end** extends or shortens it; **End
+    now** ends it early.
+  - Event accounts are labelled on the Users page, and the sign-up page
+    tells people when their account will be removed.
+
 ## v0.14.0 (2026-10-22)
 
 ### Added

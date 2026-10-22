@@ -104,6 +104,9 @@ func (s *Server) registerInfo(w http.ResponseWriter, r *http.Request) {
 		entry := map[string]any{"valid": valid}
 		if valid {
 			entry["label"], entry["groups"] = inv.Label, inv.Groups
+			if inv.Event != "" {
+				entry["event_ends"] = inv.Expires // the account is erased then
+			}
 		}
 		info["invite"] = entry
 	}

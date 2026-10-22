@@ -47,6 +47,10 @@ type User struct {
 	DisabledBy string    `json:"disabled_by,omitempty"`
 	DisabledAt time.Time `json:"disabled_at,omitzero"`
 
+	// Event is the event this temporary account belongs to; it is erased
+	// when the event ends.
+	Event string `json:"event,omitempty"`
+
 	// Two-factor login for the admin console (authenticator app codes).
 	TOTPSecret   string   `json:"totp_secret,omitempty"`
 	TOTPPending  string   `json:"totp_pending,omitempty"` // being set up, not yet confirmed
@@ -210,6 +214,8 @@ type db struct {
 	Drawings map[string]*Drawing `json:"drawings"` // by id
 
 	LDAP LDAPSettings `json:"ldap"`
+
+	Events map[string]*Event `json:"events"` // by id
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -306,6 +312,7 @@ type Invite struct {
 	Created   time.Time `json:"created"`
 	CreatedBy string    `json:"created_by"`
 	Revoked   bool      `json:"revoked"`
+	Event     string    `json:"event,omitempty"` // accounts it creates belong to this event
 }
 
 // Usable reports whether the invite can still create an account.
@@ -358,7 +365,7 @@ type Store struct {
 // Open loads the store at path, creating an empty one if needed.
 func Open(path string) (*Store, error) {
 	s := &Store{path: path, db: db{Users: map[string]*User{}, Certs: map[string]*Cert{}, Packages: map[string]*Package{}, Groups: map[string]*Group{},
-		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, DeviceProfiles: map[string]*DeviceProfile{}, Apps: map[string]*App{}, Geofences: map[string]*Geofence{}, Drawings: map[string]*Drawing{}, NextSeq: 1}}
+		Invites: map[string]*Invite{}, Requests: map[string]*SignupRequest{}, VideoFeeds: map[string]*VideoFeed{}, DeviceProfiles: map[string]*DeviceProfile{}, Apps: map[string]*App{}, Geofences: map[string]*Geofence{}, Drawings: map[string]*Drawing{}, Events: map[string]*Event{}, NextSeq: 1}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return s, s.save()
@@ -401,6 +408,9 @@ func Open(path string) (*Store, error) {
 	}
 	if s.db.Drawings == nil {
 		s.db.Drawings = map[string]*Drawing{}
+	}
+	if s.db.Events == nil {
+		s.db.Events = map[string]*Event{}
 	}
 	// Groups used to exist only as names on users; give them records.
 	for _, u := range s.db.Users {
@@ -504,6 +514,18 @@ func (s *Store) Invite(code string) (*Invite, bool) {
 	return cloneInvite(i), true
 }
 
+// UpdateInvite changes an invite.
+func (s *Store) UpdateInvite(code string, fn func(i *Invite)) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	inv, ok := s.db.Invites[code]
+	if !ok {
+		return ErrNotFound
+	}
+	fn(inv)
+	return s.save()
+}
+
 func (s *Store) RevokeInvite(code string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -530,7 +552,7 @@ func (s *Store) RegisterWithInvite(code, username, passwordHash string) (*User, 
 		return nil, err
 	}
 	inv.Uses++
-	u := &User{Username: username, PasswordHash: passwordHash, Groups: slices.Clone(inv.Groups), Created: time.Now().UTC()}
+	u := &User{Username: username, PasswordHash: passwordHash, Groups: slices.Clone(inv.Groups), Created: time.Now().UTC(), Event: inv.Event}
 	s.db.Users[username] = u
 	return cloneUser(u), s.save()
 }
@@ -1799,6 +1821,68 @@ func (s *Store) UpsertDirectoryUser(name, dn string, groups []string, admin *boo
 	}
 	s.ensureGroupsLocked(groups)
 	return cloneUser(u), s.save()
+}
+
+// ---- events ----
+
+// Event is a temporary operation: its own group and Data Sync mission, and
+// temporary accounts that are erased when it expires. People join through
+// a sign-up invite (each gets an account) or a shared account everyone
+// enrolls with, per Mode.
+type Event struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Mode      string    `json:"mode"` // "person" or "shared"
+	Group     string    `json:"group"`
+	Mission   string    `json:"mission,omitempty"`
+	Invite    string    `json:"invite,omitempty"`     // person mode: the invite code
+	Account   string    `json:"account,omitempty"`    // shared mode: the shared username
+	Password  string    `json:"password,omitempty"`   // shared mode: its password (for the QR code)
+	MaxPeople int       `json:"max_people,omitempty"` // person mode: 0 = no limit
+	Expires   time.Time `json:"expires"`
+	Created   time.Time `json:"created"`
+	CreatedBy string    `json:"created_by"`
+	Ended     time.Time `json:"ended,omitzero"`
+	EndedBy   string    `json:"ended_by,omitempty"` // "expired" or the admin who ended it
+	Removed   int       `json:"removed,omitempty"`  // accounts erased when it ended
+}
+
+func (s *Store) Events() []Event {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Event, 0, len(s.db.Events))
+	for _, e := range s.db.Events {
+		out = append(out, *e)
+	}
+	slices.SortFunc(out, func(a, b Event) int { return b.Created.Compare(a.Created) })
+	return out
+}
+
+func (s *Store) Event(id string) (Event, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	e, ok := s.db.Events[id]
+	if !ok {
+		return Event{}, false
+	}
+	return *e, true
+}
+
+func (s *Store) PutEvent(e Event) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Events[e.ID] = &e
+	return s.save()
+}
+
+func (s *Store) DeleteEvent(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.db.Events[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.db.Events, id)
+	return s.save()
 }
 
 // ---- drawings ----

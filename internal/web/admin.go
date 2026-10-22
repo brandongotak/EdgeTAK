@@ -180,6 +180,8 @@ type userView struct {
 	Disabled   bool      `json:"disabled,omitempty"`
 	DisabledBy string    `json:"disabled_by,omitempty"`
 	DisabledAt time.Time `json:"disabled_at,omitzero"`
+	Event      string    `json:"event,omitempty"`     // the event's name, for event accounts
+	EventEnds  time.Time `json:"event_ends,omitzero"` // when the account is erased
 }
 
 func newUserView(u *store.User, online int) userView {
@@ -189,7 +191,7 @@ func newUserView(u *store.User, online int) userView {
 		}
 		return l
 	}
-	return userView{u.Username, nn(u.Groups), nn(u.GroupsIn), nn(u.GroupsOut), nn(u.Inactive), u.Admin, u.Created, online, u.TwoFactor(), u.Source, u.DirectoryOff, u.Disabled, u.DisabledBy, u.DisabledAt}
+	return userView{u.Username, nn(u.Groups), nn(u.GroupsIn), nn(u.GroupsOut), nn(u.Inactive), u.Admin, u.Created, online, u.TwoFactor(), u.Source, u.DirectoryOff, u.Disabled, u.DisabledBy, u.DisabledAt, "", time.Time{}}
 }
 
 // applyUserGroups pushes a user's current memberships to their live connections.
@@ -205,9 +207,17 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request, _ *identity) 
 	for _, c := range s.Router.Clients() {
 		online[c.Username]++
 	}
+	events := map[string]store.Event{}
+	for _, e := range s.Store.Events() {
+		events[e.ID] = e
+	}
 	out := []userView{}
 	for _, u := range s.Store.Users() {
-		out = append(out, newUserView(u, online[u.Username]))
+		v := newUserView(u, online[u.Username])
+		if e, ok := events[u.Event]; ok {
+			v.Event, v.EventEnds = e.Name, e.Expires
+		}
+		out = append(out, v)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -391,18 +401,22 @@ func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request, id *identity
 		jsonError(w, http.StatusBadRequest, "you cannot delete yourself")
 		return
 	}
-	if err := s.Store.DeleteUser(name); err != nil {
+	if err := s.removeUser(name); err != nil {
 		jsonError(w, http.StatusNotFound, "user not found")
 		return
 	}
-	// Drop live connections authenticated as this user; their certs are now revoked.
-	for _, c := range s.Router.Clients() {
-		if c.Username == name {
-			c.Close()
-		}
-	}
 	s.Log.Info("user deleted", "admin", id.Username, "user", name)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// removeUser deletes a user (revoking their certificates) and ends what
+// they have open.
+func (s *Server) removeUser(name string) error {
+	if err := s.Store.DeleteUser(name); err != nil {
+		return err
+	}
+	s.cutOff(name) // drop live connections and sessions; their certs are now revoked
+	return nil
 }
 
 // userCertificate issues a client certificate and returns it as a .p12, for

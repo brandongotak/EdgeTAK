@@ -22,7 +22,8 @@ async function load() {
       $('#closed-text').textContent = 'This invite link has expired, been used up or been revoked. Ask an administrator for a new one.';
       return show('#closed');
     }
-    $('#intro').textContent = info.invite.label ? `You were invited: ${info.invite.label}. Choose a username and password.` : 'You were invited. Choose a username and password.';
+    $('#intro').textContent = (info.invite.label ? `You were invited: ${info.invite.label}. Choose a username and password.` : 'You were invited. Choose a username and password.')
+      + (info.invite.event_ends ? ` This account is for the event only: it is removed on ${new Date(info.invite.event_ends).toLocaleString()}.` : '');
   } else if (info.mode === 'approval') {
     $('#intro').textContent = 'Request an account. An administrator approves new accounts before you can sign in.';
     $('#note-field').hidden = false;

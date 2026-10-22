@@ -139,6 +139,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.geofenceRoutes(mux)
 	s.drawingRoutes(mux)
 	s.ldapRoutes(mux)
+	s.eventRoutes(mux)
 	s.federationRoutes(mux)
 	s.accountRoutes(mux)
 

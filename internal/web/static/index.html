@@ -37,6 +37,7 @@
       <button data-tab="health" data-section="overview">Health</button>
       <button data-tab="users" data-section="people">Users</button>
       <button data-tab="groups" data-section="people">Groups</button>
+      <button data-tab="events" data-section="people">Events</button>
       <button data-tab="signups" data-section="people">Sign-ups</button>
       <button data-tab="certs" data-section="people">Certificates</button>
       <button data-tab="packages" data-section="data">Data Packages</button>
@@ -587,6 +588,41 @@
           <tbody></tbody>
         </table></div>
       </div>
+    </section>
+
+    <section id="tab-events" class="tab" hidden>
+      <div class="card">
+        <h2>New event</h2>
+        <p class="muted">An event is a temporary operation with its own group and Data Sync mission. People join by scanning its QR code. When it ends, every event account is erased: certificates revoked, devices disconnected. Its group is removed and its mission is kept for review.</p>
+        <form id="event-form" class="stack">
+          <div class="inline-form">
+            <label>Name <input name="name" required maxlength="64" placeholder="e.g. Search 2026-10-24"></label>
+            <label>Ends <input type="datetime-local" name="expires" required></label>
+          </div>
+          <label class="check"><input type="radio" name="mode" value="person" checked> <span><strong>Each person signs up</strong>: the QR code opens a short sign-up page; everyone gets their own account and ATAK quick-connect code, so you can see who is who and remove one person</span></label>
+          <label class="check"><input type="radio" name="mode" value="shared"> <span><strong>One shared account</strong>: the QR code connects ATAK straight away; every device uses the same account (fastest for walk-ups)</span></label>
+          <div class="inline-form">
+            <label class="inline-label" id="event-max">At most <input type="number" name="max" min="0" class="days-input" value="0"> people <span class="muted">(0 = no limit)</span></label>
+            <label class="check"><input type="checkbox" name="mission" checked> Create a Data Sync mission for it</label>
+          </div>
+          <div class="inline-form"><button class="primary" type="submit">Create event</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Events</h2>
+        <div class="table-wrap"><table id="event-list">
+          <thead><tr><th>Event</th><th>Joining</th><th>People</th><th>Ends</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <dialog id="event-qr-dialog" class="card dialog">
+        <div class="card-head"><h2 id="event-qr-title">Join</h2><button class="small ghost" id="event-qr-close" title="Close">✕</button></div>
+        <div class="stack" style="align-items:center">
+          <div id="event-qr" class="qr-box"></div>
+          <p class="muted" id="event-qr-text" style="max-width:420px;text-align:center"></p>
+          <div class="inline-form"><button class="primary" id="event-print">Print a join sheet</button> <button id="event-copy">Copy link</button></div>
+        </div>
+      </dialog>
     </section>
 
     <section id="tab-plugins" class="tab" hidden>

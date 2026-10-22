@@ -87,6 +87,13 @@ run it, and ATAK, WinTAK, TAKX and iTAK can connect.
   devices and certificates (with expiry), revoke the certificate of a lost
   device, and change their password. Share the link from the console's
   Connect tab.
+- **Events** (People → Events): a temporary operation with its own group and
+  Data Sync mission. People join by scanning one QR code (printable as a
+  join sheet): either each person signs up for their own account, or
+  everyone enrolls with one shared account. When the event ends, at the time
+  you set, every event account is erased (certificates revoked, devices
+  disconnected) and its group removed; the mission is kept for review.
+  Extend or end it early from the console.
 - **Disable a user** (People → Users) instead of deleting them: they can't
   sign in, their certificates stop working and their devices are
   disconnected at once, while their account, groups and certificates are
