@@ -202,6 +202,23 @@ func (s *Server) serveAPK(w http.ResponseWriter, r *http.Request, a store.App, n
 	http.ServeContent(w, r, "", a.Uploaded, f)
 }
 
+// redrawAppIcons gives APKs stored without an icon one, if this version of
+// EdgeTAK can now draw it (vector and adaptive icons, from v0.10.2).
+func (s *Server) redrawAppIcons() {
+	for _, a := range s.Store.Apps() {
+		if a.HasIcon {
+			continue
+		}
+		info, err := apps.ReadAPK(s.apkFile(a))
+		if err != nil || len(info.Icon) == 0 {
+			continue
+		}
+		if os.WriteFile(s.iconFile(a), info.Icon, 0o640) == nil && s.Store.SetAppIcon(a.SHA256, true) == nil {
+			s.Log.Info("ATAK app icon drawn", "package", a.Package)
+		}
+	}
+}
+
 // changeAppIcon replaces an APK's icon with an uploaded image (PNG, JPEG or
 // WebP), stored as PNG.
 func (s *Server) changeAppIcon(w http.ResponseWriter, r *http.Request, id *identity) {

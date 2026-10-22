@@ -4,6 +4,7 @@
 package apps
 
 import (
+	"archive/zip"
 	"bytes"
 	"errors"
 	"fmt"
@@ -69,6 +70,9 @@ func ReadAPK(path string) (*Info, error) {
 		}
 	}
 	info.Icon = icon(pkg)
+	if info.Icon == nil {
+		info.Icon = drawnIcon(path, m)
+	}
 	return info, nil
 }
 
@@ -132,6 +136,40 @@ func shrink(img image.Image, size int) image.Image {
 		}
 	}
 	return out
+}
+
+// drawnIcon draws an icon that Android draws from XML (vector drawables,
+// adaptive icons, layer lists); nil when there is nothing to draw.
+func drawnIcon(path string, m apk.Manifest) []byte {
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		return nil
+	}
+	defer zr.Close()
+	r := newDrawableRenderer(&zr.Reader)
+	for _, sdk := range []uint16{0, 26} {
+		p, err := m.App.Icon.WithResTableConfig(&androidbinary.ResTableConfig{Density: 480, SDKVersion: sdk}).String()
+		if err != nil || !strings.HasSuffix(p, ".xml") {
+			continue
+		}
+		if img := r.render(p, iconSize, 0); img != nil && !blank(img) {
+			return encodePNG(img)
+		}
+	}
+	return nil
+}
+
+// blank reports whether an image is fully transparent.
+func blank(img image.Image) bool {
+	b := img.Bounds()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if _, _, _, a := img.At(x, y).RGBA(); a > 0 {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func encodePNG(img image.Image) []byte {

@@ -36,6 +36,7 @@ func (s *Server) Start(ctx context.Context) {
 	s.videoStart(ctx)
 	s.retentionStart(ctx)
 	s.backupStart(ctx)
+	go s.redrawAppIcons()
 	s.certWatchStart(ctx)
 	go func() {
 		t := time.NewTicker(presenceRefresh)

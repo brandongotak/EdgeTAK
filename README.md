@@ -462,10 +462,14 @@ device is offered, per plugin, the build for the nearest ATAK version at or
 below its own: a device on ATAK 5.7.0 gets a plugin's 5.7.0 build if there
 is one, else its 5.6.0 build. Builds for several ATAK versions can be
 uploaded side by side; a newer build for the same ATAK version replaces the
-old one. Icons drawn as
-vectors (adaptive icons) show as a plain placeholder: use **Change icon** to
-upload your own (PNG, JPEG or WebP). A newer build without a readable icon
-keeps the icon of the build it replaces.
+old one.
+
+Icons come from the APK: pictures (PNG, JPEG, WebP), and icons Android draws
+from XML (vector drawables, adaptive icons, layer lists, shapes), which
+EdgeTAK draws itself. Gradients are not drawn, and an icon EdgeTAK cannot
+draw shows as a plain placeholder. **Change icon** uploads your own (PNG,
+JPEG or WebP); a newer build without a readable icon keeps the icon of the
+build it replaces.
 
 ### Federation
 

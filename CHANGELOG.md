@@ -10,6 +10,17 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.10.2 (2026-10-21)
+
+### Fixed
+- **Plugin icons drawn as vectors now show.** Many plugins have only icons
+  that Android draws from XML (vector drawables, adaptive icons, layer
+  lists), which EdgeTAK showed as a plain placeholder (WxHazards, Drone
+  Hone, RIDAR, REDQUEEN and others). EdgeTAK now draws them: paths with
+  fills and strokes, arcs and curves, groups, and colors and layers from
+  the app's resources. Plugins already uploaded get their icon when EdgeTAK
+  starts (icons set with **Change icon** are kept).
+
 ## v0.10.1 (2026-10-21)
 
 ### Fixed
