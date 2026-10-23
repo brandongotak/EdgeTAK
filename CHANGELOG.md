@@ -10,6 +10,16 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.0.0-rc.2 (2026-10-23)
+
+The second release candidate for EdgeTAK 1.0, replacing rc.1: everything in
+v0.23.0 (including **Include pre-releases** on the update card) under the
+1.0 version number. Test it with the device checklist
+(`docs/device-checklist.md`). It is a pre-release: servers only get it with
+**Include pre-releases** ticked (on v0.23.0 or later), with the one-line
+install (`sudo EDGETAK_VERSION=v1.0.0-rc.2 sh`), or with the image
+`ghcr.io/brandongotak/edgetak:v1.0.0-rc.2`.
+
 ## v0.23.0 (2026-10-23)
 
 ### Added
