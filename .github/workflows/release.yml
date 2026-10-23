@@ -37,6 +37,12 @@ jobs:
       - name: Test
         run: go test ./...
 
+      # Upgrades must keep a server working: the oldest release, filled
+      # with data, upgraded to this one; a backup from the first release
+      # with backups restored into it.
+      - name: Upgrade test
+        run: go test -tags upgradetest -count=1 -v ./internal/upgradetest
+
       - name: Build installer and binaries
         env:
           VERSION: ${{ github.ref_name }}
