@@ -146,6 +146,7 @@ type Cert struct {
 	Issued     time.Time `json:"issued"`
 	Expires    time.Time `json:"expires"`
 	Revoked    bool      `json:"revoked"`
+	Connected  time.Time `json:"connected,omitzero"` // when a device first connected with it
 }
 
 type Package struct {
@@ -1327,6 +1328,34 @@ func (s *Store) Certs() []Cert {
 	return out
 }
 
+// CertConnected records the first time a device connected with serial.
+func (s *Store) CertConnected(serial string, at time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if c, ok := s.db.Certs[serial]; ok && c.Connected.IsZero() {
+		c.Connected = at
+		s.save()
+	}
+}
+
+// RevokeUserCerts revokes username's valid certificates except those in
+// keep, returning the serials it revoked.
+func (s *Store) RevokeUserCerts(username string, keep []string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []string
+	for serial, c := range s.db.Certs {
+		if c.CommonName == username && !c.Revoked && !slices.Contains(keep, serial) {
+			c.Revoked = true
+			out = append(out, serial)
+		}
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, s.save()
+}
+
 func (s *Store) RevokeCert(serial string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -2033,6 +2062,10 @@ type EnrollCode struct {
 	Created   time.Time `json:"created"`
 	CreatedBy string    `json:"created_by"`
 	Host      string    `json:"host,omitempty"` // the server address in the QR code
+	// Replace: when it sets up a device, the user's other devices'
+	// certificates are revoked (a replacement phone).
+	Replace bool     `json:"replace,omitempty"`
+	Certs   []string `json:"certs,omitempty"` // serials of the certificates it issued
 }
 
 func (s *Store) EnrollCodes() []EnrollCode {
@@ -2061,6 +2094,19 @@ func (s *Store) UseEnrollCode(id string, at time.Time) error {
 				return s.save()
 			}
 			return nil
+		}
+	}
+	return ErrNotFound
+}
+
+// AddEnrollCodeCert records that code id issued the certificate serial.
+func (s *Store) AddEnrollCodeCert(id, serial string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.EnrollCodes {
+		if s.db.EnrollCodes[i].ID == id {
+			s.db.EnrollCodes[i].Certs = append(s.db.EnrollCodes[i].Certs, serial)
+			return s.save()
 		}
 	}
 	return ErrNotFound

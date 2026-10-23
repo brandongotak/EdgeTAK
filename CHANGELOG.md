@@ -10,6 +10,30 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.3.0 (2026-10-23)
+
+**Help in the console.** A new **Help** section in the top bar explains every
+page of the console: what it is for, the steps for common tasks, and tips,
+from getting started and connecting devices to federation and the
+simulator. Opening Help from a page shows that page's topic; a search box
+finds topics, and each topic has a button that opens its page.
+
+**See what each QR code set up.** The code list on the Connect page now
+updates live and shows, for each code, the certificate it issued and the
+device using it: its callsign and whether it is online, or **never
+connected** (the sign of a phone that was already connected to the server as
+someone else: restart ATAK). **Disconnect** revokes the certificates a code
+issued, cutting those devices off; **Revoke** still just stops the code.
+
+**New phone QR codes.** Tick **New phone: replace their devices** when making
+a QR code for someone whose phone was lost or replaced. After you confirm,
+nothing changes until the code is scanned; then the user's other devices are
+disconnected and their certificates revoked, as the new phone connects. It
+works for both kinds of QR code (Let's Encrypt quick connect and local
+packages), is recorded in the audit log, and users can do the same from
+their account page. It isn't offered for an event's shared account, whose
+devices all use one account.
+
 ## v1.2.0 (2026-10-23)
 
 **QR codes for local servers.** The user QR code from v1.1.0 now works on

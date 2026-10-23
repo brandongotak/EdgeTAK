@@ -26,6 +26,7 @@
       <button data-section="data">Data</button>
       <button data-section="messages">Messages</button>
       <button data-section="server">Server</button>
+      <button data-section="help" title="How to use the console">Help</button>
     </nav>
     <div class="who" id="who">
       <button id="map-toggle" class="ghost" aria-pressed="false" title="Show or hide the map">Map</button>
@@ -54,12 +55,22 @@
       <button data-tab="webhooks" data-section="server">Webhooks</button>
       <button data-tab="audit" data-section="server">Audit log</button>
       <button data-tab="simulator" data-section="server">Simulator</button>
+      <button data-tab="help" data-section="help">Help</button>
     </nav>
   </header>
 
   <div id="workspace" class="workspace">
   <main>
     <div id="emergency-banner" class="emergency-banner" role="alert" aria-live="assertive" hidden></div>
+    <section id="tab-help" class="tab" hidden>
+      <div class="help-layout">
+        <nav class="card help-toc" aria-label="Help topics">
+          <input type="search" id="help-search" placeholder="Search help" aria-label="Search help">
+          <div id="help-toc"></div>
+        </nav>
+        <div id="help-body" class="help-body"><p class="muted">Loading…</p></div>
+      </div>
+    </section>
     <section id="tab-dashboard" class="tab">
       <div id="dash-issues"></div>
       <div class="stats" id="stats"></div>
@@ -1138,6 +1149,7 @@
             <div class="inline-form">
               <label>Works for <select name="hours"><option value="1">1 hour</option><option value="24" selected>24 hours</option><option value="168">7 days</option><option value="720">30 days</option></select></label>
               <label class="check"><input type="checkbox" name="one" checked> One device only</label>
+              <label class="check" title="For a lost or replaced phone: when the code is scanned, the user's other devices are disconnected and their certificates revoked"><input type="checkbox" name="replace"> New phone: replace their devices</label>
             </div>
             <div class="inline-form">
               <button type="submit" class="primary">Make QR code</button>
@@ -1149,7 +1161,7 @@
           <code id="qr-uri" class="uri"></code>
           <h3>Quick-connect codes</h3>
           <div class="table-wrap"><table id="qr-codes">
-            <thead><tr><th>User</th><th>Status</th><th>Made</th><th></th></tr></thead>
+            <thead><tr><th>User</th><th>Status</th><th>Devices</th><th></th></tr></thead>
             <tbody></tbody>
           </table></div>
         </div>

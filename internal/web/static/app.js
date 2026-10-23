@@ -151,6 +151,7 @@ const loaders = {
   video: loadVideo,
   send: loadSend,
   connect: loadConnect,
+  help: loadHelp,
   chat: loadChat,
   federation: loadFederation,
   simulator: loadSim,
@@ -160,6 +161,7 @@ const loaders = {
 };
 
 let currentTab = '';
+let helpFrom = ''; // the page Help was opened from
 
 // Navigation: sections in the top bar, and the pages of the current section
 // in a second row. Each section reopens the page last used in it.
@@ -189,6 +191,7 @@ function markSections() {
 
 function selectTab(name) {
   if (!loaders[name]) name = 'dashboard';
+  if (name === 'help' && currentTab !== 'help') helpFrom = currentTab; // Help opens at that page's topic
   currentTab = name;
   history.replaceState(null, '', '#' + name);
   const section = $(`#tabs [data-tab="${name}"]`).dataset.section;
@@ -216,6 +219,8 @@ function selectTab(name) {
     pollTimer = setInterval(() => loadChat().catch(() => {}), 5000); // new messages
   } else if (name === 'simulator') {
     pollTimer = setInterval(() => loadSim().catch(() => {}), 2000);
+  } else if (name === 'connect') {
+    pollTimer = setInterval(() => api('GET', 'api/enroll-codes').then(renderQRCodes).catch(() => {}), 5000); // codes being scanned
   } else if (name === 'federation') {
     pollTimer = setInterval(() => { if (!$('#fed-dialog').open) loadFederation().catch(() => {}); }, 3000); // live connection state
   }
@@ -3711,6 +3716,76 @@ $('#connect-form').addEventListener('submit', guard(async (e) => {
   await download('GET', `api/connection-package?${q}`, undefined, 'edgetak.zip');
 }));
 
+// ---- help ----
+
+let helpLoaded = false;
+
+async function loadHelp() {
+  if (!helpLoaded) {
+    const r = await fetch('help.html');
+    if (!r.ok) throw new Error(`Help could not be loaded (${r.status})`);
+    $('#help-body').innerHTML = await r.text();
+    helpLoaded = true;
+    const groups = new Map();
+    for (const t of document.querySelectorAll('.help-topic')) {
+      if (!groups.has(t.dataset.group)) groups.set(t.dataset.group, []);
+      groups.get(t.dataset.group).push(t);
+      t.classList.add('card');
+      if (t.dataset.tab) {
+        const label = $(`#tabs [data-tab="${t.dataset.tab}"]`)?.textContent || t.dataset.title;
+        t.querySelector('h2').insertAdjacentHTML('afterend', `<p><button type="button" class="small" data-goto="${esc(t.dataset.tab)}">Open ${esc(label)}</button></p>`);
+      }
+    }
+    $('#help-toc').innerHTML = [...groups].map(([g, ts]) => `<div class="help-group">${esc(g)}</div>`
+      + ts.map((t) => `<a href="#" data-help="${esc(t.id.replace(/^help-/, ''))}">${esc(t.dataset.title)}</a>`).join('')).join('');
+  }
+  $('#help-search').value = '';
+  filterHelp();
+  const topic = $(`#help-${helpFrom}`) ? helpFrom : 'start';
+  showHelp(topic, false);
+}
+
+function showHelp(topic, smooth = true) {
+  const t = $(`#help-${topic}`);
+  if (!t) return;
+  for (const a of $('#help-toc').querySelectorAll('a')) a.classList.toggle('active', a.dataset.help === topic);
+  t.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
+}
+
+function filterHelp() {
+  const q = $('#help-search').value.trim().toLowerCase();
+  let shown = 0;
+  for (const t of document.querySelectorAll('.help-topic')) {
+    const hit = !q || t.textContent.toLowerCase().includes(q);
+    t.hidden = !hit;
+    shown += hit;
+    const link = $(`#help-toc [data-help="${t.id.replace(/^help-/, '')}"]`);
+    if (link) link.hidden = !hit;
+  }
+  let none = $('#help-none');
+  if (!none) {
+    $('#help-body').insertAdjacentHTML('beforeend', '<p class="muted" id="help-none" hidden>Nothing matches. Try another word, or see the full manual on GitHub.</p>');
+    none = $('#help-none');
+  }
+  none.hidden = shown > 0;
+}
+
+$('#help-search').addEventListener('input', filterHelp);
+// Links in the help (and its contents): data-help shows a topic, data-goto opens a console page.
+for (const box of [$('#help-toc'), $('#help-body')]) {
+  box.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-help], [data-goto]');
+    if (!a) return;
+    e.preventDefault();
+    if (a.dataset.goto) return selectTab(a.dataset.goto);
+    if ($('#help-search').value) {
+      $('#help-search').value = '';
+      filterHelp();
+    }
+    showHelp(a.dataset.help);
+  });
+}
+
 // ---- printable QR sheet ----
 
 let qrSheetUsers = [];
@@ -3789,21 +3864,49 @@ $('#qr-sheet-form').addEventListener('submit', async (e) => {
   toast(`Made ${r.cards.length} QR code(s)` + (r.skipped.length ? `; skipped ${r.skipped.join(', ')}` : ''));
 });
 
+let qrCodes = [];
+
+// What a code set up: each certificate it issued and the device using it.
+function qrDevice(d) {
+  if (d.revoked) return '<div><span class="pill">revoked</span></div>';
+  if (d.online) return `<div><span class="pill ok">online</span> ${esc(d.callsign || 'connecting')}</div>`;
+  if (d.connected) return `<div><span class="pill">offline</span> <span class="muted">first connected ${esc(ago(d.connected))}</span></div>`;
+  return '<div title="If the phone was already connected to this server as someone else, restart ATAK"><span class="pill warn">never connected</span></div>';
+}
+
 function renderQRCodes(list) {
+  qrCodes = list;
   const state = { active: '<span class="pill ok">active</span>', used: '<span class="pill">used</span>', expired: '<span class="pill">expired</span>' };
-  $('#qr-codes tbody').innerHTML = list.map((c) => `<tr${c.state === 'active' ? '' : ' class="dim"'}>
+  $('#qr-codes tbody').innerHTML = list.map((c) => {
+    const live = (c.devices || []).filter((d) => !d.revoked).length;
+    const buttons = [
+      c.state === 'active' ? `<button class="small" data-qr-del="${esc(c.id)}" title="Stop the code being used; devices it set up stay connected">Revoke</button>` : '',
+      live ? `<button class="small danger" data-qr-cut="${esc(c.id)}" title="Revoke the certificates this code issued and remove the code">Disconnect</button>` : '',
+      c.state !== 'active' && !live ? `<button class="small" data-qr-del="${esc(c.id)}">Remove</button>` : '',
+    ].join('');
+    return `<tr${c.state === 'active' || live ? '' : ' class="dim"'}>
     <td><strong>${esc(c.username)}</strong></td>
-    <td><div>${state[c.state] || esc(c.state)} <span class="muted">${c.one_device ? 'one device' : 'any number of devices'}${c.used ? ' · first used ' + esc(ago(c.used)) : ''}${c.state === 'active' ? ' · until ' + esc(date(c.expires)) : ''}</span></div></td>
-    <td>${esc(ago(c.created))}<div class="muted">${esc(c.created_by)}</div></td>
-    <td class="actions"><button class="small${c.state === 'active' ? ' danger' : ''}" data-qr-del="${esc(c.id)}">${c.state === 'active' ? 'Revoke' : 'Remove'}</button></td></tr>`).join('')
-    || emptyRow(4, 'None yet');
+    <td><div>${state[c.state] || esc(c.state)}${c.replace ? ' <span class="pill warn">replaces devices</span>' : ''}</div>
+      <div class="muted">${c.one_device ? 'one device' : 'any number of devices'}${c.state === 'active' ? ' · until ' + esc(date(c.expires)) : ''}</div>
+      <div class="muted">made ${esc(ago(c.created))} by ${esc(c.created_by)}${c.used ? ' · first used ' + esc(ago(c.used)) : ''}</div></td>
+    <td>${(c.devices || []).map(qrDevice).join('') || '<span class="muted">none yet</span>'}</td>
+    <td class="actions">${buttons}</td></tr>`;
+  }).join('') || emptyRow(4, 'None yet');
 }
 
 $('#qr-form').addEventListener('submit', guard(async (e) => {
   e.preventDefault();
   const f = e.target;
   const host = $('#connect-host').value || status?.public_host || location.hostname;
-  const r = await api('POST', 'api/enroll-codes', { username: f.username.value, hours: Number(f.hours.value), one_device: f.one.checked, host });
+  const user = f.username.value;
+  if (f.replace.checked) {
+    const now = Date.now();
+    const n = (await api('GET', 'api/certs')).filter((c) => c.common_name === user && !c.revoked && new Date(c.expires) > now).length;
+    const what = n ? `${user}'s ${n === 1 ? 'current device certificate is' : `${n} current device certificates are`} revoked and ${n === 1 ? 'that device' : 'those devices'} disconnected` : `any devices ${user} has are disconnected (none have a certificate now)`;
+    if (!confirm(`Replace ${user}'s devices?\n\nWhen the new phone scans this code, ${what}. They would need a new QR code to connect again.\n\nNothing changes until the code is scanned.`)) return;
+  }
+  const r = await api('POST', 'api/enroll-codes', { username: user, hours: Number(f.hours.value), one_device: f.one.checked, replace: f.replace.checked, host });
+  f.replace.checked = false;
   // Without Let's Encrypt, ATAK doesn't trust this server yet: the QR code
   // imports a connection package with a certificate instead of enrolling.
   const link = r.local && r.package_link ? r.package_link : r.link;
@@ -3817,15 +3920,24 @@ $('#qr-form').addEventListener('submit', guard(async (e) => {
   let how = 'ATAK enrolls and connects.';
   if (r.local && r.package_link) how = 'ATAK imports a connection package with a certificate for them and connects.';
   else if (r.local) how = 'Plain HTTP (port 8080) is off, so this only works on a phone that already trusts this server (one that imported a connection package from it).';
+  if (r.replace) how += ` When it is scanned, ${r.username}'s other devices are disconnected.`;
   $('#qr-info').textContent = `For ${r.username}: works until ${date(r.expires)}${r.one_device ? ', for one device' : ''}. ${how} Treat it like a password until then.`;
   $('#qr-uri').textContent = link;
   renderQRCodes(r.codes);
 }));
 
 $('#qr-codes').addEventListener('click', guard(async (e) => {
-  const id = e.target.dataset.qrDel;
-  if (!id) return;
-  renderQRCodes(await api('DELETE', `api/enroll-codes/${encodeURIComponent(id)}`));
+  const { qrDel, qrCut } = e.target.dataset;
+  if (qrCut) {
+    const c = qrCodes.find((x) => x.id === qrCut);
+    const n = (c?.devices || []).filter((d) => !d.revoked).length;
+    if (!confirm(`Disconnect the ${n} device${n === 1 ? '' : 's'} this code set up for ${c?.username}? Their certificates are revoked, so they can't reconnect without a new QR code, and the code is removed.`)) return;
+    renderQRCodes(await api('DELETE', `api/enroll-codes/${encodeURIComponent(qrCut)}?certs=1`));
+    toast('Devices disconnected');
+    return;
+  }
+  if (!qrDel) return;
+  renderQRCodes(await api('DELETE', `api/enroll-codes/${encodeURIComponent(qrDel)}`));
   $('#qr').innerHTML = '';
   $('#qr-info').textContent = '';
   $('#qr-uri').textContent = '';

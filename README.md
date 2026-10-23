@@ -253,6 +253,16 @@ There are two ways to connect, depending on the server:
   - **Print a QR sheet…** (on the Connect page or above the Users list)
     makes a code for each chosen user, or a whole group, and opens a
     printable page of labelled QR cards to hand out.
+  - The code list updates live and shows what each code set up: the
+    certificate it issued and the device using it (callsign, online or not,
+    or **never connected**: if a phone that was already connected to the
+    server as someone else scanned it, restart ATAK). **Disconnect** revokes
+    those certificates, cutting the devices off.
+  - **New phone: replace their devices** makes a code for a lost or
+    replaced phone: when it is scanned, the user's other devices are
+    disconnected and their certificates revoked (after a confirmation when
+    you make it; nothing changes until it is scanned). Users can do the same
+    from their account page. Not for an event's shared account.
 - **Connection package** (any server): on the **Connect** page (Server
   section), download a package and import it on the device. For ATAK, WinTAK
   and TAKX, choose *SSL with certificate enrollment*; the client then asks
@@ -292,6 +302,7 @@ into the ☰ menu):
 | Data | Data Packages, Missions, Maps, Overlays, Plugins, Video |
 | Messages | Send, Chat log |
 | Server | Connect, Federation, Settings, Webhooks, Audit log, Simulator |
+| Help | A guide to every page, with search; opening it from a page shows that page's topic |
 
 1. **Change the admin password**: on the **Users** page, click **Password**
    on `admin`. EdgeTAK then deletes the file holding the first-run password.

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -87,22 +88,50 @@ func (s *Server) checkEnrollCode(r *http.Request, name, code string) (*store.Use
 }
 
 type enrollCodeView struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	Expires   time.Time `json:"expires"`
-	OneDevice bool      `json:"one_device"`
-	Used      time.Time `json:"used,omitzero"`
-	Created   time.Time `json:"created"`
-	CreatedBy string    `json:"created_by"`
-	State     string    `json:"state"` // active, used or expired
+	ID        string       `json:"id"`
+	Username  string       `json:"username"`
+	Expires   time.Time    `json:"expires"`
+	OneDevice bool         `json:"one_device"`
+	Used      time.Time    `json:"used,omitzero"`
+	Created   time.Time    `json:"created"`
+	CreatedBy string       `json:"created_by"`
+	State     string       `json:"state"` // active, used or expired
+	Replace   bool         `json:"replace,omitempty"`
+	Devices   []codeDevice `json:"devices"` // what it set up
+}
+
+// codeDevice is a certificate a code issued, and the device using it.
+type codeDevice struct {
+	Serial    string    `json:"serial"`
+	Revoked   bool      `json:"revoked,omitempty"`
+	Connected time.Time `json:"connected,omitzero"` // first connection; zero if it never connected
+	Online    bool      `json:"online"`
+	Callsign  string    `json:"callsign,omitempty"`
 }
 
 func (s *Server) enrollCodeViews() []enrollCodeView {
 	now := time.Now()
+	certs := map[string]store.Cert{}
+	for _, c := range s.Store.Certs() {
+		certs[c.Serial] = c
+	}
+	online := map[string]string{} // serial -> callsign
+	if s.Router != nil {
+		for _, c := range s.Router.Clients() {
+			if c.CertSerial != "" {
+				_, online[c.CertSerial] = c.Identity()
+			}
+		}
+	}
 	out := []enrollCodeView{}
 	for _, c := range s.Store.EnrollCodes() {
 		v := enrollCodeView{ID: c.ID, Username: c.Username, Expires: c.Expires, OneDevice: c.OneDevice, Used: c.Used,
-			Created: c.Created, CreatedBy: c.CreatedBy, State: "active"}
+			Created: c.Created, CreatedBy: c.CreatedBy, State: "active", Replace: c.Replace, Devices: []codeDevice{}}
+		for _, serial := range c.Certs {
+			callsign, on := online[serial]
+			v.Devices = append(v.Devices, codeDevice{Serial: serial, Revoked: certs[serial].Revoked, Connected: certs[serial].Connected,
+				Online: on, Callsign: callsign})
+		}
 		switch {
 		case !now.Before(c.Expires):
 			v.State = "expired"
@@ -113,6 +142,66 @@ func (s *Server) enrollCodeViews() []enrollCodeView {
 	}
 	slices.SortFunc(out, func(a, b enrollCodeView) int { return b.Created.Compare(a.Created) })
 	return out
+}
+
+// codeIssued records that code c issued the certificate serial and, for a
+// replacement code, revokes the user's other devices' certificates and
+// disconnects them.
+func (s *Server) codeIssued(r *http.Request, c store.EnrollCode, serial string) {
+	s.Store.AddEnrollCodeCert(c.ID, serial)
+	if !c.Replace {
+		return
+	}
+	revoked, err := s.Store.RevokeUserCerts(c.Username, append(slices.Clone(c.Certs), serial))
+	if err != nil {
+		s.Log.Error("replacing devices", "user", c.Username, "err", err)
+		return
+	}
+	s.cutOffCerts(revoked)
+	s.Log.Warn("replaced a user's devices", "user", c.Username, "revoked", len(revoked), "new_serial", serial)
+	if s.Audit != nil {
+		s.Audit.Add(audit.Entry{Actor: c.Username, IP: clientIP(r), Action: "Replaced devices with a QR code", Target: c.Username,
+			Details: fmt.Sprintf("%d certificate(s) revoked, code made by %s", len(revoked), c.CreatedBy)})
+	}
+}
+
+// cutOffCerts disconnects the devices using these certificates.
+func (s *Server) cutOffCerts(serials []string) {
+	if len(serials) == 0 || s.Router == nil {
+		return
+	}
+	for _, c := range s.Router.Clients() {
+		if c.CertSerial != "" && slices.Contains(serials, c.CertSerial) {
+			c.Close()
+		}
+	}
+}
+
+// enrollCodeCertIssued links a certificate issued by enrollment to the
+// code the device enrolled with, if it used one.
+func (s *Server) enrollCodeCertIssued(r *http.Request, username, serial string) {
+	name, pw, ok := r.BasicAuth()
+	if !ok || pw == "" || name != username {
+		return
+	}
+	want := hashCode(pw)
+	for _, c := range s.Store.EnrollCodes() {
+		if c.Username == username && subtle.ConstantTimeCompare([]byte(c.Hash), []byte(want)) == 1 {
+			s.codeIssued(r, c, serial)
+			return
+		}
+	}
+}
+
+// sharedEventAccount reports whether username is a shared event account,
+// whose devices all use one account (and so can't be replaced one by one).
+func (s *Server) sharedEventAccount(username string) bool {
+	for _, e := range s.Store.Events() {
+		if e.Mode == "shared" && e.Account == username {
+			return true
+		}
+	}
+	return false
 }
 
 // qrPackageLink is the ATAK import link to the connection package for code,
@@ -162,7 +251,7 @@ func (s *Server) qrHost(r *http.Request) string {
 
 // newEnrollCode makes and saves a code for username that works for hours.
 // The code is returned only here.
-func (s *Server) newEnrollCode(username string, hours int, oneDevice bool, host, by string) (string, store.EnrollCode, error) {
+func (s *Server) newEnrollCode(username string, hours int, oneDevice, replace bool, host, by string) (string, store.EnrollCode, error) {
 	if host == "" || strings.ContainsAny(host, "/?#@ ") {
 		return "", store.EnrollCode{}, errNoHost
 	}
@@ -171,11 +260,11 @@ func (s *Server) newEnrollCode(username string, hours int, oneDevice bool, host,
 	code := base64.RawURLEncoding.EncodeToString(b)
 	now := time.Now().UTC()
 	c := store.EnrollCode{ID: uuid(), Username: username, Hash: hashCode(code), Expires: now.Add(time.Duration(hours) * time.Hour),
-		OneDevice: oneDevice, Created: now, CreatedBy: by, Host: host}
+		OneDevice: oneDevice, Created: now, CreatedBy: by, Host: host, Replace: replace}
 	if err := s.Store.AddEnrollCode(c, now); err != nil {
 		return "", store.EnrollCode{}, err
 	}
-	s.Log.Info("enrollment code made", "by", by, "user", username, "hours", hours, "one_device", oneDevice)
+	s.Log.Info("enrollment code made", "by", by, "user", username, "hours", hours, "one_device", oneDevice, "replace", replace)
 	return code, c, nil
 }
 
@@ -193,12 +282,13 @@ func (s *Server) qrPackage(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	given := r.PathValue("code")
 	want := hashCode(given)
-	var username, host, details, codeID string
+	var username, host, details string
+	var code *store.EnrollCode
 	found, live := false, false
 	for _, c := range s.Store.EnrollCodes() {
 		if subtle.ConstantTimeCompare([]byte(c.Hash), []byte(want)) == 1 {
 			found, live = true, enrollCodeLive(c, now)
-			username, host, details, codeID = c.Username, c.Host, "code made by "+c.CreatedBy, c.ID
+			username, host, details, code = c.Username, c.Host, "code made by "+c.CreatedBy, &c
 		}
 	}
 	if !found {
@@ -222,8 +312,9 @@ func (s *Server) qrPackage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if codeID != "" {
-		s.Store.UseEnrollCode(codeID, now.UTC())
+	if code != nil {
+		s.Store.UseEnrollCode(code.ID, now.UTC())
+		s.codeIssued(r, *code, serial)
 	}
 	s.Log.Info("QR connection package downloaded", "user", u.Username, "serial", serial, "remote", r.RemoteAddr)
 	if s.Audit != nil {
@@ -248,6 +339,7 @@ func (s *Server) enrollCodeRoutes(mux *http.ServeMux) {
 			Username  string `json:"username"`
 			Hours     int    `json:"hours"`
 			OneDevice bool   `json:"one_device"`
+			Replace   bool   `json:"replace"`
 			Host      string `json:"host"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
@@ -267,8 +359,14 @@ func (s *Server) enrollCodeRoutes(mux *http.ServeMux) {
 			req.Hours = 24
 		}
 		req.Hours = min(req.Hours, 30*24)
+		if req.Replace && s.sharedEventAccount(u.Username) {
+			jsonError(w, http.StatusBadRequest, u.Username+" is an event's shared account: every device uses it, so they can't be replaced one by one")
+			return
+		}
+		// A replacement code sets up one phone.
+		req.OneDevice = req.OneDevice || req.Replace
 		host := firstNonEmpty(strings.TrimSpace(req.Host), s.Cfg.PublicHost)
-		code, c, err := s.newEnrollCode(u.Username, req.Hours, req.OneDevice, host, id.Username)
+		code, c, err := s.newEnrollCode(u.Username, req.Hours, req.OneDevice, req.Replace, host, id.Username)
 		if errors.Is(err, errNoHost) {
 			jsonError(w, http.StatusBadRequest, err.Error())
 			return
@@ -278,7 +376,7 @@ func (s *Server) enrollCodeRoutes(mux *http.ServeMux) {
 		}
 		// Without a public certificate on the enrollment port ATAK can't
 		// trust it yet, so the QR code imports a package instead.
-		writeJSON(w, http.StatusCreated, map[string]any{"id": c.ID, "username": u.Username, "expires": c.Expires, "one_device": c.OneDevice,
+		writeJSON(w, http.StatusCreated, map[string]any{"id": c.ID, "username": u.Username, "expires": c.Expires, "one_device": c.OneDevice, "replace": c.Replace,
 			"link": enrollLink(host, u.Username, code), "package_link": s.qrPackageLink(host, u.Username, code), "local": !s.Public.Uses("enroll"),
 			"qr_link": s.qrLink(host, u.Username, code), "codes": s.enrollCodeViews()})
 	}))
@@ -315,7 +413,7 @@ func (s *Server) enrollCodeRoutes(mux *http.ServeMux) {
 				skipped = append(skipped, name)
 				continue
 			}
-			code, c, err := s.newEnrollCode(u.Username, req.Hours, req.OneDevice, host, id.Username)
+			code, c, err := s.newEnrollCode(u.Username, req.Hours, req.OneDevice, false, host, id.Username)
 			if errors.Is(err, errNoHost) {
 				jsonError(w, http.StatusBadRequest, err.Error())
 				return
@@ -327,7 +425,20 @@ func (s *Server) enrollCodeRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{"cards": cards, "skipped": skipped, "codes": s.enrollCodeViews()})
 	}))
+	// ?certs=1 also revokes the certificates the code issued, disconnecting
+	// the devices it set up.
 	mux.HandleFunc("DELETE /admin/api/enroll-codes/{id}", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
+		if boolParam(r, "certs") {
+			for _, c := range s.Store.EnrollCodes() {
+				if c.ID == r.PathValue("id") {
+					for _, serial := range c.Certs {
+						s.Store.RevokeCert(serial)
+					}
+					s.cutOffCerts(c.Certs)
+					s.Log.Warn("revoked a QR code's certificates", "admin", id.Username, "user", c.Username, "certs", len(c.Certs))
+				}
+			}
+		}
 		if err := s.Store.DeleteEnrollCode(r.PathValue("id")); err != nil {
 			jsonError(w, http.StatusNotFound, "no such code")
 			return

@@ -97,6 +97,9 @@ func (s *Server) handle(ctx context.Context, conn net.Conn, transport string) {
 
 	c := router.NewClient(remote, transport, username, in, out, func() { conn.Close() })
 	c.CertSerial = serial
+	if serial != "" {
+		s.Store.CertConnected(serial, time.Now().UTC())
+	}
 	defer c.Close()
 
 	// The announcement goes out before anything else on the stream.

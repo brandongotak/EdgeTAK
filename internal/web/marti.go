@@ -116,6 +116,7 @@ func (s *Server) issueFromCSR(w http.ResponseWriter, r *http.Request, id *identi
 	}
 	s.Log.Info("issued client certificate", "user", id.Username, "clientUid", clientUID, "serial", pki.SerialHex(cert), "api", r.URL.Path)
 	s.auditEvent(r, id.Username, "Enrolled a device (certificate issued)", clientUID, false)
+	s.enrollCodeCertIssued(r, id.Username, pki.SerialHex(cert))
 	return cert, true
 }
 

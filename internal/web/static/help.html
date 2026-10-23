@@ -1,0 +1,300 @@
+<!-- The console's Help page (loaded into #help-body). One <article> per
+     topic: data-group is its heading in the contents, data-tab the console
+     page it explains (opening Help from that page shows it first). -->
+
+<article class="help-topic" id="help-start" data-group="Start here" data-title="Getting started">
+  <h2>Getting started</h2>
+  <p>EdgeTAK is a TAK server: ATAK, WinTAK, TAKX and iTAK devices connect to it to share positions, markers, chat, files and video. The console is grouped into sections in the top bar (Dashboard, People, Data, Messages, Server), with each section's pages in the row below.</p>
+  <h3>First steps</h3>
+  <ol>
+    <li><strong>Change the admin password:</strong> on <a data-goto="users">Users</a>, click <em>Password</em> on <code>admin</code>.</li>
+    <li><strong>Create groups</strong> on <a data-goto="groups">Groups</a>, for example <code>Cyan</code> and <code>Command</code>. Devices only see traffic from groups they share.</li>
+    <li><strong>Create users</strong> on <a data-goto="users">Users</a> and tick their groups. Give each person their own user, so you can cut off one device without affecting the rest.</li>
+    <li><strong>Check the server address:</strong> <em>Public host</em> on the <a data-goto="dashboard">Dashboard</a> must be the address devices use (an IP on a local network, or a domain name).</li>
+    <li><strong>Connect a device:</strong> on <a data-goto="connect">Connect</a>, make a QR code for a user and scan it with the phone's camera. See <a data-help="connect">Connecting devices</a>.</li>
+  </ol>
+  <h3>Tips</h3>
+  <ul>
+    <li>The map beside every page shows devices live. <em>Map</em> in the top bar shows or hides it.</li>
+    <li>Your own devices, certificates and password are on <em>My account</em>.</li>
+    <li>Every change you make is recorded in the <a data-goto="audit">Audit log</a>.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-dashboard" data-group="Dashboard" data-tab="dashboard" data-title="Dashboard">
+  <h2>Dashboard</h2>
+  <p>The state of the server at a glance: connected devices, messages, problems that need attention, and updates.</p>
+  <ul>
+    <li><strong>Issues</strong> at the top list anything wrong: a full disk, certificates about to expire, a federation link down.</li>
+    <li><strong>Server</strong> shows the version, the address devices use (<em>Public host</em>) and the ports.</li>
+    <li><strong>EdgeTAK updates:</strong> <em>Check for updates</em>, then <em>Install</em>. EdgeTAK restarts itself; devices reconnect on their own. Tick <em>Include pre-releases</em> only on test servers.</li>
+    <li><strong>Connected clients</strong> lists every device with its user, groups and connection. You can disconnect one from here.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-health" data-group="Dashboard" data-tab="health" data-title="Health">
+  <h2>Health</h2>
+  <p>Graphs of the last hour to 24 hours: CPU, memory, disk, network, temperature (on a Raspberry Pi), connected devices, messages and video bandwidth, with warnings for a full disk, overheating or dropped messages.</p>
+  <p>The <strong>Devices</strong> table lists each device's battery (with how fast it drains), last report, GPS fix and connection, worst problems first. Use it to spot a phone about to go flat before it drops off.</p>
+</article>
+
+<article class="help-topic" id="help-users" data-group="People" data-tab="users" data-title="Users">
+  <h2>Users</h2>
+  <p>Everyone who signs in: people's devices, the console and the account page.</p>
+  <h3>Add a user</h3>
+  <ol>
+    <li>Enter a username and a password (8 characters or more).</li>
+    <li>Tick their groups. No group means <code>__ANON__</code>, shared with anonymous devices.</li>
+    <li>Tick <em>Administrator</em> only for people who run the server.</li>
+    <li><em>Create</em>, then connect their device with <em>QR</em> on their row.</li>
+  </ol>
+  <h3>The buttons on each user</h3>
+  <ul>
+    <li><strong>Groups:</strong> which groups, and in which direction: <em>in + out</em> (the usual), <em>in</em> (receive only) or <em>out</em> (send only). Changes reach connected devices at once.</li>
+    <li><strong>Password</strong> sets a new one. <strong>Make admin</strong> / <strong>Revoke admin</strong> changes their role.</li>
+    <li><strong>Disable</strong> cuts them off at once (sign-ins, certificates, connected devices) but keeps the account; <strong>Enable</strong> brings it all back. Prefer it to <em>Delete</em>.</li>
+    <li><strong>QR</strong> makes a QR code that connects their phone (see <a data-help="connect">Connecting devices</a>). <strong>Package</strong> downloads a connection package; <strong>Issue .p12</strong> a certificate for clients set up by hand.</li>
+    <li><strong>Print a QR sheet…</strong> (above the list) prints a labelled QR card for each chosen user or a whole group.</li>
+  </ul>
+  <h3>Also on this page</h3>
+  <ul>
+    <li><strong>Two-factor login</strong> for your own account: after the password, a code from an authenticator app. TAK apps are not affected.</li>
+    <li><strong>Directory sign-in (LDAP / Active Directory):</strong> people sign in with their directory account, and directory groups become EdgeTAK groups. <em>Test these settings</em> before saving.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-groups" data-group="People" data-tab="groups" data-title="Groups and device profiles">
+  <h2>Groups and device profiles</h2>
+  <p>Groups decide who sees what: a device receives traffic sent to the groups it is <em>in</em>, and its own traffic goes to the groups it is <em>out</em> in. Users can switch groups on and off on their device with ATAK's <em>Channels</em>.</p>
+  <ul>
+    <li><strong>Create group</strong> with a name and description; members are set on <a data-goto="users">Users</a> or with the group's own button here.</li>
+    <li>Deleting a group removes it from its members.</li>
+  </ul>
+  <h3>Device profiles</h3>
+  <p>Settings and files sent to the devices of a group's members (or every user): ATAK settings (key, type and value), <code>.pref</code> files, plugin APKs, map sources and overlays.</p>
+  <ul>
+    <li>Devices get them when they set up, and each time they connect if the profile changed.</li>
+    <li><strong>Send now</strong> reaches devices that are already connected. <strong>Download</strong> shows exactly what devices receive.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-events" data-group="People" data-tab="events" data-title="Events">
+  <h2>Events</h2>
+  <p>A temporary operation (a search, an exercise, a race) with its own group and, if you like, a Data Sync mission. People join by scanning one QR code, and everything is cleaned up when it ends.</p>
+  <ol>
+    <li><strong>New event:</strong> a name, when it ends, and how people join:
+      <ul>
+        <li><em>Each person signs up</em>: the QR code opens a sign-up page; each person picks a name and gets their own account (limit how many with <em>max people</em>).</li>
+        <li><em>One shared account</em>: the QR code connects ATAK straight away; every device uses the same account. Fastest for walk-ups.</li>
+      </ul>
+    </li>
+    <li>Show the QR code, or <em>Print a join sheet</em> to post at the check-in point.</li>
+    <li>When the event ends (at the time you set, or <em>End now</em>), its accounts are erased, their devices disconnected and its group removed. The mission is kept for review.</li>
+  </ol>
+  <p><em>Extend</em> changes when it ends. <em>Package</em> gets a connection package for the shared account.</p>
+</article>
+
+<article class="help-topic" id="help-signups" data-group="People" data-tab="signups" data-title="Sign-ups">
+  <h2>Sign-ups</h2>
+  <p>Let people make their own accounts on the sign-up page, instead of creating each one yourself.</p>
+  <ul>
+    <li><strong>Invite links:</strong> choose the groups, how many people may use it (0 = no limit) and how long it lasts, then share the link or its QR code. Anyone with it gets an account in those groups at once.</li>
+    <li><strong>Sign-up without an invite:</strong> <em>Off</em> (invites only, the default), <em>Approval</em> (requests wait under <em>Pending requests</em> for you to approve), or <em>Open</em> (anyone who can reach the server). Use Open only where you are happy for anyone to join.</li>
+  </ul>
+  <p>After signing up, people see a QR code that connects their phone, and connection packages for each app.</p>
+</article>
+
+<article class="help-topic" id="help-certs" data-group="People" data-tab="certs" data-title="Certificates">
+  <h2>Certificates</h2>
+  <p>Devices connect with a certificate EdgeTAK issued when they were set up. This page lists them all.</p>
+  <ul>
+    <li><strong>Revoke</strong> a lost device's certificate: it is disconnected and can't connect again. The user's other devices keep working.</li>
+    <li><strong>Server certificates</strong> shows when the CA, the server certificate and any Let's Encrypt certificate expire, and how each renews.</li>
+    <li>Device certificates are flagged before they expire (30 days by default); set how long new ones last here. A device renews by setting up again (a new QR code or package).</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-packages" data-group="Data" data-tab="packages" data-title="Data packages">
+  <h2>Data packages</h2>
+  <p>Files shared through the server: what devices upload with ATAK's <em>Send → Server</em>, and what you upload here. Each is visible to its uploader's groups.</p>
+  <ul>
+    <li>Upload, search, download and delete packages.</li>
+    <li><strong>Show on map</strong> draws a package's markers, routes, shapes and any KML, KMZ or GeoJSON on the console map.</li>
+    <li>To push a package to devices, use <a data-goto="send">Send</a>.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-missions" data-group="Data" data-tab="missions" data-title="Missions (Data Sync)">
+  <h2>Missions (Data Sync)</h2>
+  <p>Data Sync missions are shared workspaces: map items and files that every subscriber's device keeps in step, with changes pushed live. They are usually created in ATAK, WinTAK or iTAK (<em>Data Sync</em>); this page manages them.</p>
+  <ul>
+    <li>See subscribers and their roles, the items and files, the change log and invitations.</li>
+    <li><strong>Show on map</strong> draws a mission's items; <strong>Export</strong> downloads it.</li>
+    <li>A mission is visible to the groups it was created for. An <a data-goto="events">event</a> can make one for its group.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-maps" data-group="Data" data-tab="maps" data-title="Maps: drawings and offline maps">
+  <h2>Maps: drawings and offline maps</h2>
+  <h3>Drawings</h3>
+  <p>Draw markers, routes, areas and circles on the console map; they appear on devices' maps like items a teammate placed, for every device or chosen groups. Devices that were off get them when they connect; editing or deleting one updates devices.</p>
+  <h3>Offline maps</h3>
+  <ol>
+    <li>Make or get an <strong>MBTiles</strong> file of raster tiles (QGIS, MOBAC, gdal and the like).</li>
+    <li>Upload it here, or copy large files into the server's <code>maps</code> folder (shown on the page) and <em>Rescan the folder</em>.</li>
+    <li>It becomes a base map in the console, and ATAK devices get it as a map source when they connect, so maps work with no internet.</li>
+  </ol>
+  <p>Your own tile sources (and ATAK map source <code>.xml</code> files) are under <em>Map sources</em> on the map itself; tick <em>Send to ATAK devices</em> to add one to devices' map lists.</p>
+</article>
+
+<article class="help-topic" id="help-overlays" data-group="Data" data-tab="overlays" data-title="Overlays">
+  <h2>Overlays</h2>
+  <p>Send map overlays (boundaries, search sectors, routes, points) to devices without passing files around by hand.</p>
+  <ol>
+    <li><strong>Import</strong> a KML, KMZ or GeoJSON file, name it, and pick the groups whose devices get it (none = every device).</li>
+    <li>Connected devices get it straight away as one overlay in ATAK's Overlay Manager; devices that were off get it when they connect.</li>
+    <li><strong>Replace file</strong> sends a new version that replaces the old one; <strong>Stop sending</strong> pauses it.</li>
+  </ol>
+  <p>ATAK can't be told to remove an overlay, so <em>Delete</em> only stops EdgeTAK sending it; people remove it on their device.</p>
+</article>
+
+<article class="help-topic" id="help-plugins" data-group="Data" data-tab="plugins" data-title="Plugins">
+  <h2>Plugins</h2>
+  <p>An update server for ATAK, like tak.gov's: devices install and update plugins and apps from ATAK's <em>Plugins</em> screen.</p>
+  <ul>
+    <li><strong>Upload</strong> plugin or app APKs. Builds for several ATAK versions can sit side by side; each device gets the build for its version (or the nearest older one).</li>
+    <li>Devices are pointed at this update server automatically (<em>Point devices at this update server</em>).</li>
+    <li>If an app shows up as a plugin in ATAK (or the other way round), use <em>Treat as app</em> / <em>Treat as plugin</em>.</li>
+    <li><strong>Plugins from tak.gov:</strong> link a tak.gov account, pick the ATAK version, and <em>Add</em> plugins without downloading them yourself.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-video" data-group="Data" data-tab="video" data-title="Video">
+  <h2>Video</h2>
+  <p>Video feeds for ATAK's and WinTAK's Video Player, limited by group.</p>
+  <ul>
+    <li><strong>Publishing:</strong> send a stream with any EdgeTAK username and password, e.g. <code>rtsp://USER:PASSWORD@server:8554/NAME</code> (RTMP and SRT work too). It appears on this page at once.</li>
+    <li><strong>Save as feed</strong> names it, chooses who can watch and can give it a map position (a camera marker on devices).</li>
+    <li><strong>Watching:</strong> on devices, open Video Player and import from the server; in the console, <em>Watch</em>.</li>
+    <li><strong>Publishing without a login</strong> is for cameras that can't sign in: allow it only for named feeds.</li>
+    <li><strong>Recording</strong> (off by default) keeps streams for a set number of days; play or download them under <em>Recordings</em>.</li>
+    <li>The <strong>MediaMTX</strong> card updates or restarts the video server.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-send" data-group="Messages" data-tab="send" data-title="Send">
+  <h2>Send</h2>
+  <p>Send a chat message or a data package to everyone, chosen groups or chosen devices.</p>
+  <ul>
+    <li>Pick the <strong>recipients</strong>, then write the <strong>message</strong> or choose a <strong>data package</strong> (including settings <code>.pref</code> packages).</li>
+    <li><strong>Server contact:</strong> the server can appear on devices as an HQ contact; replies to its messages arrive in the <strong>Inbox</strong>.</li>
+    <li><strong>Scheduled sends:</strong> a message or package at a set time, once or on a repeat (every few hours, daily, weekdays, chosen days).</li>
+    <li><strong>Sent</strong> lists what went out.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-chat" data-group="Messages" data-tab="chat" data-title="Chat log">
+  <h2>Chat log</h2>
+  <p>Off by default. When on, it records chat sent through the server (All Chat Rooms, team and group chats, one-to-one messages) for after-action reviews.</p>
+  <p>Search it, filter by conversation, sender and time, and export as CSV or JSON. How long messages are kept is set under <a data-goto="settings">Settings → Data retention</a>.</p>
+</article>
+
+<article class="help-topic" id="help-connect" data-group="Server" data-tab="connect" data-title="Connecting devices">
+  <h2>Connecting devices</h2>
+  <p>Ways to get a device onto the server, easiest first.</p>
+  <h3>QR code (ATAK)</h3>
+  <ol>
+    <li>On this page (or <em>QR</em> next to a user on <a data-goto="users">Users</a>), pick the user, how long the code works, and whether it's for one device.</li>
+    <li><em>Make QR code</em> and scan it with the phone's <strong>camera</strong>. ATAK opens and connects as that user. Nobody types a password.</li>
+  </ol>
+  <ul>
+    <li>With Let's Encrypt, ATAK enrolls with the code. On a local server, it downloads a connection package (over port 8080) with a certificate instead; use those codes on networks you trust.</li>
+    <li>The code is like a password until it expires: don't post it publicly. <em>One device only</em> codes stop 10 minutes after their first use.</li>
+    <li><strong>Lost or new phone:</strong> tick <em>New phone: replace their devices</em>. When the new phone scans the code, the user's other devices are disconnected (you confirm first; nothing happens until the scan).</li>
+    <li><strong>Print a QR sheet…</strong> makes a card per user for a briefing.</li>
+  </ul>
+  <h3>The code list</h3>
+  <p>Updates live. <em>Devices</em> shows what each code set up: <em>online</em> with the callsign, <em>offline</em>, <em>revoked</em>, or <em>never connected</em>. If a phone that was already connected to this server as someone else scanned the code, restart ATAK. <strong>Revoke</strong> stops a code; <strong>Disconnect</strong> also cuts off the devices it set up.</p>
+  <h3>Other ways</h3>
+  <ul>
+    <li><strong>Connection package</strong> (any app): download it here and import it on the device. For ATAK, WinTAK and TAKX choose <em>SSL with certificate enrollment</em> (the app asks for the password); for iTAK choose <em>iTAK</em>.</li>
+    <li><strong>Typing the address</strong> (servers with Let's Encrypt): add the server in the app, turn on <em>Use authentication</em> and <em>Enroll for client certificate</em>, and enter the username and password.</li>
+    <li><strong>The sign-in page for users</strong> (link at the bottom) lets people get their own QR code and packages.</li>
+  </ul>
+  <h3>Also here</h3>
+  <ul>
+    <li><strong>Position history:</strong> record devices' tracks (off by default) for trails, replay and KML/GPX export, from the map's <em>History</em> button.</li>
+    <li><strong>Map sources:</strong> tile sources sent to devices' map lists.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-federation" data-group="Server" data-tab="federation" data-title="Federation">
+  <h2>Federation</h2>
+  <p>Link this server with a TAK Server or another EdgeTAK, so devices on both see each other's positions, markers and chat, and get each other's data packages.</p>
+  <h3>Connect to a TAK Server</h3>
+  <ol>
+    <li><strong>Connect to a server</strong>, enter its address and choose how to sign in: a certificate (port 9001; the TAK Server must trust EdgeTAK's CA, which <em>Make the TAK Server trust EdgeTAK</em> does with its admin login) or a federation token (port 9002).</li>
+    <li><strong>Its CA:</strong> <em>Get it from the server</em>, check the fingerprint with its admin, and trust it.</li>
+    <li>Save. The list shows the connection's state and message counts.</li>
+  </ol>
+  <h3>Let other servers connect</h3>
+  <p>Turn on <em>Let other servers connect on port 9001</em>. A server that connects waits under <em>Waiting for approval</em>; check its fingerprint, then <em>Approve</em>.</p>
+  <p>On a TAK Server with LDAP, give EdgeTAK's federate one of your users' groups (<em>TAK Server groups for EdgeTAK</em>), or no traffic crosses.</p>
+</article>
+
+<article class="help-topic" id="help-settings" data-group="Server" data-tab="settings" data-title="Settings">
+  <h2>Settings</h2>
+  <ul>
+    <li><strong>Emergency alerts:</strong> when someone presses ATAK's emergency button, every open console shows a red banner and sounds an alarm until acknowledged. The log is here.</li>
+    <li><strong>Lost contact alerts:</strong> an amber alert with the last position when a device stops reporting (not when someone signs off on purpose). Untick to turn off.</li>
+    <li><strong>Geofences:</strong> draw an area or circle and get an alert when devices enter or leave it.</li>
+    <li><strong>Login protection:</strong> blocks an address after too many wrong passwords. Add your own networks to <em>Never block</em>, and unblock people here.</li>
+    <li><strong>Data retention:</strong> how long to keep packages, missions, messages, the chat log and the audit log. It shows what would be removed before you save.</li>
+    <li><strong>Backup and restore:</strong> download a backup (or schedule them) and restore one onto this or a new server.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-webhooks" data-group="Server" data-tab="webhooks" data-title="Webhooks">
+  <h2>Webhooks</h2>
+  <p>Send alerts to Discord, Slack, Microsoft Teams, ntfy (phone notifications) or any URL, so people hear about them with the console closed.</p>
+  <ol>
+    <li>Get a webhook URL from the service (the page has the steps for each).</li>
+    <li><strong>Add webhook</strong>, choose the service, paste the URL and choose the alerts: emergencies, geofences, lost contact, sign-ups, admin changes, server health, blocked sign-ins.</li>
+    <li>Save and press <strong>Send test</strong>.</li>
+  </ol>
+  <p>Limit a webhook to groups to hear only about those users' devices.</p>
+</article>
+
+<article class="help-topic" id="help-audit" data-group="Server" data-tab="audit" data-title="Audit log">
+  <h2>Audit log</h2>
+  <p>Every change an administrator makes, with who, from where, what and whether it worked; also sign-ins, failed sign-ins, blocked addresses, device enrollments and QR codes used. Passwords and keys are never recorded.</p>
+  <p>Search it, show failures only, and download it as CSV. How long it is kept is under <a data-goto="settings">Settings → Data retention</a> (forever by default).</p>
+</article>
+
+<article class="help-topic" id="help-simulator" data-group="Server" data-tab="simulator" data-title="Simulator">
+  <h2>Simulator</h2>
+  <p>Load testing: simulated devices connect like ATAK, move around and send positions (and chat), so you can see how the server copes before a big event.</p>
+  <ul>
+    <li>Choose how many devices, how fast they join, how often they report and how long to run, then watch connections, events per second, relay time, CPU and memory live.</li>
+    <li>They use a temporary account in the <em>Simulator</em> group, so real devices don't see them; it is removed when the run ends.</li>
+    <li>Traffic grows with the square of the devices; start small on a Raspberry Pi. Turn position history off first if you don't want them recorded.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-account" data-group="More" data-title="My account and two-factor login">
+  <h2>My account and two-factor login</h2>
+  <p>Everyone signs in at the same page: administrators go on to this console, users to their <strong>account page</strong>, where they get a QR code for their phone and connection packages, see their devices and certificates, revoke a lost device's certificate, and change their password.</p>
+  <p><strong>Two-factor login</strong> (optional): turn it on from the account page (or for yourself, on <a data-goto="users">Users</a>), scan the code with an authenticator app, and keep the recovery codes. TAK apps keep using the password. If someone loses their phone, an admin can <em>Reset 2FA</em> on Users.</p>
+</article>
+
+<article class="help-topic" id="help-trouble" data-group="More" data-title="Troubleshooting">
+  <h2>Troubleshooting</h2>
+  <ul>
+    <li><strong>A device can't connect:</strong> check <em>Public host</em> on the Dashboard is an address the phone can reach, and that the ports are open (8089 for devices, 8443 for the API, 8446 for setting up). Is the user disabled, or the certificate revoked?</li>
+    <li><strong>A QR code shows "never connected":</strong> the phone was probably already connected to this server as someone else. Restart ATAK (or remove the server in ATAK and scan again).</li>
+    <li><strong>Devices don't see each other:</strong> they need a group in common (in on one side, out on the other). Check <em>Groups</em> on each user.</li>
+    <li><strong>Someone is locked out:</strong> see <em>Blocked now</em> under <a data-goto="settings">Settings → Login protection</a>.</li>
+    <li><strong>See what a device is doing:</strong> set <code>log_level</code> to <code>debug</code> and watch the server log (<code>journalctl -u edgetak -f</code>); every request is listed.</li>
+    <li>The full manual is the README on <a href="https://github.com/brandongotak/EdgeTAK#readme" target="_blank" rel="noopener">GitHub</a>.</li>
+  </ul>
+</article>

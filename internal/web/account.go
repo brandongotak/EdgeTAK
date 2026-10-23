@@ -69,14 +69,22 @@ func (s *Server) accountRoutes(mux *http.ServeMux) {
 	// A QR code that sets up one device, made when the user asks for it.
 	mux.HandleFunc("POST /account/api/qr", s.accountAuth(func(w http.ResponseWriter, r *http.Request, u *store.User, _ string) {
 		host := s.qrHost(r)
-		code, c, err := s.newEnrollCode(u.Username, 1, true, host, u.Username)
+		var req struct {
+			Replace bool `json:"replace"`
+		}
+		json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req)
+		if req.Replace && s.sharedEventAccount(u.Username) {
+			jsonError(w, http.StatusBadRequest, "this is a shared account; its devices can't be replaced one by one")
+			return
+		}
+		code, c, err := s.newEnrollCode(u.Username, 1, true, req.Replace, host, u.Username)
 		if err != nil {
 			jsonError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		if s.Audit != nil {
 			s.Audit.Add(audit.Entry{Actor: u.Username, IP: clientIP(r), Action: "Made a quick-connect QR code", Target: u.Username,
-				Details: "on the account page"})
+				Details: map[bool]string{false: "on the account page", true: "on the account page, to replace their devices"}[req.Replace]})
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"link": s.qrLink(host, u.Username, code), "expires": c.Expires})
 	}))

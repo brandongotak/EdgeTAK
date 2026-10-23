@@ -255,11 +255,14 @@ $('#twofa-recovery').addEventListener('click', async () => {
 // The QR code holds a one-time code from the server (not the password), so
 // it works on servers with or without Let's Encrypt.
 $('#qr-make').addEventListener('click', async () => {
+  const replace = $('#qr-replace').checked;
+  if (replace && !confirm('Disconnect your other devices?\n\nWhen the new phone scans this code, your other devices are disconnected and their certificates revoked. They would need a new QR code to connect again.')) return;
   try {
-    const r = await api('POST', 'qr');
+    const r = await api('POST', 'qr', { replace });
+    $('#qr-replace').checked = false;
     $('#qr').innerHTML = '';
     if (window.QRCode) new QRCode($('#qr'), { text: r.link, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
-    $('#qr-info').textContent = `Works until ${new Date(r.expires).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, for one device.`;
+    $('#qr-info').textContent = `Works until ${new Date(r.expires).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, for one device.${replace ? ' When it is scanned, your other devices are disconnected.' : ''}`;
   } catch (ex) {
     toast(ex.message, true);
   }

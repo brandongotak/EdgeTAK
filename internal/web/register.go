@@ -97,7 +97,7 @@ func (s *Server) inviteViews() []inviteView {
 func (s *Server) signedUp(r *http.Request, username string) map[string]any {
 	out := map[string]any{"status": "created", "username": username}
 	host := s.qrHost(r)
-	if code, c, err := s.newEnrollCode(username, 24, true, host, "sign-up"); err == nil {
+	if code, c, err := s.newEnrollCode(username, 24, true, false, host, "sign-up"); err == nil {
 		out["qr_link"], out["qr_expires"] = s.qrLink(host, username, code), c.Expires
 	}
 	return out
