@@ -5258,6 +5258,7 @@ async function loadLostContact() {
   lostView = await api('GET', 'api/lost-contact');
   const f = $('#lost-form'), set = lostView.settings;
   f.on.checked = !set.off;
+  lostOnChanged();
   f.grace.value = set.grace_minutes;
   f.nopos.value = set.no_position_minutes > 0 ? set.no_position_minutes : 0;
   renderChips('#lost-groups', set.groups);
@@ -5275,13 +5276,24 @@ function renderLostList() {
     || emptyRow(5, 'Every device that has connected is still connected');
 }
 
+// Off: the options don't apply, and the card says so.
+function lostOnChanged() {
+  const on = $('#lost-form').on.checked;
+  $('#lost-options').disabled = !on;
+  $('#lost-options').classList.toggle('dim', !on);
+  $('#lost-state').innerHTML = on ? '<span class="pill ok">on</span>' : '<span class="pill">off</span>';
+}
+$('#lost-form').on.addEventListener('change', lostOnChanged);
+
 $('#lost-form').addEventListener('submit', guard(async (e) => {
   e.preventDefault();
   const f = e.target;
   lostView = await api('PUT', 'api/lost-contact', { off: !f.on.checked, grace_minutes: Number(f.grace.value) || 5,
     no_position_minutes: Number(f.nopos.value) || 0, groups: checkedIn('#lost-groups') });
   renderLostList();
-  toast('Lost contact settings saved');
+  lostOnChanged();
+  toast(f.on.checked ? 'Lost contact settings saved' : 'Lost contact alerts are off; any open ones have ended');
+  pollEmergencies().catch(() => {}); // the ended alerts leave the banner and map
 }));
 
 $('#lost-list').addEventListener('click', (e) => {

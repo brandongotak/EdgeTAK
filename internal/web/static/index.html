@@ -293,14 +293,16 @@
         </table></div>
       </div>
       <div class="card" id="lost-card">
-        <h2>Lost contact alerts</h2>
+        <div class="card-head"><h2>Lost contact alerts</h2><span id="lost-state"></span></div>
         <p class="muted">An amber alert, with the last known position, when a device stops reporting: its connection went silent or dropped, or it stays connected without sending a position. A device that signs off (turns its server connection off, quits ATAK, shuts down) closes its connection itself, so it doesn't alert and is only listed below. A device that comes back within the grace period (switching networks) doesn't alert either, and alerts end by themselves when the device is back.</p>
         <form id="lost-form" class="stack">
-          <label class="check"><input type="checkbox" name="on"> Alert when contact is lost</label>
+          <label class="check"><input type="checkbox" name="on"> Alert when contact is lost <span class="muted">(untick to turn lost contact alerts off; open ones end)</span></label>
+          <fieldset class="plain stack" id="lost-options">
           <label class="inline-label">Alert after <input type="number" name="grace" min="1" max="1440" class="days-input"> minutes without contact</label>
           <label class="inline-label">or after <input type="number" name="nopos" min="0" max="1440" class="days-input"> minutes connected without a position <span class="muted">(0 = off)</span></label>
           <div class="muted picker-label">Only for devices in these groups (none selected = every device)</div>
           <div id="lost-groups" class="group-picker"></div>
+          </fieldset>
           <div class="inline-form"><button class="primary" type="submit">Save</button></div>
         </form>
         <h3>Devices offline</h3>

@@ -10,6 +10,15 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.21.2 (2026-10-23)
+
+### Fixed
+- **Lost contact alerts**: turning them off (Server → Settings → Lost
+  contact alerts, untick *Alert when contact is lost*) now also ends the
+  alerts already open, so they leave the console, map and dashboard at
+  once (recorded as ended by you; no "back in contact" webhooks). The card
+  shows On or Off, and its options are greyed out while it is off.
+
 ## v0.21.1 (2026-10-22)
 
 Security fixes from a review of the whole codebase.

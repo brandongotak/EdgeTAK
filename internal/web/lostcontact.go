@@ -199,6 +199,31 @@ func (s *Server) CheckLostContact(now time.Time) {
 	s.lost.mu.Unlock()
 }
 
+// endAllLostAlerts closes the open lost contact alerts when an admin turns
+// the alerts off.
+func (s *Server) endAllLostAlerts(by string) {
+	s.lost.mu.Lock()
+	s.lost.alerts = map[string]string{}
+	s.lost.mu.Unlock()
+	var ids []string // from the store: alerts open since before a restart too
+	for _, e := range s.Store.Emergencies() {
+		if e.Kind == "lost" && e.Ended == nil {
+			ids = append(ids, e.ID)
+		}
+	}
+	now := time.Now().UTC()
+	for _, id := range ids {
+		s.Store.UpdateEmergency(id, func(e *store.Emergency) {
+			if e.Ended == nil {
+				e.Ended, e.EndedBy, e.Updated = &now, by, now
+			}
+		})
+	}
+	if len(ids) > 0 {
+		s.Log.Info("lost contact alerts turned off; open alerts ended", "admin", by, "alerts", len(ids))
+	}
+}
+
 // endLostAlert closes an alert because its device is back (unless an admin
 // already closed it).
 func (s *Server) endLostAlert(id string) {
@@ -234,6 +259,9 @@ func (s *Server) lostContactRoutes(mux *http.ServeMux) {
 		if err := s.Store.SetLostContact(l); err != nil {
 			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		if l.Off {
+			s.endAllLostAlerts(id.Username)
 		}
 		s.Log.Info("lost contact settings changed", "admin", id.Username, "off", l.Off, "grace", l.GraceMinutes, "no_position", l.NoPositionMinutes, "groups", l.Groups)
 		writeJSON(w, http.StatusOK, s.lostContactView())

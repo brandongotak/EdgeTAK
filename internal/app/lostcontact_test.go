@@ -128,4 +128,38 @@ func TestLostContact(t *testing.T) {
 	if c := lostAlerts()["CHARLIE"]; c.Ended == nil {
 		t.Errorf("CHARLIE's alert did not end with a new position: %+v", c)
 	}
+
+	// Turning lost contact alerts off ends the open ones and raises no more.
+	openLost := func() []store.Emergency {
+		var out []store.Emergency
+		for _, e := range a.Store.Emergencies() {
+			if e.Kind == "lost" && e.Ended == nil {
+				out = append(out, e)
+			}
+		}
+		return out
+	}
+	a.Web.CheckLostContact(time.Now().Add(11 * time.Minute))
+	open := openLost()
+	if len(open) == 0 {
+		t.Fatal("no open alert before turning alerts off")
+	}
+	call, _ := adminJSON(t, a)
+	if code, v := call("PUT", "/admin/api/lost-contact", map[string]any{"off": true, "grace_minutes": 60, "no_position_minutes": 10}); code != 200 {
+		t.Fatalf("turn off = %d %v", code, v)
+	}
+	if len(openLost()) != 0 {
+		t.Errorf("alerts still open after turning alerts off: %+v", openLost())
+	}
+	for _, e := range a.Store.Emergencies() {
+		for _, o := range open {
+			if e.ID == o.ID && e.EndedBy != "admin" {
+				t.Errorf("%s ended by %q, want admin", e.Callsign, e.EndedBy)
+			}
+		}
+	}
+	a.Web.CheckLostContact(time.Now().Add(30 * time.Minute))
+	if len(openLost()) != 0 {
+		t.Errorf("an alert was raised while alerts are off: %+v", openLost())
+	}
 }
