@@ -80,5 +80,9 @@ func Newer(a, b string) bool {
 			return x > y
 		}
 	}
-	return false
+	// Same numbers: a release candidate (v1.0.0-rc.1) comes before its
+	// release; a development build (v0.3.0-2-gabc123) comes after its tag.
+	return preReleaseRE.MatchString(b)
 }
+
+var preReleaseRE = regexp.MustCompile(`^v?\d+\.\d+\.\d+-(rc|beta|alpha)([.0-9]|$)`)

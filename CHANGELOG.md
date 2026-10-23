@@ -10,6 +10,37 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.0.0-rc.1 (2026-10-23)
+
+The first release candidate for EdgeTAK 1.0: the features are complete and
+frozen; this candidate is for checking on real devices before 1.0.0. It is a
+pre-release, so servers don't update to it on their own and the Docker
+`latest` tag doesn't move. To try it: `sudo EDGETAK_VERSION=v1.0.0-rc.1 sh`
+with the one-line install (or rerun `edgetak-installer.sh` from this
+release), or the image `ghcr.io/brandongotak/edgetak:v1.0.0-rc.1`. A server
+on a release candidate is offered 1.0.0 when it is out.
+
+### Added
+- **Compatibility promise** (README, *Upgrading and compatibility*): upgrades
+  keep users, groups, passwords, certificates, packages, missions and
+  settings, and enrolled devices keep working without enrolling again;
+  backups restore into the same or later releases; from 1.0, changes that
+  would break a working setup wait for 2.0.
+- **Upgrade tests** in the release workflow: the oldest release, filled with
+  data, upgraded in place, and a backup from the first release with backups
+  restored, checked before every release is published.
+- **Device checklist** (`docs/device-checklist.md`) for real ATAK, iTAK and
+  WinTAK devices before major releases.
+
+### Changed
+- **README** reorganised for new users: install, connecting devices and
+  first steps, then a guide arranged like the console.
+- Release candidates (`-rc.N`) are published as pre-releases.
+
+### Fixed
+- A server running a release candidate is offered the final release as an
+  update (the version check saw them as the same).
+
 ## v0.22.1 (2026-10-23)
 
 No changes to EdgeTAK since v0.21.2. v0.22.0 was never released: its
