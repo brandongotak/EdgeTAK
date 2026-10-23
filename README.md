@@ -1064,7 +1064,9 @@ v0.2.0`) runs the tests and the upgrade tests and publishes a GitHub release
 `edgetak-installer.sh` (which the one-line install fetches), a versioned copy
 of the installer, standalone binaries and `SHA256SUMS`, and the container
 image goes to `ghcr.io/brandongotak/edgetak`. Each release has a section in
-[CHANGELOG.md](CHANGELOG.md), which becomes its release notes.
+[CHANGELOG.md](CHANGELOG.md), which becomes its release notes. Before a
+major release, also run the [device checklist](docs/device-checklist.md) on
+real phones.
 
 The end-to-end tests use an in-memory network instead of real sockets,
 because some desktop antivirus products intercept local TLS and break mutual
