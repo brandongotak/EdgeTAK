@@ -33,6 +33,13 @@ for the user), which you add in iTAK with **Upload Server Package**. Both
 follow the same rules as ATAK codes: expiry, one device, New phone, and
 the live code list.
 
+**Enrollment reply for iPhone clients.** iTAK, and clients that send no
+User-Agent, now get the certificates in the enrollment reply as single-line
+base64 and the CA twice (`ca0` and `ca1`, as OpenTAKServer sends it), which
+iOS reads more easily. iTAK enrolls as before; ATAK, WinTAK and TAKX get the
+reply they had. This came from looking into TROP (an iOS TAK client), which
+enrolls but still doesn't connect.
+
 ## v1.5.0-rc.1 (2026-10-23)
 
 A release candidate for v1.5.0 (above), to try the iTAK QR codes on an
@@ -40,15 +47,11 @@ iPhone and check that iTAK still enrolls normally with the enrollment reply
 changes from the v1.4.2 candidates (below), which v1.5.0 includes. A
 pre-release: servers only get it with **Include pre-releases** ticked.
 
-## v1.4.2 (2026-10-23)
+## v1.4.2 (not released)
 
-**Fix: TROP couldn't enroll.** TROP (an iOS TAK client) got its certificate,
-then said "check credentials" and never connected. EdgeTAK's enrollment
-reply carries the certificates as base64 broken into 64-character lines,
-which iOS's standard decoder rejects. iOS-style clients (iTAK, and clients
-that send no User-Agent, as TROP does) now get the base64 on one line, and
-the CA twice (`ca0` and `ca1`, as OpenTAKServer sends it). ATAK, WinTAK and
-TAKX keep the reply they had.
+Not released on its own: its change is part of v1.5.0. It changed the
+enrollment reply for iOS clients while investigating TROP, which still
+doesn't connect.
 
 ## v1.4.2-rc.2 (2026-10-23)
 
