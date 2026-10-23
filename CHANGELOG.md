@@ -10,6 +10,22 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.22.0 (2026-10-23)
+
+### Added
+- **Signed releases.** Each release's `SHA256SUMS` is signed with the
+  EdgeTAK release key (Ed25519, kept offline) as `SHA256SUMS.sig`. The
+  console's **Update** verifies the signature with the EdgeTAK already
+  installed before trusting the checksums, and refuses releases that are
+  unsigned, altered or signed with another key.
+- `edgetak verify-release SHA256SUMS SHA256SUMS.sig` checks a download by
+  hand; release key `55c8667e`.
+
+### Upgrading
+- Updating *to* v0.22.0 from the console works as before (older updaters
+  check checksums only). From v0.22.0 on, every update must be signed, and
+  the console no longer installs versions before v0.22.0.
+
 ## v0.21.2 (2026-10-23)
 
 ### Fixed

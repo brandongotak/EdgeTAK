@@ -31,8 +31,15 @@ func init() {
 }
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "sim" {
-		os.Exit(runSim(os.Args[2:]))
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "sim":
+			os.Exit(runSim(os.Args[2:]))
+		case "verify-release":
+			os.Exit(runVerifyRelease(os.Args[2:]))
+		case "sign-release":
+			os.Exit(runSignRelease(os.Args[2:]))
+		}
 	}
 	dataDir := flag.String("data", envOr("EDGETAK_DATA", "data"), "data directory (config, database, certificates, packages)")
 	cfgPath := flag.String("config", "", "config file (default <data>/edgetak.json)")

@@ -263,15 +263,18 @@ write_updater() {
 # EdgeTAK updater, installed by the EdgeTAK installer. edgetak-update.service
 # runs it as root when the admin console asks for an update. The only input
 # it takes from EdgeTAK is a version number, which it validates; it downloads
-# that release's installer itself and verifies it against the release's
-# SHA256SUMS, then reruns it with the options in /etc/edgetak/install.conf.
+# that release's installer itself, checks the release's SHA256SUMS carries a
+# valid signature from the EdgeTAK release key (with the EdgeTAK already
+# installed, which has the key built in), verifies the installer against
+# it, then reruns it with the options in /etc/edgetak/install.conf.
 set -eu
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 REPO=brandongotak/EdgeTAK
 REQUEST=/var/lib/edgetak/update/request
 STATE=/var/lib/edgetak-update
 DEST=/usr/local/lib/edgetak
-MIN=0.2.15
+MIN=0.22.0
+EDGETAK=/usr/local/bin/edgetak
 
 status() { # state message
 	printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >"$STATE/status.tmp"
@@ -296,6 +299,8 @@ base=https://github.com/$REPO/releases/download/$v
 status running "downloading $v"
 fetch "$base/edgetak-installer.sh" "$tmp/edgetak-installer.sh" || fail "download of $v failed (no internet, or no such release)"
 fetch "$base/SHA256SUMS" "$tmp/SHA256SUMS" || fail "download of the $v checksums failed"
+fetch "$base/SHA256SUMS.sig" "$tmp/SHA256SUMS.sig" || fail "the $v release isn't signed; not installing"
+"$EDGETAK" verify-release "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.sig" >"$tmp/verify" 2>&1 || fail "$(cat "$tmp/verify"); not installing $v"
 want=$(awk '$2 == "edgetak-installer.sh" || $2 == "*edgetak-installer.sh" { print $1 }' "$tmp/SHA256SUMS")
 got=$(sha256sum "$tmp/edgetak-installer.sh" | awk '{print $1}')
 [ -n "$want" ] && [ "$got" = "$want" ] || fail "checksum mismatch for the $v installer; not installing"

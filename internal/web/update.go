@@ -29,7 +29,7 @@ const (
 	edgetakRepo = "brandongotak/EdgeTAK"
 	// The first release whose installer contains the updater; older ones
 	// would remove the ability to update from the console.
-	minUpdateVersion = "v0.2.15"
+	minUpdateVersion = "v0.22.0" // the first signed release
 )
 
 var (
