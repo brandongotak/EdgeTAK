@@ -361,6 +361,31 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	errLog := slog.NewLogLogger(a.Log.Handler(), slog.LevelDebug)
 	var servers []*http.Server
 	for _, b := range binds {
+		if b.name == "tcp" {
+			// Plain TCP can be turned on and off from the console.
+			tcp := &plainTCP{parent: ctx, addr: a.Addrs["tcp"],
+				listen: func(addr string) (net.Listener, error) { return a.Listen("tcp", addr) },
+				serve: func(ctx context.Context, ln net.Listener) {
+					if err := st.Serve(ctx, ln, "tcp"); err != nil {
+						a.Log.Error("stream listener stopped", "listener", "tcp", "err", err)
+					}
+				},
+				dropClients: func() {
+					for _, c := range a.Router.Clients() {
+						if c.Transport == "tcp" {
+							c.Close()
+						}
+					}
+				}}
+			if a.Store.PlainTCPOff() {
+				b.ln.Close()
+				a.Log.Info("plain TCP is turned off (Settings)", "addr", a.Addrs["tcp"])
+			} else {
+				tcp.start(b.ln)
+			}
+			ws.PlainTCP = tcp
+			continue
+		}
 		wg.Add(1)
 		if !b.web {
 			go func() {

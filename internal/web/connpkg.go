@@ -107,6 +107,9 @@ var manifestTmpl = template.Must(template.New("manifest").Parse(`<MissionPackage
 
 func (s *Server) buildConnectionPackage(mode, host, username string) ([]byte, error) {
 	ssl := mode == "ssl"
+	if !ssl && s.PlainTCP != nil && !s.PlainTCP.On() {
+		return nil, fmt.Errorf("plain TCP is turned off (Settings → Plain TCP)")
+	}
 	addr := s.Addrs["tcp"]
 	if ssl {
 		addr = s.Addrs["tls"]

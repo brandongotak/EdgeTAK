@@ -10,6 +10,21 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.4.0 (2026-10-23)
+
+**Turn plain TCP on and off from the console.** A **Plain TCP** card on the
+Settings page opens or closes port 8087 (unencrypted, anonymous devices that
+only see `__ANON__`) while EdgeTAK runs, with no restart. Turning it off
+closes the port and disconnects the devices connected that way; the choice
+is kept across restarts. While it's off, the Dashboard shows CoT TCP as off
+and TCP connection packages aren't offered. Servers installed with
+`--no-plaintext` show it as off in the server configuration.
+
+**Clear the audit log.** **Clear log…** on the Audit log page deletes every
+entry, after a confirmation. The clearing itself becomes the first entry of
+the new log (who, when, how many entries were removed) and goes to webhooks
+with **Admin changes** ticked, so a cleared log is never a silent one.
+
 ## v1.3.0 (2026-10-23)
 
 **Help in the console.** A new **Help** section in the top bar explains every

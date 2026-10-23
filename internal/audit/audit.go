@@ -5,6 +5,7 @@ package audit
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -183,6 +184,30 @@ func (l *Log) Prune(cut time.Time, dry bool) (int, error) {
 		l.mu.Unlock()
 		if err == nil {
 			n++
+		}
+	}
+	return n, nil
+}
+
+// Clear deletes every entry, returning how many there were.
+func (l *Log) Clear() (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	names, err := filepath.Glob(filepath.Join(l.dir, "audit-*.jsonl"))
+	if err != nil {
+		return 0, err
+	}
+	if l.f != nil {
+		l.f.Close()
+		l.f = nil
+	}
+	n := 0
+	for _, name := range names {
+		if data, err := os.ReadFile(name); err == nil {
+			n += bytes.Count(data, []byte{'\n'})
+		}
+		if err := os.Remove(name); err != nil {
+			return n, err
 		}
 	}
 	return n, nil

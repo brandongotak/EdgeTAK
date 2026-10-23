@@ -240,7 +240,7 @@
 
     <section id="tab-audit" class="tab" hidden>
       <div class="card">
-        <div class="card-head"><h2>Audit log</h2><a class="button small" id="audit-csv" href="api/audit.csv">Download CSV</a></div>
+        <div class="card-head"><h2>Audit log</h2><div class="inline-form"><a class="button small" id="audit-csv" href="api/audit.csv">Download CSV</a><button type="button" class="small danger" id="audit-clear">Clear log…</button></div></div>
         <p class="muted">Every change made by an administrator (in this console or through the admin API), sign-ins, failed sign-ins and device enrollments: who, from where, what and whether it worked. Passwords, tokens and webhook addresses are never recorded. How long it is kept is under Settings → Data retention.</p>
         <form id="audit-filter" class="inline-form">
           <input type="search" name="q" placeholder="Search: user, action, target…">
@@ -350,6 +350,11 @@
           <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
         </form>
       </dialog>
+      <div class="card" id="tcp-card">
+        <div class="card-head"><h2>Plain TCP</h2><span id="tcp-state"></span></div>
+        <p class="muted">Lets TAK apps connect on port <span id="tcp-port">8087</span> without encryption or a login. They are anonymous and only see the <code>__ANON__</code> group. Useful on a closed local network for apps without a certificate; turn it off on servers others can reach. Turning it off closes the port and disconnects the devices connected that way.</p>
+        <label class="check"><input type="checkbox" id="tcp-on"> Allow plain TCP connections</label>
+      </div>
       <div class="card" id="guard-card">
         <div class="card-head"><h2>Login protection</h2><span id="guard-state"></span></div>
         <p class="muted">An address that fails to sign in with a password too often is blocked from password sign-ins for a while: the console, account page, device enrollment, the update server and ATAK's username sign-in. Devices connected with their certificate and people already signed in carry on, so one person mistyping on a shared network doesn't cut off a team. This machine is never blocked. Failed sign-ins and blocks are in the audit log; a webhook with <strong>Blocked sign-ins</strong> ticked hears about each block.</p>

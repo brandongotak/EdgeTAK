@@ -47,3 +47,25 @@ func TestLog(t *testing.T) {
 		t.Errorf("after prune = %+v", got)
 	}
 }
+
+func TestClear(t *testing.T) {
+	l, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	l.Add(Entry{Time: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), Actor: "a", Action: "x"})
+	l.Add(Entry{Actor: "b", Action: "y"})
+	l.Add(Entry{Actor: "c", Action: "z"})
+	if n, err := l.Clear(); n != 3 || err != nil {
+		t.Fatalf("clear = %d %v", n, err)
+	}
+	if got, _ := l.Query(Filter{}); len(got) != 0 {
+		t.Fatalf("after clear = %+v", got)
+	}
+	// It keeps working afterwards.
+	l.Add(Entry{Actor: "d", Action: "Cleared the audit log"})
+	if got, _ := l.Query(Filter{}); len(got) != 1 {
+		t.Errorf("after adding = %+v", got)
+	}
+}

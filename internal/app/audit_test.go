@@ -111,4 +111,19 @@ func TestAuditLog(t *testing.T) {
 		t.Error("a refused change went to the webhook")
 	}
 	mu.Unlock()
+
+	// Clearing leaves only the record of the clearing, and tells the webhook.
+	before := len(get("?limit=1000"))
+	code, v := call("DELETE", "/admin/api/audit", nil)
+	if code != 200 || int(v["removed"].(float64)) < before {
+		t.Fatalf("clear = %d %v (had %d)", code, v, before)
+	}
+	if l := get(""); len(l) != 1 || l[0]["action"] != "Cleared the audit log" || l[0]["actor"] != "admin" {
+		t.Errorf("after clearing = %v", l)
+	}
+	waitFor(t, "clear webhook", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return strings.Contains(strings.Join(hooked, "|"), "Cleared the audit log")
+	})
 }

@@ -70,6 +70,7 @@ var auditActions = map[string]string{
 	"POST /admin/api/emergencies/{id}/ack":               "Acknowledged alert",
 	"POST /admin/api/emergencies/{id}/dismiss":           "Dismissed alert",
 	"POST /admin/api/enroll-codes":                       "Made a quick-connect QR code",
+	"PUT /admin/api/plain-tcp":                           "Turned plain TCP on or off",
 	"POST /admin/api/enroll-codes/batch":                 "Made a QR code sheet",
 	"POST /admin/api/events":                             "Created event",
 	"POST /admin/api/events/{id}/end":                    "Ended event",
@@ -145,6 +146,7 @@ var auditQuiet = map[string]bool{
 	"POST /admin/api/video/mediamtx/check": true,
 	"POST /admin/api/ldap/test":            true,
 	"POST /admin/api/webhooks/{id}/test":   true,
+	"DELETE /admin/api/audit":              true, // records its own entry, with the count
 }
 
 // auditSecret are request fields never recorded.
@@ -386,6 +388,27 @@ func (s *Server) auditRoutes(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, http.StatusOK, list)
+	}))
+	// Clear the log. The clearing is the first entry of the new log, so it
+	// can't be hidden.
+	mux.HandleFunc("DELETE /admin/api/audit", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
+		if s.Audit == nil {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		n, err := s.Audit.Clear()
+		e := audit.Entry{Actor: id.Username, IP: clientIP(r), Action: "Cleared the audit log", Details: fmt.Sprintf("%d entries removed", n)}
+		if err != nil {
+			e.Failed, e.Status, e.Details = true, http.StatusInternalServerError, e.Details+"; "+err.Error()
+		}
+		s.Audit.Add(e)
+		s.Log.Warn("audit log cleared", "admin", id.Username, "entries", n, "err", err)
+		go s.notify(notice{Kind: "admin", Title: e.Action, Username: e.Actor, Text: "By " + e.Actor + ". " + e.Details, Groups: []string{}})
+		if err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]int{"removed": n})
 	}))
 	// The same search as a spreadsheet (up to 5000 entries).
 	mux.HandleFunc("GET /admin/api/audit.csv", s.admin(func(w http.ResponseWriter, r *http.Request, _ *identity) {

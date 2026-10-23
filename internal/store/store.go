@@ -232,6 +232,10 @@ type db struct {
 	SelfUpdate SelfUpdateSettings `json:"self_update"`
 
 	EnrollCodes []EnrollCode `json:"enroll_codes,omitempty"`
+
+	// PlainTCPOff turns off the plain TCP streaming port (8087), which is
+	// on by default.
+	PlainTCPOff bool `json:"plain_tcp_off,omitempty"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -2589,5 +2593,20 @@ func (s *Store) DeleteFederate(id string) error {
 		return ErrNotFound
 	}
 	s.db.Federation.Federates = slices.Delete(fs, i, i+1)
+	return s.save()
+}
+
+// ---- plain TCP ----
+
+func (s *Store) PlainTCPOff() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.PlainTCPOff
+}
+
+func (s *Store) SetPlainTCPOff(off bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.PlainTCPOff = off
 	return s.save()
 }

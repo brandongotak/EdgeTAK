@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"strconv"
 	"net/http"
 	"sync"
 )
@@ -20,11 +21,22 @@ type memNet struct {
 
 var mem = &memNet{next: 40000, listeners: map[string]*memListener{}}
 
-func (m *memNet) Listen(_, _ string) (net.Listener, error) {
+func (m *memNet) Listen(_, address string) (net.Listener, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.next++
-	l := &memListener{net: m, addr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: m.next}, conns: make(chan net.Conn), done: make(chan struct{})}
+	// A port memnet handed out before can be listened on again (a listener
+	// reopened at its old address); anything else gets a new port.
+	port := 0
+	if _, p, err := net.SplitHostPort(address); err == nil {
+		port, _ = strconv.Atoi(p)
+	}
+	if port <= 40000 || port > m.next {
+		m.next++
+		port = m.next
+	} else if _, taken := m.listeners[(&net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port}).String()]; taken {
+		return nil, fmt.Errorf("memnet: address in use: %s", address)
+	}
+	l := &memListener{net: m, addr: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port}, conns: make(chan net.Conn), done: make(chan struct{})}
 	m.listeners[l.addr.String()] = l
 	return l, nil
 }

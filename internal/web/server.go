@@ -46,6 +46,12 @@ type Server struct {
 	History    *history.Recorder
 	Chat       *chatlog.Log
 	Federation *federation.Manager
+	// PlainTCP turns the plain TCP streaming port on and off; nil when it
+	// is turned off in the configuration (no tcp_addr, --no-plaintext).
+	PlainTCP interface {
+		On() bool
+		Set(on bool) error
+	}
 	// FederationDial reaches other servers for federation setup (tests).
 	FederationDial func(addr string) (net.Conn, error)
 	MediaMTX       *mediamtx.Manager // nil unless EdgeTAK runs MediaMTX itself
@@ -159,6 +165,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.scheduleRoutes(mux)
 	s.loginGuardRoutes(mux)
 	s.enrollCodeRoutes(mux)
+	s.plainTCPRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)

@@ -287,7 +287,10 @@ profile updates** turned on, followed by a reconnect. Alternatively, import a
 fresh SSL package.
 
 **Plain TCP** (`8087`, local networks only): add the server as TCP with no
-authentication. These clients are anonymous and only see `__ANON__`.
+authentication. These clients are anonymous and only see `__ANON__`. Turn
+the port off or on under **Settings → Plain TCP**, without a restart: off
+closes it and disconnects those devices, and the choice is kept. A server
+installed with `--no-plaintext` has it off in its configuration instead.
 
 ## First steps in the admin console
 
@@ -898,7 +901,10 @@ keys and webhook addresses never are. Search it, show failures only, page
 back through it and download it as CSV. It is kept in `audit/` in the data
 directory, one file per month, for as long as **Settings → Data retention**
 says (forever by default). A webhook with **Admin changes** ticked hears
-about each change as it happens.
+about each change as it happens. **Clear log…** deletes every entry after a
+confirmation; the clearing itself is recorded as the first entry of the new
+log (with how many entries were removed) and sent to those webhooks, so it
+can't go unnoticed.
 
 ### Simulator (load testing)
 

@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"regexp"
 	"runtime"
@@ -74,13 +75,17 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 func (s *Server) status(w http.ResponseWriter, r *http.Request, _ *identity) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
+	listeners := maps.Clone(s.Addrs)
+	if s.PlainTCP != nil && !s.PlainTCP.On() {
+		delete(listeners, "tcp") // turned off on the Settings page
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"server_name": s.Cfg.ServerName, "version": s.Version, "public_host": s.Cfg.PublicHost,
 		"started": s.Started, "uptime_seconds": int(time.Since(s.Started).Seconds()),
 		"clients": len(s.Router.Clients()), "users": len(s.Store.Users()), "packages": len(s.Store.Packages()),
 		"missions":  len(s.Missions.Summaries()),
 		"memory_mb": mem.Alloc >> 20, "goroutines": runtime.NumGoroutine(),
-		"listeners":  s.Addrs,
+		"listeners":  listeners,
 		"ca_subject": s.CA.Cert.Subject.CommonName, "ca_expires": s.CA.Cert.NotAfter,
 		"public_cert": s.Public.Info(), "signin_url": strings.TrimSuffix(s.registerURL(""), "register"),
 	})

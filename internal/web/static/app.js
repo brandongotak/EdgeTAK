@@ -157,7 +157,7 @@ const loaders = {
   simulator: loadSim,
   webhooks: loadWebhooks,
   audit: () => loadAudit(),
-  settings: () => Promise.all([loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
+  settings: () => Promise.all([loadPlainTCP(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
 };
 
 let currentTab = '';
@@ -277,7 +277,7 @@ async function loadDashboard() {
   const info = [
     ['Version', st.version],
     ['Public host', st.public_host],
-    ['CoT TCP', l.tcp || 'disabled'],
+    ['CoT TCP', l.tcp || 'off'],
     ['CoT TLS', l.tls || 'disabled'],
     ['HTTPS API', l.https || 'disabled'],
     ['Enrollment', l.enroll || 'disabled'],
@@ -3716,6 +3716,31 @@ $('#connect-form').addEventListener('submit', guard(async (e) => {
   await download('GET', `api/connection-package?${q}`, undefined, 'edgetak.zip');
 }));
 
+// ---- plain TCP ----
+
+function renderPlainTCP(v) {
+  $('#tcp-port').textContent = v.port || '8087';
+  $('#tcp-on').checked = v.on;
+  $('#tcp-on').disabled = !v.configured;
+  $('#tcp-state').innerHTML = !v.configured ? '<span class="pill">off in the server configuration</span>'
+    : v.on ? '<span class="pill warn">on</span>' : '<span class="pill ok">off</span>';
+}
+
+async function loadPlainTCP() {
+  renderPlainTCP(await api('GET', 'api/plain-tcp'));
+}
+
+$('#tcp-on').addEventListener('change', guard(async (e) => {
+  const on = e.target.checked;
+  try {
+    renderPlainTCP(await api('PUT', 'api/plain-tcp', { on }));
+    toast(on ? 'Plain TCP is on' : 'Plain TCP is off');
+  } catch (ex) {
+    e.target.checked = !on;
+    throw ex;
+  }
+}));
+
 // ---- help ----
 
 let helpLoaded = false;
@@ -5078,6 +5103,12 @@ $('#audit-filter').addEventListener('input', () => {
 });
 $('#audit-filter').addEventListener('submit', (e) => e.preventDefault());
 $('#audit-more').addEventListener('click', guard(() => loadAudit(true)));
+$('#audit-clear').addEventListener('click', guard(async () => {
+  if (!confirm('Clear the audit log?\n\nEvery entry is deleted for good. Download a CSV first if you need them. The clearing itself is recorded as the first entry of the new log, and webhooks with Admin changes ticked hear about it.')) return;
+  const r = await api('DELETE', 'api/audit');
+  toast(`Audit log cleared (${r.removed} entries)`);
+  await loadAudit();
+}));
 
 // ---------- webhooks ----------
 
