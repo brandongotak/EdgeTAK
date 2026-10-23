@@ -10,6 +10,14 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.22.1 (2026-10-23)
+
+No changes to EdgeTAK since v0.21.2. v0.22.0 was never released: its
+Docker image (`ghcr.io/brandongotak/edgetak:v0.22.0`, briefly also
+`latest`) was built from a release-signing change that has been taken back
+out. This release makes `latest` match a published release again; Docker
+servers that pulled the v0.22.0 image should pull `latest` (or `v0.22.1`).
+
 ## v0.21.2 (2026-10-23)
 
 ### Fixed
