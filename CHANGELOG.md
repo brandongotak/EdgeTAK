@@ -10,6 +10,37 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.0.0 (2026-10-23)
+
+EdgeTAK 1.0: a complete TAK server in one small program, for a Raspberry Pi
+in the field or a server on the internet. The same code as v1.0.0-rc.2,
+which passed the device checklist on real ATAK, iTAK and WinTAK devices.
+
+**What 1.0 means:** upgrades keep users, groups, passwords, certificates,
+data packages, missions and settings, and enrolled devices keep working
+without enrolling again; backups restore into the same or later releases;
+from here on, changes that would break a working setup wait for 2.0 (see
+*Upgrading and compatibility* in the README). Every release is checked
+against an upgrade from the very first one before it is published.
+
+**In 1.0:**
+- **Connecting:** CoT over TLS and TCP (XML and TAK protobuf), certificate
+  enrollment, quick connect with Let's Encrypt, ATAK Channels.
+- **People:** users and groups with directions, device profiles,
+  self-registration, events with expiring accounts, disabling users, LDAP /
+  Active Directory, two-factor login, login protection, an audit log.
+- **Data and maps:** data packages, Data Sync missions, a live map with
+  drawings, overlays, map sources, offline maps, weather and terrain,
+  position history with replay and export, an ATAK update server with
+  plugins from tak.gov, video with MediaMTX and recording.
+- **Messages and alerts:** sends now or on a schedule, direct messages, a
+  chat log, emergency, lost contact and geofence alerts, webhooks to
+  Discord, Slack, Teams, ntfy or any URL.
+- **Running it:** federation with TAK Servers, OpenTAKServer and other
+  EdgeTAKs; health, certificate status, data retention, backup and restore,
+  updates from the console (pre-releases optional), and a load-test
+  simulator.
+
 ## v1.0.0-rc.2 (2026-10-23)
 
 The second release candidate for EdgeTAK 1.0, replacing rc.1: everything in
