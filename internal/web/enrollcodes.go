@@ -360,7 +360,7 @@ func (s *Server) qrPackage(w http.ResponseWriter, r *http.Request) {
 	if code != nil && code.App == "itak" {
 		data, serial, err = s.buildITAKPackage(firstNonEmpty(host, s.Cfg.PublicHost), u.Username, "QR code")
 	} else {
-		data, serial, err = s.buildCertPackage(firstNonEmpty(host, s.Cfg.PublicHost), u.Username)
+		data, serial, err = s.buildCertPackage(firstNonEmpty(host, s.Cfg.PublicHost), u.Username, "qr-package")
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

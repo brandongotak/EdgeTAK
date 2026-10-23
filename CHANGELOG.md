@@ -25,11 +25,26 @@ opening router ports:
 - Join and leave networks by ID, see each network's state (including
   "waiting for authorization", with the node ID to authorize in ZeroTier
   Central) and the server's ZeroTier addresses.
-- **Open console** at a ZeroTier address, so packages and QR codes point
-  devices there; **Restart EdgeTAK** adds a new address to the server
+- **Use for devices** points the Connect page's packages and QR codes at a
+  ZeroTier address (or **open console** there); **Restart EdgeTAK** adds a new address to the server
   certificate.
 
 Servers get the install helper when they update to this version.
+
+**Connection packages include the user's certificate.** An ATAK, WinTAK or
+TAKX package downloaded for a user (Connect page with a user picked, the
+account page, after signing up) now carries a client certificate for them,
+like the iTAK package and the QR code's package, so the app connects without
+asking for a password or enrolling. Each package gets its own
+certificate, listed on the Certificates tab. A package made without a user
+still enrolls, asking for a username and password.
+
+## v1.6.0-rc.2 (2026-10-23)
+
+The second release candidate for v1.6.0: rc.1 plus connection packages with
+the user's certificate and **Use for devices** on the ZeroTier card. See
+v1.6.0 above. A pre-release: servers only get it with **Include
+pre-releases** ticked.
 
 ## v1.6.0-rc.1 (2026-10-23)
 

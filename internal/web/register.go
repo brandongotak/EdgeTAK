@@ -216,8 +216,13 @@ func (s *Server) ownPackage(w http.ResponseWriter, r *http.Request, id *identity
 	case "itak":
 		data, _, err = s.buildITAKPackage(host, id.Username, id.Username)
 	default:
+		// With a certificate for them: the app connects without asking for
+		// their password.
 		mode = "ssl"
-		data, err = s.buildConnectionPackage("ssl", host, id.Username)
+		var serial string
+		if data, serial, err = s.buildCertPackage(host, id.Username, "account-package"); err == nil {
+			s.Log.Info("issued connection package", "user", id.Username, "serial", serial)
+		}
 	}
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())

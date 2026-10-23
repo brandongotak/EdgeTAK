@@ -275,11 +275,14 @@ There are two ways to connect, depending on the server:
     you make it; nothing changes until it is scanned). Users can do the same
     from their account page. Not for an event's shared account.
 - **Connection package** (any server): on the **Connect** page (Server
-  section), download a package and import it on the device. For ATAK, WinTAK
-  and TAKX, choose *SSL with certificate enrollment*; the client then asks
-  for the password. For iTAK, choose *iTAK*. That package includes a client
-  certificate for one user, so treat it like a password and make a new one
-  per device.
+  section), download a package and import it on the device. With a user
+  picked, it includes a client certificate for them (ATAK, WinTAK, TAKX and
+  iTAK alike), so the app connects without asking for a password, over any
+  of the server's addresses: treat it like a password, make a new one per
+  device, and revoke one on the **Certificates** tab. Without a user, the
+  ATAK/WinTAK/TAKX package enrolls instead: the app asks for a username and
+  password. Users' own packages (account page, after signing up) include
+  their certificate too.
 
 | Client | Quick connect | Package to import |
 |---|---|---|
@@ -892,9 +895,10 @@ network.
    EdgeTAK to it.
 2. **Join** your network by its 16-character ID, then authorize this
    server's node in ZeroTier Central (the card shows the node ID).
-3. The card lists the server's ZeroTier address. **Open console** opens the
-   console there, so packages and QR codes made in it point devices at that
-   address. EdgeTAK adds a new address to its certificate when it starts;
+3. The card lists the server's ZeroTier address. **Use for devices** makes
+   the Connect page's packages and QR codes point devices at it; **open
+   console** opens the console there instead (this computer must be on the
+   network). EdgeTAK adds a new address to its certificate when it starts;
    the card offers **Restart EdgeTAK** until it has.
 
 Managing the network itself (its members, rules) stays in ZeroTier Central

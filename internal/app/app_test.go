@@ -602,13 +602,18 @@ func TestEndToEnd(t *testing.T) {
 		}
 		var ts []byte
 		for name, data := range files {
-			if strings.HasSuffix(name, ".p12") {
+			if strings.HasPrefix(name, "certs/truststore") {
 				ts = data
 			}
 		}
 		certs, err := pkcs12.DecodeTrustStore(ts, a.Cfg.TruststorePassword)
 		if err != nil || len(certs) != 1 || !certs[0].Equal(a.CA.Cert) {
 			t.Errorf("truststore: %v %d", err, len(certs))
+		}
+		// For a user it carries their certificate instead of enrolling.
+		if _, leaf, _, err := pkcs12.DecodeChain(files["certs/dave.p12"], a.Cfg.TruststorePassword); err != nil || leaf.Subject.CommonName != "dave" ||
+			bytes.Contains(files["certs/server.pref"], []byte("enrollForCertificateWithTrust")) {
+			t.Errorf("user package: client certificate %v; pref:\n%s", err, files["certs/server.pref"])
 		}
 
 		// iTAK: flat zip with config.pref, a client .p12 and the truststore.

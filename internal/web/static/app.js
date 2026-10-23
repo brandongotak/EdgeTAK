@@ -3678,9 +3678,12 @@ function connectModeChanged() {
   sel.required = mode === 'itak';
   sel.options[0].textContent = mode === 'itak' ? 'Choose a user' : mode === 'tcp' ? 'Not used for TCP' : 'No username: they type it in the app';
   $('#connect-user-hint').textContent = mode === 'itak' ? 'The package includes a new certificate for this user, for one device.'
-    : mode === 'tcp' ? 'TCP connections are anonymous.' : 'The package fills in the username; they still enter their password when the app enrolls.';
+    : mode === 'tcp' ? 'TCP connections are anonymous.'
+    : $('#connect-user').value ? 'The package includes a new certificate for this user, so the app connects without asking for a password. Make one per device; revoke it on the Certificates tab.'
+    : 'Without a user, the app asks for a username and password when it enrolls.';
 }
 $('#connect-mode').addEventListener('change', connectModeChanged);
+$('#connect-user').addEventListener('change', connectModeChanged);
 
 let connectPick = null;
 let qrPick = null;
@@ -3780,7 +3783,7 @@ function renderZeroTier(v) {
       return `<tr>
         <td><strong>${esc(nw.name || '(unnamed)')}</strong><div class="muted mono">${esc(nw.id)}</div></td>
         <td>${ztStatus[nw.status] || esc(nw.status)}${nw.status === 'ACCESS_DENIED' ? `<div class="muted">Authorize node <span class="mono">${esc(n.address)}</span> in ZeroTier Central (my.zerotier.com)</div>` : ''}</td>
-        <td>${ips.map((ip) => `<div class="mono">${esc(ip)} <a href="${esc(consoleAt(ip))}" title="Open the console at this address: packages and QR codes made there point devices at it">open console</a></div>`).join('') || '<span class="muted">none yet</span>'}</td>
+        <td>${ips.map((ip) => `<div class="mono">${esc(ip)} <button type="button" class="small" data-zt-use="${esc(ip)}" title="Packages and QR codes on the Connect page point devices at this address">Use for devices</button> <a href="${esc(consoleAt(ip))}" title="Open the console at this address (this computer must be on the network)">open console</a></div>`).join('') || '<span class="muted">none yet</span>'}</td>
         <td class="actions"><button class="small danger" data-zt-leave="${esc(nw.id)}">Leave</button></td></tr>`;
     }).join('') || emptyRow(4, 'Not on any network yet');
     box.innerHTML = `
@@ -3796,7 +3799,7 @@ function renderZeroTier(v) {
       </table></div>
       ${(v.cert_missing || []).length ? `<p class="muted">EdgeTAK's certificate doesn't cover ${v.cert_missing.map(esc).join(', ')} yet; devices connecting there need it. EdgeTAK adds this machine's addresses when it starts.
         <button type="button" class="small" id="zt-restart">Restart EdgeTAK</button></p>` : ''}
-      <p class="muted">Devices on the network connect to this server's ZeroTier address. Open the console at that address (<em>open console</em>) to make connection packages and QR codes that point at it.</p>`;
+      <p class="muted">Devices on the network connect to this server's ZeroTier address. <em>Use for devices</em> makes the Connect page's packages and QR codes point at it (or open the console there, if this computer is on the network).</p>`;
   }
   // Keep watching while something is changing.
   clearTimeout(ztTimer);
@@ -3817,6 +3820,10 @@ $('#zt-body').addEventListener('click', guard(async (e) => {
   } else if (e.target.dataset.ztLeave) {
     if (!confirm(`Leave ZeroTier network ${e.target.dataset.ztLeave}? Devices that reach this server through it lose their connection.`)) return;
     renderZeroTier(await api('DELETE', `api/zerotier/networks/${e.target.dataset.ztLeave}`));
+  } else if (e.target.dataset.ztUse) {
+    $('#connect-host').value = e.target.dataset.ztUse;
+    toast(`Packages and QR codes on the Connect page now point devices at ${e.target.dataset.ztUse}`);
+    selectTab('connect');
   } else if (e.target.id === 'zt-restart') {
     if (!confirm('Restart EdgeTAK? Devices reconnect by themselves within a few seconds.')) return;
     await api('POST', 'api/server/restart');

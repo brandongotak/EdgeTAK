@@ -218,7 +218,7 @@
   <p>Updates live. <em>Devices</em> shows what each code set up: <em>online</em> with the callsign, <em>offline</em>, <em>revoked</em>, or <em>never connected</em>. If a phone that was already connected to this server as someone else scanned the code, restart ATAK. <strong>Revoke</strong> stops a code; <strong>Disconnect</strong> also cuts off the devices it set up.</p>
   <h3>Other ways</h3>
   <ul>
-    <li><strong>Connection package</strong> (any app): download it here and import it on the device. For ATAK, WinTAK and TAKX choose <em>SSL with certificate enrollment</em> (the app asks for the password); for iTAK choose <em>iTAK</em>.</li>
+    <li><strong>Connection package</strong> (any app): download it here and import it on the device. With a user picked it includes a certificate for them, so the app connects without a login (one per device; revoke it on Certificates). Without a user, ATAK, WinTAK and TAKX ask for a username and password and enroll. For iTAK choose <em>iTAK</em>.</li>
     <li><strong>Typing the address</strong> (servers with Let's Encrypt): add the server in the app, turn on <em>Use authentication</em> and <em>Enroll for client certificate</em>, and enter the username and password.</li>
     <li><strong>The sign-in page for users</strong> (link at the bottom) lets people get their own QR code and packages.</li>
   </ul>
@@ -250,7 +250,7 @@
     <li><strong>Lost contact alerts:</strong> an amber alert with the last position when a device stops reporting (not when someone signs off on purpose). Untick to turn off.</li>
     <li><strong>Geofences:</strong> draw an area or circle and get an alert when devices enter or leave it.</li>
     <li><strong>Plain TCP:</strong> turn port 8087 (unencrypted, anonymous devices that only see <code>__ANON__</code>) on or off without a restart. Turning it off closes the port and disconnects those devices. If the server has a firewall, open 8087 there too (<code>sudo ufw allow 8087/tcp</code>).</li>
-    <li><strong>ZeroTier:</strong> put the server on a ZeroTier network so devices anywhere reach it without opening router ports. <em>Install ZeroTier</em>, join your network by its ID, then authorize this server's node in ZeroTier Central. Open the console at the server's ZeroTier address to make packages and QR codes that point there.</li>
+    <li><strong>ZeroTier:</strong> put the server on a ZeroTier network so devices anywhere reach it without opening router ports. <em>Install ZeroTier</em>, join your network by its ID, then authorize this server's node in ZeroTier Central. <em>Use for devices</em> next to its ZeroTier address makes the Connect page's packages and QR codes point there.</li>
     <li><strong>Login protection:</strong> blocks an address after too many wrong passwords. Add your own networks to <em>Never block</em>, and unblock people here.</li>
     <li><strong>Data retention:</strong> how long to keep packages, missions, messages, the chat log and the audit log. It shows what would be removed before you save.</li>
     <li><strong>Backup and restore:</strong> download a backup (or schedule them) and restore one onto this or a new server.</li>

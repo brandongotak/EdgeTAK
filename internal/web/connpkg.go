@@ -16,9 +16,11 @@ import (
 )
 
 // connectionPackage builds an ATAK/WinTAK data package that adds this server
-// as a streaming connection. In "ssl" mode it carries the CA truststore and
-// enables certificate enrollment, so the client only has to enter its
-// password; in "tcp" mode it configures the plaintext port.
+// as a streaming connection. In "ssl" mode it carries the CA truststore and,
+// for a chosen user, a client certificate (so the app connects without a
+// login); without a user it enables certificate enrollment, so the app asks
+// for a username and password. In "tcp" mode it configures the plaintext
+// port.
 func (s *Server) connectionPackage(w http.ResponseWriter, r *http.Request, id *identity) {
 	q := r.URL.Query()
 	mode := firstNonEmpty(q.Get("mode"), "ssl")
@@ -30,10 +32,22 @@ func (s *Server) connectionPackage(w http.ResponseWriter, r *http.Request, id *i
 	}
 	var data []byte
 	var err error
-	switch mode {
-	case "ssl", "tcp":
-		data, err = s.buildConnectionPackage(mode, host, username)
-	case "itak":
+	switch {
+	case mode == "ssl" && username != "":
+		// For a user: with a certificate for them, so the app connects
+		// without enrolling or asking for a password.
+		u, ok := s.Store.User(username)
+		if !ok || u.Disabled {
+			jsonError(w, http.StatusBadRequest, "no such active user: "+username)
+			return
+		}
+		var serial string
+		if data, serial, err = s.buildCertPackage(host, u.Username, "connection-package"); err == nil {
+			s.Log.Info("issued connection package", "admin", id.Username, "user", u.Username, "serial", serial)
+		}
+	case mode == "ssl" || mode == "tcp":
+		data, err = s.buildConnectionPackage(mode, host, "")
+	case mode == "itak":
 		if _, ok := s.Store.User(username); !ok {
 			jsonError(w, http.StatusBadRequest, "iTAK packages contain a client certificate: choose an existing username")
 			return
@@ -295,7 +309,7 @@ var certManifestTmpl = template.Must(template.New("certmanifest").Parse(`<Missio
 // no enrollment (and no password). The connection's own truststore is set,
 // not the device's default one, so other servers on the device are left
 // alone.
-func (s *Server) buildCertPackage(host, username string) (data []byte, serial string, err error) {
+func (s *Server) buildCertPackage(host, username, clientUID string) (data []byte, serial string, err error) {
 	if s.Addrs["tls"] == "" {
 		return nil, "", fmt.Errorf("the TLS streaming listener is disabled")
 	}
@@ -303,7 +317,7 @@ func (s *Server) buildCertPackage(host, username string) (data []byte, serial st
 	if err != nil {
 		return nil, "", err
 	}
-	clientP12, serial, err := s.packageCert(username, "qr-package")
+	clientP12, serial, err := s.packageCert(username, clientUID)
 	if err != nil {
 		return nil, "", err
 	}
