@@ -840,29 +840,6 @@ authentication. These clients are anonymous and only see `__ANON__`.
 
 ## Upgrade, back up, uninstall
 
-### Signed releases
-
-From v0.22.0, every release's `SHA256SUMS` is signed with the EdgeTAK
-release key, which is kept offline (never on GitHub), and the signature is
-published beside it as `SHA256SUMS.sig`. The console's **Update** checks
-that signature with the EdgeTAK already installed before it trusts the
-checksums, then checks the installer against them; a release that is
-unsigned, altered or signed with another key is not installed. So someone
-who took over the GitHub account or the build couldn't push an update to
-your server.
-
-To check a download by hand, with any EdgeTAK v0.22.0 or later:
-
-```
-edgetak verify-release SHA256SUMS SHA256SUMS.sig
-sha256sum -c --ignore-missing SHA256SUMS
-```
-
-The release key is `55c8667e`; its public key is
-`v+MkD6SE2SRz621Gav3m5TD7LL6Ub95ZbefV4EWrrok=`. A first install
-(`install.sh`, the Docker image) trusts GitHub's HTTPS as before; the
-container image isn't signed yet.
-
 - **Upgrade from the console:** the **EdgeTAK updates** card on the Dashboard
   checks GitHub for new releases and shows the release notes. **Update**
   installs one: a small root updater, set up by the installer, downloads that

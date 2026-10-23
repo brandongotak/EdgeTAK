@@ -56,10 +56,7 @@ jobs:
           VERSION: ${{ github.ref_name }}
         run: |
           cd dist
-          # A draft: the maintainer signs SHA256SUMS offline, uploads
-          # SHA256SUMS.sig and publishes it. Servers only see published
-          # releases, so they never see an unsigned one.
-          gh release create "$VERSION" --draft --title "EdgeTAK $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
+          gh release create "$VERSION" --title "EdgeTAK $VERSION" --notes-file "$RUNNER_TEMP/notes.md" \
             edgetak-installer.sh "edgetak-$VERSION-rpi-installer.sh" install.sh SHA256SUMS \
             $(cat binaries.txt)
 
