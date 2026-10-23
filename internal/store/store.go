@@ -234,8 +234,10 @@ type db struct {
 	EnrollCodes []EnrollCode `json:"enroll_codes,omitempty"`
 
 	// PlainTCPOff turns off the plain TCP streaming port (8087), which is
-	// on by default.
+	// on by default; PlainTCPOn turns it on where the configuration has no
+	// tcp_addr (installed with --no-plaintext).
 	PlainTCPOff bool `json:"plain_tcp_off,omitempty"`
+	PlainTCPOn  bool `json:"plain_tcp_on,omitempty"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -2598,15 +2600,23 @@ func (s *Store) DeleteFederate(id string) error {
 
 // ---- plain TCP ----
 
-func (s *Store) PlainTCPOff() bool {
+// PlainTCP is what an admin chose for the plain TCP port: on, off, or
+// (neither) whatever the configuration says.
+func (s *Store) PlainTCP() (on, off bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.db.PlainTCPOff
+	return s.db.PlainTCPOn, s.db.PlainTCPOff
 }
 
-func (s *Store) SetPlainTCPOff(off bool) error {
+// PlainTCPOff reports whether an admin turned plain TCP off.
+func (s *Store) PlainTCPOff() bool {
+	_, off := s.PlainTCP()
+	return off
+}
+
+func (s *Store) SetPlainTCP(on bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.db.PlainTCPOff = off
+	s.db.PlainTCPOn, s.db.PlainTCPOff = on, !on
 	return s.save()
 }

@@ -76,8 +76,11 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request, _ *identity) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	listeners := maps.Clone(s.Addrs)
-	if s.PlainTCP != nil && !s.PlainTCP.On() {
-		delete(listeners, "tcp") // turned off on the Settings page
+	if s.PlainTCP != nil {
+		listeners["tcp"] = s.PlainTCP.Addr()
+		if !s.PlainTCP.On() {
+			delete(listeners, "tcp") // turned off on the Settings page
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"server_name": s.Cfg.ServerName, "version": s.Version, "public_host": s.Cfg.PublicHost,

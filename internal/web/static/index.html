@@ -352,7 +352,7 @@
       </dialog>
       <div class="card" id="tcp-card">
         <div class="card-head"><h2>Plain TCP</h2><span id="tcp-state"></span></div>
-        <p class="muted">Lets TAK apps connect on port <span id="tcp-port">8087</span> without encryption or a login. They are anonymous and only see the <code>__ANON__</code> group. Useful on a closed local network for apps without a certificate; turn it off on servers others can reach. Turning it off closes the port and disconnects the devices connected that way.</p>
+        <p class="muted">Lets TAK apps connect on port <span id="tcp-port">8087</span> without encryption or a login. They are anonymous and only see the <code>__ANON__</code> group. Useful on a closed local network for apps without a certificate; turn it off on servers others can reach. Turning it off closes the port and disconnects the devices connected that way. If the server has a firewall, the port must be open there too (for example <code>sudo ufw allow 8087/tcp</code>); servers installed with <code>--no-plaintext</code> start with it off and closed in the firewall.</p>
         <label class="check"><input type="checkbox" id="tcp-on"> Allow plain TCP connections</label>
       </div>
       <div class="card" id="guard-card">

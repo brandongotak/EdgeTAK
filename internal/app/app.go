@@ -241,12 +241,25 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		web  bool
 		tls  bool
 	}
+	// Plain TCP is on as configured unless an admin turned it off, or, where
+	// the configuration has none (--no-plaintext), on if an admin turned it
+	// on (Settings → Plain TCP).
+	tcpAddr, tcpListen := a.Cfg.TCPAddr, ""
+	tcpOn, tcpOff := a.Store.PlainTCP()
+	if tcpAddr == "" {
+		tcpAddr = config.Default().TCPAddr
+		if tcpOn {
+			tcpListen = tcpAddr
+		}
+	} else if !tcpOff {
+		tcpListen = tcpAddr
+	}
 	specs := []struct {
 		name, addr string
 		tls        *tls.Config
 		web        bool
 	}{
-		{"tcp", a.Cfg.TCPAddr, nil, false},
+		{"tcp", tcpListen, nil, false},
 		{"tls", a.Cfg.TLSAddr, streamTLS, false},
 		{"https", a.Cfg.HTTPSAddr, httpsTLS, true},
 		{"enroll", a.Cfg.EnrollAddr, httpsTLS, true},
@@ -279,6 +292,10 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 			ln = tls.NewListener(ln, sp.tls)
 		}
 		binds = append(binds, bound{sp.name, ln, sp.web, sp.tls != nil})
+	}
+	if tcpListen == "" {
+		a.Addrs["tcp"] = tcpAddr // where it listens once turned on
+		a.Log.Info("plain TCP is off (Settings → Plain TCP)", "addr", tcpAddr)
 	}
 	var acmeLn net.Listener
 	if h := a.Public.ChallengeHandler(port(a.Addrs["enroll"])); h != nil {
@@ -360,30 +377,25 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	}
 	errLog := slog.NewLogLogger(a.Log.Handler(), slog.LevelDebug)
 	var servers []*http.Server
+	// Plain TCP can be turned on and off from the console.
+	tcp := &plainTCP{parent: ctx, addr: a.Addrs["tcp"],
+		listen: func(addr string) (net.Listener, error) { return a.Listen("tcp", addr) },
+		serve: func(ctx context.Context, ln net.Listener) {
+			if err := st.Serve(ctx, ln, "tcp"); err != nil {
+				a.Log.Error("stream listener stopped", "listener", "tcp", "err", err)
+			}
+		},
+		dropClients: func() {
+			for _, c := range a.Router.Clients() {
+				if c.Transport == "tcp" {
+					c.Close()
+				}
+			}
+		}}
+	ws.PlainTCP = tcp
 	for _, b := range binds {
 		if b.name == "tcp" {
-			// Plain TCP can be turned on and off from the console.
-			tcp := &plainTCP{parent: ctx, addr: a.Addrs["tcp"],
-				listen: func(addr string) (net.Listener, error) { return a.Listen("tcp", addr) },
-				serve: func(ctx context.Context, ln net.Listener) {
-					if err := st.Serve(ctx, ln, "tcp"); err != nil {
-						a.Log.Error("stream listener stopped", "listener", "tcp", "err", err)
-					}
-				},
-				dropClients: func() {
-					for _, c := range a.Router.Clients() {
-						if c.Transport == "tcp" {
-							c.Close()
-						}
-					}
-				}}
-			if a.Store.PlainTCPOff() {
-				b.ln.Close()
-				a.Log.Info("plain TCP is turned off (Settings)", "addr", a.Addrs["tcp"])
-			} else {
-				tcp.start(b.ln)
-			}
-			ws.PlainTCP = tcp
+			tcp.start(b.ln)
 			continue
 		}
 		wg.Add(1)

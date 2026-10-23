@@ -7,12 +7,21 @@ import (
 
 // Plain TCP (Settings → Plain TCP): the unencrypted, anonymous streaming
 // port (8087), for local networks. Admins can turn it off and on without
-// a restart; the choice is kept.
+// a restart, also on servers installed without it (--no-plaintext); the
+// choice is kept.
 
 func (s *Server) plainTCPOn() bool { return s.PlainTCP != nil && s.PlainTCP.On() }
 
+// tcpAddr is the plain TCP port's address.
+func (s *Server) tcpAddr() string {
+	if s.PlainTCP != nil {
+		return s.PlainTCP.Addr()
+	}
+	return s.Addrs["tcp"]
+}
+
 func (s *Server) plainTCPView() map[string]any {
-	return map[string]any{"configured": s.PlainTCP != nil, "on": s.plainTCPOn(), "port": port(s.Addrs["tcp"])}
+	return map[string]any{"configured": s.PlainTCP != nil, "on": s.plainTCPOn(), "port": port(s.tcpAddr())}
 }
 
 func (s *Server) plainTCPRoutes(mux *http.ServeMux) {
@@ -35,11 +44,11 @@ func (s *Server) plainTCPRoutes(mux *http.ServeMux) {
 			jsonError(w, http.StatusInternalServerError, "could not open the port: "+err.Error())
 			return
 		}
-		if err := s.Store.SetPlainTCPOff(!req.On); err != nil {
+		if err := s.Store.SetPlainTCP(req.On); err != nil {
 			jsonError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		s.Log.Warn("plain TCP turned "+map[bool]string{true: "on", false: "off"}[req.On], "admin", id.Username, "addr", s.Addrs["tcp"])
+		s.Log.Warn("plain TCP turned "+map[bool]string{true: "on", false: "off"}[req.On], "admin", id.Username, "addr", s.tcpAddr())
 		writeJSON(w, http.StatusOK, s.plainTCPView())
 	}))
 }

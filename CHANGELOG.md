@@ -10,6 +10,15 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.4.1 (2026-10-23)
+
+**Fix: plain TCP couldn't be turned on** on servers installed with
+`--no-plaintext` (as the Let's Encrypt setup suggests): the Settings switch
+was greyed out, because those servers have no TCP address in their
+configuration. It now turns on there too, on the usual port 8087, and the
+choice is kept. Those installs left 8087 closed in the firewall, so open it
+there as well (for example `sudo ufw allow 8087/tcp`); the card says so.
+
 ## v1.4.0 (2026-10-23)
 
 **Turn plain TCP on and off from the console.** A **Plain TCP** card on the

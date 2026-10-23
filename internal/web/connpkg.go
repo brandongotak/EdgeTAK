@@ -110,7 +110,7 @@ func (s *Server) buildConnectionPackage(mode, host, username string) ([]byte, er
 	if !ssl && s.PlainTCP != nil && !s.PlainTCP.On() {
 		return nil, fmt.Errorf("plain TCP is turned off (Settings → Plain TCP)")
 	}
-	addr := s.Addrs["tcp"]
+	addr := s.tcpAddr()
 	if ssl {
 		addr = s.Addrs["tls"]
 	}

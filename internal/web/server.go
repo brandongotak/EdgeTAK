@@ -51,6 +51,7 @@ type Server struct {
 	PlainTCP interface {
 		On() bool
 		Set(on bool) error
+		Addr() string
 	}
 	// FederationDial reaches other servers for federation setup (tests).
 	FederationDial func(addr string) (net.Conn, error)

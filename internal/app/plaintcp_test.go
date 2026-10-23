@@ -1,6 +1,10 @@
 package app
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/brandongotak/EdgeTAK/internal/config"
+)
 
 // TestPlainTCPToggle covers turning the plain TCP port off and on from the
 // console: off closes the port and drops its devices, and the choice is
@@ -48,5 +52,33 @@ func TestPlainTCPToggle(t *testing.T) {
 	waitFor(t, "a TCP device again", func() bool { return tcpClients() == 1 })
 	if a.Store.PlainTCPOff() {
 		t.Error("the setting wasn't kept")
+	}
+}
+
+// TestPlainTCPWithoutConfig covers a server installed with --no-plaintext:
+// plain TCP starts off, and turning it on opens the usual port.
+func TestPlainTCPWithoutConfig(t *testing.T) {
+	a := startAppWith(t, func(c *config.Config) { c.TCPAddr = "" })
+	call, _ := adminJSON(t, a)
+	if code, v := call("GET", "/admin/api/plain-tcp", nil); code != 200 || v["on"] != false {
+		t.Fatalf("status = %d %v", code, v)
+	}
+	if _, st := call("GET", "/admin/api/status", nil); st["listeners"].(map[string]any)["tcp"] != nil {
+		t.Errorf("status lists tcp while off: %v", st["listeners"])
+	}
+	code, v := call("PUT", "/admin/api/plain-tcp", map[string]bool{"on": true})
+	if code != 200 || v["on"] != true || v["port"] == "" {
+		t.Fatalf("turn on = %d %v", code, v)
+	}
+	if on, _ := a.Store.PlainTCP(); !on {
+		t.Error("the setting wasn't kept")
+	}
+	conn, err := mem.Dial("127.0.0.1:" + v["port"].(string))
+	if err != nil {
+		t.Fatalf("plain TCP after turning it on: %v", err)
+	}
+	conn.Close()
+	if _, st := call("GET", "/admin/api/status", nil); st["listeners"].(map[string]any)["tcp"] == nil {
+		t.Errorf("status doesn't list tcp while on: %v", st["listeners"])
 	}
 }

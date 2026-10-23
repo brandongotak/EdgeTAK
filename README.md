@@ -290,7 +290,9 @@ fresh SSL package.
 authentication. These clients are anonymous and only see `__ANON__`. Turn
 the port off or on under **Settings → Plain TCP**, without a restart: off
 closes it and disconnects those devices, and the choice is kept. A server
-installed with `--no-plaintext` has it off in its configuration instead.
+installed with `--no-plaintext` starts with it off; turning it on there opens
+8087, which then also has to be opened in the firewall (for example `sudo ufw
+allow 8087/tcp`), since that install left it closed.
 
 ## First steps in the admin console
 

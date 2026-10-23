@@ -7,8 +7,7 @@ import (
 )
 
 // plainTCP opens and closes the plain TCP streaming port while EdgeTAK
-// runs (Settings → Plain TCP). It always listens on the address bound at
-// startup, so Addrs["tcp"] stays right.
+// runs (Settings → Plain TCP), always on the same address.
 type plainTCP struct {
 	mu     sync.Mutex
 	parent context.Context
@@ -23,8 +22,15 @@ type plainTCP struct {
 // start serves ln (already bound) until the port is turned off.
 func (p *plainTCP) start(ln net.Listener) {
 	ctx, cancel := context.WithCancel(p.parent)
-	p.cancel = cancel
+	p.cancel, p.addr = cancel, ln.Addr().String()
 	go p.serve(ctx, ln)
+}
+
+// Addr is where it listens (or will, once turned on).
+func (p *plainTCP) Addr() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.addr
 }
 
 func (p *plainTCP) On() bool {
