@@ -117,6 +117,10 @@ func TestEnrollmentForms(t *testing.T) {
 	if ct, m := enrollAs("iTAK%20App%20Store/651 CFNetwork/3896.100.1.2.1 Darwin/27.0.0"); ct != "application/json" || m["ca1"] == "" || m["ca1"] != m["ca0"] {
 		t.Errorf("iTAK */* enrollment: %q %v", ct, m)
 	}
+	// TROP sends no User-Agent and needs ca1 too.
+	if ct, m := enrollAs(""); ct != "application/json" || m["ca1"] == "" || m["ca1"] != m["ca0"] {
+		t.Errorf("TROP enrollment: %q %v", ct, m)
+	}
 	if _, m := enrollAs("TAK/5.5 (Android)"); m["ca0"] == "" || m["ca1"] != "" {
 		t.Errorf("non-iTAK enrollment changed: %v", m)
 	}

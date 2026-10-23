@@ -143,7 +143,9 @@ func (s *Server) signClient(w http.ResponseWriter, r *http.Request, id *identity
 	}
 	signed, ca := pki.PEMBody(cert), pki.PEMBody(s.CA.Cert)
 	accept := strings.ToLower(r.Header.Get("Accept"))
-	iTAK := strings.Contains(r.UserAgent(), "iTAK")
+	// TROP (an iOS TAK client) sends no User-Agent and, like iTAK, drops
+	// the reply without ca1: it enrolls over and over and never connects.
+	iTAK := strings.Contains(r.UserAgent(), "iTAK") || r.UserAgent() == ""
 	switch {
 	case iTAK || strings.Contains(accept, "text/plain") && !strings.Contains(accept, "application/json"):
 		// iTAK quietly drops the reply unless it has the CA as both ca0 and

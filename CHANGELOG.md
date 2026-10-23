@@ -10,6 +10,21 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.4.2 (2026-10-23)
+
+**Fix: TROP couldn't enroll.** TROP (an iOS TAK client) got its certificate,
+then dropped the reply and enrolled again, over and over, without ever
+connecting. Like iTAK, it needs the CA in the reply twice (`ca0` and `ca1`, as
+OpenTAKServer sends it); EdgeTAK did that only for clients calling
+themselves iTAK. Clients that send no User-Agent, as TROP does, now get it
+too. ATAK, WinTAK and TAKX keep the official reply.
+
+## v1.4.2-rc.1 (2026-10-23)
+
+A release candidate for v1.4.2, to check the TROP enrollment fix on a real
+device (see v1.4.2 above). It is a pre-release: servers only get it with
+**Include pre-releases** ticked on the update card.
+
 ## v1.4.1 (2026-10-23)
 
 **Fix: plain TCP couldn't be turned on** on servers installed with
