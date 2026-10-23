@@ -229,6 +229,8 @@ type db struct {
 	LoginProtection LoginProtection `json:"login_protection"`
 
 	SelfUpdate SelfUpdateSettings `json:"self_update"`
+
+	EnrollCodes []EnrollCode `json:"enroll_codes,omitempty"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -2013,6 +2015,65 @@ func (s *Store) DeleteDrawing(id string) (Drawing, error) {
 	}
 	delete(s.db.Drawings, id)
 	return cloneDrawing(d), s.save()
+}
+
+// ---- enrollment codes ----
+
+// EnrollCode stands in for a user's password in an ATAK quick-connect QR
+// code: it enrolls a device as Username until Expires and does nothing
+// else. OneDevice codes stop working shortly after their first use.
+type EnrollCode struct {
+	ID        string    `json:"id"`
+	Username  string    `json:"username"`
+	Hash      string    `json:"hash"` // sha256 of the code; the code itself isn't kept
+	Expires   time.Time `json:"expires"`
+	OneDevice bool      `json:"one_device,omitempty"`
+	Used      time.Time `json:"used,omitzero"`
+	Created   time.Time `json:"created"`
+	CreatedBy string    `json:"created_by"`
+}
+
+func (s *Store) EnrollCodes() []EnrollCode {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return slices.Clone(s.db.EnrollCodes)
+}
+
+// AddEnrollCode saves a code, dropping ones that ended over a week ago.
+func (s *Store) AddEnrollCode(c EnrollCode, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.EnrollCodes = slices.DeleteFunc(s.db.EnrollCodes, func(o EnrollCode) bool { return now.Sub(o.Expires) > 7*24*time.Hour })
+	s.db.EnrollCodes = append(s.db.EnrollCodes, c)
+	return s.save()
+}
+
+// UseEnrollCode marks a code used (the first time only).
+func (s *Store) UseEnrollCode(id string, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.EnrollCodes {
+		if s.db.EnrollCodes[i].ID == id {
+			if s.db.EnrollCodes[i].Used.IsZero() {
+				s.db.EnrollCodes[i].Used = at
+				return s.save()
+			}
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
+func (s *Store) DeleteEnrollCode(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.EnrollCodes {
+		if s.db.EnrollCodes[i].ID == id {
+			s.db.EnrollCodes = slices.Delete(s.db.EnrollCodes, i, i+1)
+			return s.save()
+		}
+	}
+	return ErrNotFound
 }
 
 // ---- EdgeTAK updates ----

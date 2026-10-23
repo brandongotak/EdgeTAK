@@ -158,6 +158,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.auditRoutes(mux)
 	s.scheduleRoutes(mux)
 	s.loginGuardRoutes(mux)
+	s.enrollCodeRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)

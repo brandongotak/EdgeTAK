@@ -1943,6 +1943,7 @@ async function loadUsers() {
       <button class="small" data-act="admin" data-user="${esc(u.username)}" data-admin="${u.admin}">${u.admin ? 'Revoke admin' : 'Make admin'}</button>
       ${u.username === $('#me').textContent ? '' : `<button class="small${u.disabled ? ' primary' : ''}" data-act="disable" data-user="${esc(u.username)}" data-disabled="${!!u.disabled}" title="${u.disabled ? 'Let this user sign in and connect again' : 'Block sign-in, certificates and connections, keeping the account'}">${u.disabled ? 'Enable' : 'Disable'}</button>`}
       ${u.two_factor && u.username !== $('#me').textContent ? `<button class="small" data-act="reset2fa" data-user="${esc(u.username)}" title="For a lost phone">Reset 2FA</button>` : ''}
+      ${u.disabled ? '' : `<button class="small" data-act="qr" data-user="${esc(u.username)}" title="ATAK quick-connect QR code for this user">QR</button>`}
       <button class="small" data-act="package" data-user="${esc(u.username)}" title="Connection data package for this user">Package</button>
       <button class="small" data-act="p12" data-user="${esc(u.username)}">Issue .p12</button>
       <button class="small danger" data-act="delete" data-user="${esc(u.username)}">Delete</button>
@@ -2034,6 +2035,11 @@ $('#users-table').addEventListener('click', guard(async (e) => {
   switch (b.dataset.act) {
     case 'groups':
       openGroupsDialog(user);
+      return;
+    case 'qr':
+      qrPick = user;
+      selectTab('connect');
+      setTimeout(() => $('#qr-form').scrollIntoView({ block: 'center' }), 300);
       return;
     case 'package':
       connectPick = user; // preselected when the Connect tab loads
@@ -3672,6 +3678,7 @@ function connectModeChanged() {
 $('#connect-mode').addEventListener('change', connectModeChanged);
 
 let connectPick = null;
+let qrPick = null;
 
 async function loadConnect() {
   if (!$('#connect-host').value && status) $('#connect-host').value = status.public_host || location.hostname;
@@ -3685,6 +3692,14 @@ async function loadConnect() {
   }
   sel.value = users.some((u) => u.username === keep) ? keep : '';
   connectModeChanged();
+  // Quick-connect QR: active users only.
+  const qsel = $('#qr-user');
+  const qkeep = qrPick ?? qsel.value;
+  qrPick = null;
+  qsel.length = 1;
+  for (const u of users.filter((x) => !x.disabled)) qsel.add(new Option(u.username, u.username));
+  qsel.value = users.some((u) => u.username === qkeep) ? qkeep : '';
+  renderQRCodes(await api('GET', 'api/enroll-codes'));
   const url = status?.signin_url || location.origin + '/';
   $('#account-url').textContent = url;
   $('#account-url').href = url;
@@ -3696,20 +3711,41 @@ $('#connect-form').addEventListener('submit', guard(async (e) => {
   await download('GET', `api/connection-package?${q}`, undefined, 'edgetak.zip');
 }));
 
-$('#qr-form').addEventListener('submit', (e) => {
+function renderQRCodes(list) {
+  const state = { active: '<span class="pill ok">active</span>', used: '<span class="pill">used</span>', expired: '<span class="pill">expired</span>' };
+  $('#qr-codes tbody').innerHTML = list.map((c) => `<tr${c.state === 'active' ? '' : ' class="dim"'}>
+    <td><strong>${esc(c.username)}</strong></td>
+    <td><div>${state[c.state] || esc(c.state)} <span class="muted">${c.one_device ? 'one device' : 'any number of devices'}${c.used ? ' · first used ' + esc(ago(c.used)) : ''}${c.state === 'active' ? ' · until ' + esc(date(c.expires)) : ''}</span></div></td>
+    <td>${esc(ago(c.created))}<div class="muted">${esc(c.created_by)}</div></td>
+    <td class="actions"><button class="small${c.state === 'active' ? ' danger' : ''}" data-qr-del="${esc(c.id)}">${c.state === 'active' ? 'Revoke' : 'Remove'}</button></td></tr>`).join('')
+    || emptyRow(4, 'None yet');
+}
+
+$('#qr-form').addEventListener('submit', guard(async (e) => {
   e.preventDefault();
-  const f = new FormData(e.target);
+  const f = e.target;
   const host = $('#connect-host').value || status?.public_host || location.hostname;
-  const uri = `tak://com.atakmap.app/enroll?host=${encodeURIComponent(host)}&username=${encodeURIComponent(f.get('username'))}&token=${encodeURIComponent(f.get('password'))}`;
+  const r = await api('POST', 'api/enroll-codes', { username: f.username.value, hours: Number(f.hours.value), one_device: f.one.checked, host });
   const box = $('#qr');
   box.innerHTML = '';
   if (window.QRCode) {
-    new QRCode(box, { text: uri, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+    new QRCode(box, { text: r.link, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
   } else {
     toast('QR library unavailable offline; use the link below', true);
   }
-  $('#qr-uri').textContent = uri;
-});
+  $('#qr-info').textContent = `For ${r.username}: works until ${date(r.expires)}${r.one_device ? ', for one device' : ''}. Treat it like a password until then.`;
+  $('#qr-uri').textContent = r.link;
+  renderQRCodes(r.codes);
+}));
+
+$('#qr-codes').addEventListener('click', guard(async (e) => {
+  const id = e.target.dataset.qrDel;
+  if (!id) return;
+  renderQRCodes(await api('DELETE', `api/enroll-codes/${encodeURIComponent(id)}`));
+  $('#qr').innerHTML = '';
+  $('#qr-info').textContent = '';
+  $('#qr-uri').textContent = '';
+}));
 
 // On phones tables are shown as cards; label every cell with its column
 // header so the CSS can show it.

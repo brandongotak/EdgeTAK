@@ -10,6 +10,22 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.1.0 (2026-10-23)
+
+**Quick-connect QR codes without the password.** The Connect page's
+quick-connect QR code no longer asks for a username and password: pick a
+user (or click **QR** next to them on the Users page) and the code is ready
+to scan in ATAK. It holds a one-time enrollment code rather than the
+password, so the admin never needs to know it:
+
+- The code only enrolls a device; it doesn't sign in to the console, the
+  account page or any other API.
+- Choose how long it works (1 hour to 30 days, 24 hours by default) and
+  whether it's for one device only (it then stops 10 minutes after its
+  first use).
+- Codes are listed under the QR code with their status and can be revoked.
+  Making, revoking and using a code is recorded in the audit log.
+
 ## v1.0.0 (2026-10-23)
 
 EdgeTAK 1.0: a complete TAK server in one small program, for a Raspberry Pi

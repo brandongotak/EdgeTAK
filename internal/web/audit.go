@@ -28,6 +28,7 @@ var auditActions = map[string]string{
 	"DELETE /admin/api/backups/{name}":                   "Deleted backup",
 	"DELETE /admin/api/chat":                             "Cleared the chat log",
 	"DELETE /admin/api/drawings/{id}":                    "Deleted drawing",
+	"DELETE /admin/api/enroll-codes/{id}":                "Revoked a quick-connect QR code",
 	"DELETE /admin/api/events/{id}":                      "Deleted event record",
 	"DELETE /admin/api/federation/federates/{id}":        "Removed federation link",
 	"DELETE /admin/api/federation/pending/{fp}":          "Rejected federation request",
@@ -68,6 +69,7 @@ var auditActions = map[string]string{
 	"POST /admin/api/drawings":                           "Added drawing",
 	"POST /admin/api/emergencies/{id}/ack":               "Acknowledged alert",
 	"POST /admin/api/emergencies/{id}/dismiss":           "Dismissed alert",
+	"POST /admin/api/enroll-codes":                       "Made a quick-connect QR code",
 	"POST /admin/api/events":                             "Created event",
 	"POST /admin/api/events/{id}/end":                    "Ended event",
 	"POST /admin/api/federation/federates":               "Added federation link",
@@ -249,6 +251,12 @@ func (s *Server) auditTarget(r *http.Request, body []byte) string {
 			for _, e := range s.Store.Emergencies() {
 				if e.ID == id {
 					return e.Type + ": " + e.Callsign
+				}
+			}
+		case strings.Contains(path, "/enroll-codes/"):
+			for _, c := range s.Store.EnrollCodes() {
+				if c.ID == id {
+					return c.Username
 				}
 			}
 		case strings.Contains(path, "/schedules/"):

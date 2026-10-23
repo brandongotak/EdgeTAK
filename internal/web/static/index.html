@@ -1132,14 +1132,23 @@
         </div>
         <div class="card">
           <h2>Quick-connect QR</h2>
-          <p class="muted">For ATAK 5.x: <em>Settings → Network → Servers → Quick connect</em>. The QR code holds the password, so treat it like the password.</p>
+          <p class="muted">Pick a user: the QR code connects ATAK 5.x as them (<em>Settings → Network → Servers → Quick connect</em>, or the phone's camera). It holds a one-time enrollment code, not their password: the code only enrolls a device, stops working when it expires (or soon after its first use, for one device), and can be revoked below.</p>
           <form id="qr-form" class="stack">
-            <label>Username <input name="username" required></label>
-            <label>Password <input name="password" type="password" required></label>
-            <button type="submit">Show QR</button>
+            <label>User <select name="username" id="qr-user" required><option value="">Choose a user</option></select></label>
+            <div class="inline-form">
+              <label>Works for <select name="hours"><option value="1">1 hour</option><option value="24" selected>24 hours</option><option value="168">7 days</option><option value="720">30 days</option></select></label>
+              <label class="check"><input type="checkbox" name="one" checked> One device only</label>
+            </div>
+            <button type="submit" class="primary">Make QR code</button>
           </form>
           <div id="qr" class="qr"></div>
+          <p class="muted" id="qr-info"></p>
           <code id="qr-uri" class="uri"></code>
+          <h3>Quick-connect codes</h3>
+          <div class="table-wrap"><table id="qr-codes">
+            <thead><tr><th>User</th><th>Status</th><th>Made</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table></div>
         </div>
       </div>
       <div class="card">

@@ -232,6 +232,14 @@ There are two ways to connect, depending on the server:
   with the server's address, turn on **Use authentication** and **Enroll for
   client certificate**, then enter a username and password. This works in
   ATAK, WinTAK, TAKX and iTAK.
+- **Quick-connect QR code** (ATAK, servers with Let's Encrypt): on the
+  **Connect** page, or with **QR** next to a user on the **Users** page,
+  pick a user and scan the code in ATAK (*Settings → Network → Servers →
+  Quick connect*). You don't need their password: the code holds a one-time
+  enrollment code that only enrolls a device, works for 1 hour to 30 days,
+  and with **One device only** stops 10 minutes after its first use. Codes
+  are listed under the QR code, where you can revoke them, and are recorded
+  in the audit log.
 - **Connection package** (any server): on the **Connect** page (Server
   section), download a package and import it on the device. For ATAK, WinTAK
   and TAKX, choose *SSL with certificate enrollment*; the client then asks

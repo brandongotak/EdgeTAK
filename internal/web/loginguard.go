@@ -102,6 +102,13 @@ func (s *Server) blockedUntil(ip string, now time.Time) time.Time {
 // while the address is blocked (errBlocked), and failures counted towards
 // a block.
 func (s *Server) passwordSignIn(r *http.Request, name, password string) (*store.User, error) {
+	// An enrollment code from a quick-connect QR stands in for the password
+	// while a device enrolls.
+	if !s.passwordBlocked(clientIP(r)) {
+		if u, ok := s.checkEnrollCode(r, name, password); ok {
+			return u, nil
+		}
+	}
 	return s.passwordSignInFrom(clientIP(r), name, password)
 }
 

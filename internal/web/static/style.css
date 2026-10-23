@@ -174,7 +174,7 @@ td.actions > * + * { margin-left: 6px; }
 td.wrap-actions { white-space: normal; min-width: 220px; max-width: 300px; }
 td.wrap-actions > * { margin: 2px 0 2px 4px; }
 .empty td { color: var(--muted); text-align: center; padding: 20px; }
-.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); margin-right: 4px; }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); margin-right: 4px; white-space: nowrap; }
 .pill.ok { color: var(--accent); border-color: currentColor; }
 .pill.bad { color: var(--danger); border-color: currentColor; }
 .pill.warn { color: var(--warn); border-color: currentColor; }
