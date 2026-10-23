@@ -340,6 +340,9 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request, id *identity
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if hash != "" {
+		s.forgetInitialPassword(name)
+	}
 	if req.Disabled != nil {
 		if u.Disabled {
 			s.cutOff(name)

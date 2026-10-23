@@ -102,14 +102,18 @@ func (s *Server) blockedUntil(ip string, now time.Time) time.Time {
 // while the address is blocked (errBlocked), and failures counted towards
 // a block.
 func (s *Server) passwordSignIn(r *http.Request, name, password string) (*store.User, error) {
-	ip := clientIP(r)
-	set := s.Store.LoginProtection().WithDefaults()
-	if !set.Off && !s.blockedUntil(ip, time.Now()).IsZero() {
+	return s.passwordSignInFrom(clientIP(r), name, password)
+}
+
+// passwordSignInFrom is passwordSignIn for an address known otherwise (the
+// video server passes on its clients' addresses).
+func (s *Server) passwordSignInFrom(ip, name, password string) (*store.User, error) {
+	if s.passwordBlocked(ip) {
 		return nil, errBlocked
 	}
 	u, ok := s.authenticate(name, password)
 	if !ok {
-		s.signInFailed(r, name)
+		s.signInFailedFrom(ip, name)
 		return nil, errBadPassword
 	}
 	s.guard.mu.Lock()
@@ -118,11 +122,20 @@ func (s *Server) passwordSignIn(r *http.Request, name, password string) (*store.
 	return u, nil
 }
 
+// passwordBlocked reports whether password sign-ins from ip are refused now.
+func (s *Server) passwordBlocked(ip string) bool {
+	return !s.Store.LoginProtection().Off && !s.blockedUntil(ip, time.Now()).IsZero()
+}
+
 // signInFailed counts a failed sign-in (a wrong password or second factor)
 // and blocks the address when it has failed too often.
-func (s *Server) signInFailed(r *http.Request, name string) {
+func (s *Server) signInFailed(r *http.Request, name string) { s.signInFailedFrom(clientIP(r), name) }
+
+func (s *Server) signInFailedFrom(ip, name string) {
+	if ip == "" {
+		return // no address to hold it against
+	}
 	set := s.Store.LoginProtection().WithDefaults()
-	ip := clientIP(r)
 	if set.Off || isLoopbackIP(ip) || addrIn(ip, set.Allow) {
 		return
 	}

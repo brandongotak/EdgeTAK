@@ -870,6 +870,14 @@ $('#clients-table').addEventListener('click', guard(async (e) => {
 }));
 
 // ---------- map ----------
+
+// Leaflet's layer switcher shows layer names as HTML. Ours come from data
+// packages, missions and map files that other people name, so show them as
+// text (the layers keep their names; only the label is escaped).
+if (window.L?.Control?.Layers) {
+  const addItem = L.Control.Layers.prototype._addItem;
+  L.Control.Layers.prototype._addItem = function (obj) { return addItem.call(this, { ...obj, name: esc(obj.name) }); };
+}
 //
 // One map beside every tab (full screen on narrow screens), with base maps
 // and overlays like ATAK's map sources. Admins can add their own sources,

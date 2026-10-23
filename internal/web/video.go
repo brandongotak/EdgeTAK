@@ -695,7 +695,7 @@ func (s *Server) authorizeMedia(req mediamtxAuth) (bool, string) {
 	}
 	switch req.Action {
 	case "publish":
-		u, ok := s.checkVideoPassword(req.User, req.Password)
+		u, ok := s.checkVideoPassword(req.IP, req.User, req.Password)
 		if !ok {
 			return false, "invalid username or password"
 		}
@@ -724,7 +724,7 @@ func (s *Server) authorizeMedia(req mediamtxAuth) (bool, string) {
 			id = &identity{Username: "anonymous", Groups: anon, OutGroups: anon, Anonymous: true}
 		} else if u, ok := s.Store.User(req.User); ok && subtle.ConstantTimeCompare([]byte(req.Password), []byte(s.readToken(u.Username))) == 1 {
 			id = s.fromUser(u)
-		} else if u, ok := s.checkVideoPassword(req.User, req.Password); ok {
+		} else if u, ok := s.checkVideoPassword(req.IP, req.User, req.Password); ok {
 			id = s.fromUser(u)
 		} else {
 			return false, "invalid credentials"
@@ -773,7 +773,10 @@ func (s *Server) anonPublish(req mediamtxAuth) (bool, string) {
 
 // checkVideoPassword verifies a password, caching successes briefly since
 // some clients reconnect often and bcrypt is deliberately slow.
-func (s *Server) checkVideoPassword(user, pass string) (*store.User, bool) {
+func (s *Server) checkVideoPassword(ip, user, pass string) (*store.User, bool) {
+	if s.passwordBlocked(ip) {
+		return nil, false // login protection: this address failed too often
+	}
 	sum := sha256.Sum256([]byte(user + "\x00" + pass))
 	key := hex.EncodeToString(sum[:])
 	s.video.mu.Lock()
@@ -784,8 +787,8 @@ func (s *Server) checkVideoPassword(user, pass string) (*store.User, bool) {
 			return u, true
 		}
 	}
-	u, ok := s.authenticate(user, pass)
-	if !ok {
+	u, err := s.passwordSignInFrom(ip, user, pass)
+	if err != nil {
 		return nil, false
 	}
 	s.video.mu.Lock()

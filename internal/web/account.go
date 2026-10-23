@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -63,6 +65,17 @@ func (s *Server) accountRoutes(mux *http.ServeMux) {
 		s.ownPackage(w, r, s.fromUser(u))
 	}))
 	mux.HandleFunc("POST /account/api/certs/{serial}/revoke", s.accountAuth(s.accountRevoke))
+}
+
+// forgetInitialPassword deletes the first-run password file once the admin
+// account's password has been changed: it no longer works, and shouldn't
+// sit on disk.
+func (s *Server) forgetInitialPassword(username string) {
+	if username == "admin" && s.DataDir != "" {
+		if os.Remove(filepath.Join(s.DataDir, "initial-admin-password.txt")) == nil {
+			s.Log.Info("removed initial-admin-password.txt: the admin password was changed")
+		}
+	}
 }
 
 // accountAuth requires an account session. State-changing requests also need
@@ -239,6 +252,7 @@ func (s *Server) accountPassword(w http.ResponseWriter, r *http.Request, u *stor
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.forgetInitialPassword(u.Username)
 	// Sign out everywhere else: other account and admin console sessions.
 	s.account.mu.Lock()
 	for k, v := range s.account.sessions {

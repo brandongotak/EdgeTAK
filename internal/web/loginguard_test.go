@@ -1,12 +1,14 @@
 package web
 
 import (
+	"crypto/tls"
 	"errors"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -93,6 +95,17 @@ func TestLoginProtection(t *testing.T) {
 	if u := s.blockedUntil("203.0.113.9", time.Now().Add(31*time.Minute)); !u.IsZero() {
 		t.Errorf("still blocked after 31 minutes: %v", u)
 	}
+	// Video sign-ins (RTSP/RTMP/SRT, via MediaMTX) count and are refused too.
+	s.video.authCache = map[string]time.Time{}
+	for range 3 {
+		s.checkVideoPassword("192.0.2.80", "alice", "wrong")
+	}
+	if _, ok := s.checkVideoPassword("192.0.2.80", "alice", "right-password-1"); ok {
+		t.Error("a blocked address signed in to video")
+	}
+	if _, ok := s.checkVideoPassword("192.0.2.81", "alice", "right-password-1"); !ok {
+		t.Error("video sign-in from another address failed")
+	}
 	// Turned off: nothing is counted.
 	s.Store.SetLoginProtection(store.LoginProtection{Off: true, MaxFailures: 1})
 	try("192.0.2.1", "wrong")
@@ -112,5 +125,49 @@ func TestDenyList(t *testing.T) {
 	}
 	if _, err := cleanAddresses([]string{"10.0.0.0/8", " 192.168.1.5 ", "nonsense"}); err == nil || !strings.Contains(err.Error(), "nonsense") {
 		t.Errorf("bad entry accepted: %v", err)
+	}
+}
+
+// TestPasswordsNeedTLS: a username and password sent over the plain HTTP
+// port from another machine are ignored; over TLS, or from this machine,
+// they work.
+func TestPasswordsNeedTLS(t *testing.T) {
+	s := guardServer(t)
+	r := reqFrom("203.0.113.5")
+	r.SetBasicAuth("alice", "right-password-1")
+	if id := s.identify(r); id != nil {
+		t.Errorf("plain HTTP from another machine signed in as %s", id.Username)
+	}
+	r.TLS = &tls.ConnectionState{}
+	if id := s.identify(r); id == nil || id.Username != "alice" {
+		t.Errorf("over TLS = %+v", id)
+	}
+	r = reqFrom("127.0.0.1")
+	r.SetBasicAuth("alice", "right-password-1")
+	if id := s.identify(r); id == nil {
+		t.Error("from this machine over plain HTTP was refused")
+	}
+}
+
+func TestSecurityHeadersAndInitialPassword(t *testing.T) {
+	s := guardServer(t)
+	s.DataDir = t.TempDir()
+	h := s.Handler(true)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	for k, want := range map[string]string{"X-Frame-Options": "DENY", "Content-Security-Policy": "frame-ancestors 'none'", "Referrer-Policy": "same-origin"} {
+		if got := rec.Header().Get(k); got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
+	}
+	p := filepath.Join(s.DataDir, "initial-admin-password.txt")
+	os.WriteFile(p, []byte("username: admin\npassword: x\n"), 0o600)
+	s.forgetInitialPassword("alice")
+	if _, err := os.Stat(p); err != nil {
+		t.Fatal("removed for another user's password change")
+	}
+	s.forgetInitialPassword("admin")
+	if _, err := os.Stat(p); err == nil {
+		t.Error("initial-admin-password.txt kept after the admin password changed")
 	}
 }

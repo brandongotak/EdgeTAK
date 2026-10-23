@@ -127,6 +127,10 @@ func (s *Server) oauthToken(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusBadRequest, "invalid_request", "malformed request")
 		return
 	}
+	if r.TLS == nil && !isLoopback(r.RemoteAddr) {
+		oauthError(w, http.StatusBadRequest, "invalid_request", "sign in over HTTPS")
+		return
+	}
 	if r.Form.Get("grant_type") != "password" {
 		oauthError(w, http.StatusBadRequest, "unsupported_grant_type", "use grant_type=password")
 		return

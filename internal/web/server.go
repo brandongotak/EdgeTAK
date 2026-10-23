@@ -180,6 +180,11 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 		defer func() { s.logRequest(r, rec, time.Since(start)) }()
 
 		rec.Header().Set("X-Content-Type-Options", "nosniff")
+		// No other site may frame these pages (clickjacking), or learn console
+		// addresses from links followed out of it.
+		rec.Header().Set("X-Frame-Options", "DENY")
+		rec.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+		rec.Header().Set("Referrer-Policy", "same-origin")
 		if s.AddressRefused(r.RemoteAddr) {
 			http.Error(rec, "refused", http.StatusForbidden)
 			return
@@ -305,7 +310,9 @@ func (s *Server) identify(r *http.Request) *identity {
 	if id := s.bearerIdentity(r); id != nil {
 		return id
 	}
-	if name, pw, ok := r.BasicAuth(); ok {
+	// Passwords are only accepted over TLS (or from this machine): on the
+	// plain HTTP port they would cross the network in the clear.
+	if name, pw, ok := r.BasicAuth(); ok && (r.TLS != nil || isLoopback(r.RemoteAddr)) {
 		u, err := s.passwordSignIn(r, name, pw)
 		if err != nil {
 			return nil

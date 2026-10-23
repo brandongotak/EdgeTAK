@@ -10,6 +10,32 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.21.1 (2026-10-22)
+
+Security fixes from a review of the whole codebase.
+
+### Security
+- **Console map**: a data package's file name, a mission's name or an
+  offline map's name could carry HTML that ran in an administrator's
+  browser when its layer appeared in the map's layer menu (Leaflet shows
+  layer names as HTML). Any device user could name a data package. Layer
+  names are now shown as text.
+- **Video sign-in**: passwords tried on the video ports (RTSP, RTMP, SRT)
+  are now covered by login protection, which they bypassed.
+- **Passwords over plain HTTP**: usernames and passwords sent to the plain
+  HTTP port from another machine (device API basic auth, ATAK's OAuth
+  sign-in) are refused; they would cross the network unencrypted. TLS
+  ports, and requests from the server itself, are unchanged.
+- **Clickjacking**: pages can no longer be shown inside another site's
+  frame (`X-Frame-Options: DENY`, `frame-ancestors 'none'`), and console
+  addresses aren't sent to other sites (`Referrer-Policy: same-origin`).
+- **First-run password**: `initial-admin-password.txt` is deleted once the
+  admin password is changed.
+- **Dependencies**: built with Go 1.26.10 and gRPC 1.84.0, fixing known
+  vulnerabilities in the Go standard library (HTTP, TLS, X.509, XML,
+  templates) and in gRPC (including an authorization bypass affecting the
+  federation listener).
+
 ## v0.21.0 (2026-10-22)
 
 ### Added
