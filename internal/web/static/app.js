@@ -3726,15 +3726,21 @@ $('#qr-form').addEventListener('submit', guard(async (e) => {
   const f = e.target;
   const host = $('#connect-host').value || status?.public_host || location.hostname;
   const r = await api('POST', 'api/enroll-codes', { username: f.username.value, hours: Number(f.hours.value), one_device: f.one.checked, host });
+  // Without Let's Encrypt, ATAK doesn't trust this server yet: the QR code
+  // imports a connection package with a certificate instead of enrolling.
+  const link = r.local && r.package_link ? r.package_link : r.link;
   const box = $('#qr');
   box.innerHTML = '';
   if (window.QRCode) {
-    new QRCode(box, { text: r.link, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+    new QRCode(box, { text: link, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
   } else {
     toast('QR library unavailable offline; use the link below', true);
   }
-  $('#qr-info').textContent = `For ${r.username}: works until ${date(r.expires)}${r.one_device ? ', for one device' : ''}. Treat it like a password until then.`;
-  $('#qr-uri').textContent = r.link;
+  let how = 'ATAK enrolls and connects.';
+  if (r.local && r.package_link) how = 'ATAK imports a connection package with a certificate for them and connects.';
+  else if (r.local) how = 'Plain HTTP (port 8080) is off, so this only works on a phone that already trusts this server (one that imported a connection package from it).';
+  $('#qr-info').textContent = `For ${r.username}: works until ${date(r.expires)}${r.one_device ? ', for one device' : ''}. ${how} Treat it like a password until then.`;
+  $('#qr-uri').textContent = link;
   renderQRCodes(r.codes);
 }));
 

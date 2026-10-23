@@ -232,14 +232,24 @@ There are two ways to connect, depending on the server:
   with the server's address, turn on **Use authentication** and **Enroll for
   client certificate**, then enter a username and password. This works in
   ATAK, WinTAK, TAKX and iTAK.
-- **Quick-connect QR code** (ATAK, servers with Let's Encrypt): on the
-  **Connect** page, or with **QR** next to a user on the **Users** page,
-  pick a user and scan the code in ATAK (*Settings → Network → Servers →
-  Quick connect*). You don't need their password: the code holds a one-time
-  enrollment code that only enrolls a device, works for 1 hour to 30 days,
+- **QR code** (ATAK, any server): on the **Connect** page, or with **QR**
+  next to a user on the **Users** page, pick a user and scan the code with
+  the phone's camera. You don't need their password: the code holds a
+  one-time code that only sets up a device, works for 1 hour to 30 days,
   and with **One device only** stops 10 minutes after its first use. Codes
   are listed under the QR code, where you can revoke them, and are recorded
   in the audit log.
+  - With Let's Encrypt, it's an ATAK quick-connect code: ATAK enrolls with
+    the one-time code and connects.
+  - Without it (a local server), ATAK can't trust the server's certificate
+    yet, so the QR code makes ATAK download a connection package from the
+    plain HTTP port (8080). The package holds the EdgeTAK CA and a client
+    certificate issued for the user at download, and ATAK connects with it
+    without enrolling. The certificate is listed on the **Certificates**
+    tab, where it can be revoked. The package crosses the network
+    unencrypted, so use these codes on networks you trust; with plain HTTP
+    turned off, the QR code only works on phones that already imported a
+    connection package from the server.
 - **Connection package** (any server): on the **Connect** page (Server
   section), download a package and import it on the device. For ATAK, WinTAK
   and TAKX, choose *SSL with certificate enrollment*; the client then asks

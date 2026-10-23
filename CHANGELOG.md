@@ -10,6 +10,34 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.2.0 (2026-10-23)
+
+**QR codes for local servers.** The user QR code from v1.1.0 now works on
+servers without Let's Encrypt too. ATAK's quick connect only enrolls with a
+server whose certificate it already trusts, so on those servers the QR code
+instead makes ATAK download a connection package (over the plain HTTP port,
+8080) holding the EdgeTAK CA and a client certificate issued for the user.
+ATAK imports it and connects: one scan, no typing.
+
+- The Connect page picks the right kind of QR code by itself.
+- The package only sets the trust for its own connection, so other servers
+  on the phone are left alone.
+- Each download's certificate is listed on the Certificates tab (where it
+  can be revoked) and recorded in the audit log.
+- The same rules as before apply to the code: expiry, one device only, and
+  revoking.
+- With plain HTTP turned off, the QR code only works on phones that already
+  imported a connection package from the server.
+
+## v1.2.0-rc.1 (2026-10-23)
+
+A release candidate for v1.2.0, for testing QR codes on a local server
+(without Let's Encrypt) on a real phone: the user QR code makes ATAK import
+a connection package with a client certificate for the user, so it connects
+with one scan and no typing. See v1.2.0 above for the details. It is a
+pre-release: servers only get it with **Include pre-releases** ticked on the
+update card, and the Docker `latest` tag doesn't move.
+
 ## v1.1.0 (2026-10-23)
 
 **Quick-connect QR codes without the password.** The Connect page's

@@ -2020,8 +2020,9 @@ func (s *Store) DeleteDrawing(id string) (Drawing, error) {
 // ---- enrollment codes ----
 
 // EnrollCode stands in for a user's password in an ATAK quick-connect QR
-// code: it enrolls a device as Username until Expires and does nothing
-// else. OneDevice codes stop working shortly after their first use.
+// code: it enrolls a device as Username, or downloads a connection package
+// with a certificate for them, until Expires, and does nothing else.
+// OneDevice codes stop working shortly after their first use.
 type EnrollCode struct {
 	ID        string    `json:"id"`
 	Username  string    `json:"username"`
@@ -2031,6 +2032,7 @@ type EnrollCode struct {
 	Used      time.Time `json:"used,omitzero"`
 	Created   time.Time `json:"created"`
 	CreatedBy string    `json:"created_by"`
+	Host      string    `json:"host,omitempty"` // the server address in the QR code
 }
 
 func (s *Store) EnrollCodes() []EnrollCode {

@@ -196,11 +196,7 @@ func (s *Server) buildITAKPackage(host, username, admin string) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	cert, key, err := s.CA.NewClient(username)
-	if err != nil {
-		return nil, err
-	}
-	clientP12, err := s.CA.ClientP12(cert, key, s.Cfg.TruststorePassword)
+	clientP12, serial, err := s.packageCert(username, "itak-package")
 	if err != nil {
 		return nil, err
 	}
@@ -208,11 +204,7 @@ func (s *Server) buildITAKPackage(host, username, admin string) ([]byte, error) 
 	if err != nil {
 		return nil, err
 	}
-	if err := s.Store.AddCert(store.Cert{Serial: pki.SerialHex(cert), CommonName: username, ClientUID: "itak-package",
-		Issued: time.Now().UTC(), Expires: cert.NotAfter.UTC()}); err != nil {
-		return nil, err
-	}
-	s.Log.Info("issued iTAK connection package", "admin", admin, "user", username, "serial", pki.SerialHex(cert))
+	s.Log.Info("issued iTAK connection package", "admin", admin, "user", username, "serial", serial)
 
 	clientFile := sanitize(username) + ".p12"
 	var pref bytes.Buffer
@@ -240,6 +232,117 @@ func (s *Server) buildITAKPackage(host, username, admin string) ([]byte, error) 
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// packageCert issues a client certificate for a connection package and
+// records it like any other (revocable from the Certificates tab).
+func (s *Server) packageCert(username, clientUID string) (p12 []byte, serial string, err error) {
+	cert, key, err := s.CA.NewClient(username)
+	if err != nil {
+		return nil, "", err
+	}
+	if p12, err = s.CA.ClientP12(cert, key, s.Cfg.TruststorePassword); err != nil {
+		return nil, "", err
+	}
+	serial = pki.SerialHex(cert)
+	if err := s.Store.AddCert(store.Cert{Serial: serial, CommonName: username, ClientUID: clientUID,
+		Issued: time.Now().UTC(), Expires: cert.NotAfter.UTC()}); err != nil {
+		return nil, "", err
+	}
+	return p12, serial, nil
+}
+
+var certPrefTmpl = template.Must(template.New("certpref").Parse(`<?xml version='1.0' encoding='ASCII' standalone='yes'?>
+<preferences>
+  <preference version="1" name="cot_streams">
+    <entry key="count" class="class java.lang.Integer">1</entry>
+    <entry key="description0" class="class java.lang.String">{{.Name}}</entry>
+    <entry key="enabled0" class="class java.lang.Boolean">true</entry>
+    <entry key="connectString0" class="class java.lang.String">{{.Connect}}</entry>
+    <entry key="caLocation0" class="class java.lang.String">cert/{{.Truststore}}</entry>
+    <entry key="caPassword0" class="class java.lang.String">{{.Password}}</entry>
+    <entry key="certificateLocation0" class="class java.lang.String">cert/{{.ClientFile}}</entry>
+    <entry key="clientPassword0" class="class java.lang.String">{{.Password}}</entry>
+  </preference>
+  <preference version="1" name="com.atakmap.app_preferences">
+    <entry key="displayServerConnectionWidget" class="class java.lang.Boolean">true</entry>
+  </preference>
+  <preference version="1" name="com.atakmap.app.civ_preferences">
+    {{.ChannelPrefs}}
+  </preference>
+</preferences>
+`))
+
+var certManifestTmpl = template.Must(template.New("certmanifest").Parse(`<MissionPackageManifest version="2">
+  <Configuration>
+    <Parameter name="uid" value="{{.UID}}"/>
+    <Parameter name="name" value="{{.Name}}"/>
+    <Parameter name="onReceiveDelete" value="true"/>
+  </Configuration>
+  <Contents>
+    <Content ignore="false" zipEntry="certs/server.pref"/>
+    <Content ignore="false" zipEntry="certs/{{.Truststore}}"/>
+    <Content ignore="false" zipEntry="certs/{{.ClientFile}}"/>
+  </Contents>
+</MissionPackageManifest>
+`))
+
+// buildCertPackage builds an ATAK data package that connects to this server
+// as username with a client certificate issued here, so the device needs
+// no enrollment (and no password). The connection's own truststore is set,
+// not the device's default one, so other servers on the device are left
+// alone.
+func (s *Server) buildCertPackage(host, username string) (data []byte, serial string, err error) {
+	if s.Addrs["tls"] == "" {
+		return nil, "", fmt.Errorf("the TLS streaming listener is disabled")
+	}
+	_, port, err := net.SplitHostPort(s.Addrs["tls"])
+	if err != nil {
+		return nil, "", err
+	}
+	clientP12, serial, err := s.packageCert(username, "qr-package")
+	if err != nil {
+		return nil, "", err
+	}
+	trust, err := s.CA.TrustStoreP12(s.Cfg.TruststorePassword)
+	if err != nil {
+		return nil, "", err
+	}
+	vals := map[string]any{
+		"Name":         xmlEscape(s.Cfg.ServerName),
+		"Connect":      xmlEscape(fmt.Sprintf("%s:%s:ssl", host, port)),
+		"Truststore":   "truststore-" + sanitize(s.Cfg.ServerName) + ".p12",
+		"ClientFile":   sanitize(username) + ".p12",
+		"Password":     xmlEscape(s.Cfg.TruststorePassword),
+		"UID":          uuid(),
+		"ChannelPrefs": channelPrefEntries(host),
+	}
+	var manifest, pref bytes.Buffer
+	if err := certManifestTmpl.Execute(&manifest, vals); err != nil {
+		return nil, "", err
+	}
+	if err := certPrefTmpl.Execute(&pref, vals); err != nil {
+		return nil, "", err
+	}
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, f := range []struct {
+		name string
+		data []byte
+	}{{"MANIFEST/manifest.xml", manifest.Bytes()}, {"certs/server.pref", pref.Bytes()},
+		{"certs/" + vals["Truststore"].(string), trust}, {"certs/" + vals["ClientFile"].(string), clientP12}} {
+		w, err := zw.CreateHeader(&zip.FileHeader{Name: f.name, Method: zip.Deflate, Modified: time.Now()})
+		if err != nil {
+			return nil, "", err
+		}
+		if _, err := w.Write(f.data); err != nil {
+			return nil, "", err
+		}
+	}
+	if err := zw.Close(); err != nil {
+		return nil, "", err
+	}
+	return buf.Bytes(), serial, nil
 }
 
 func sanitize(s string) string {
