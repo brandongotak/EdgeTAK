@@ -795,14 +795,20 @@ function renderSelfUpdate() {
   if (!u.available) {
     text = esc(u.reason);
   } else {
-    text = `Running ${esc(u.version)}.` + (u.latest ? ` Latest release: ${esc(u.latest.version)} (${esc(new Date(u.latest.published).toLocaleDateString())}).` : '') +
+    text = `Running ${esc(u.version)}.` + (u.latest ? ` Latest ${u.latest.prerelease ? '<span class="pill warn">pre-release</span>' : 'release'}: ${esc(u.latest.version)} (${esc(new Date(u.latest.published).toLocaleDateString())}).` : '') +
       (u.checked_at ? ` <span class="muted">Checked ${esc(ago(u.checked_at))}.</span>` : '');
     if (running) text += ` <strong>${esc(st?.message || 'Starting the update')}…</strong> EdgeTAK restarts during the update; this page reloads when it is back.`;
-    else if (st?.state === 'error') text += ` <span class="error">Last update failed: ${esc(st.message)}</span>`;
+    else if (st?.state === 'error') {
+      text += ` <span class="error">Last update failed: ${esc(st.message)}</span>`;
+      // Updaters installed before pre-release support only take plain versions.
+      if (st.message === 'invalid version requested' && u.prereleases) text += ' <span class="muted">The updater on this server predates pre-releases: install a pre-release once with the one-line install (<code>sudo EDGETAK_VERSION=&lt;version&gt; sh</code>), and later ones work from here.</span>';
+    }
     else if (st?.state === 'done' && st.at && Date.now() - new Date(st.at) < 86400000) text += ` <span class="pill ok">done</span> ${esc(st.message)}.`;
   }
   $('#update-text').innerHTML = text;
   $('#update-check').hidden = !u.available;
+  $('#update-pre-row').hidden = !u.available;
+  $('#update-pre').checked = !!u.prereleases;
   $('#update-check').disabled = running;
   const b = $('#update-install');
   b.hidden = !u.available || !u.update_available || running;
@@ -815,6 +821,15 @@ function renderSelfUpdate() {
   }
 }
 
+$('#update-pre').addEventListener('change', guard(async (e) => {
+  try {
+    selfUpd = await api('PUT', 'api/server/update/settings', { prereleases: e.target.checked });
+  } finally {
+    renderSelfUpdate();
+  }
+  toast(e.target.checked ? 'Pre-releases are offered as updates' : 'Only releases are offered as updates');
+}));
+
 $('#update-check').addEventListener('click', guard(async () => {
   await api('POST', 'api/server/update/check');
   await loadSelfUpdate();
@@ -823,7 +838,8 @@ $('#update-check').addEventListener('click', guard(async () => {
 
 $('#update-install').addEventListener('click', guard(async () => {
   const v = selfUpd.latest.version;
-  if (!confirm(`Update EdgeTAK ${selfUpd.version} to ${v}?\n\nEdgeTAK restarts: devices reconnect by themselves within a minute, and live video drops briefly. The update downloads ${v} from GitHub, checks it against the release checksums, and reinstalls with this server's settings.`)) return;
+  const pre = selfUpd.latest.prerelease ? `\n\n${v} is a PRE-RELEASE, for testing. It may have problems; keep a backup.` : '';
+  if (!confirm(`Update EdgeTAK ${selfUpd.version} to ${v}?${pre}\n\nEdgeTAK restarts: devices reconnect by themselves within a minute, and live video drops briefly. The update downloads ${v} from GitHub, checks it against the release checksums, and reinstalls with this server's settings.`)) return;
   await api('POST', 'api/server/update', { version: v });
   watchSelfUpdate(selfUpd.version, v);
 }));

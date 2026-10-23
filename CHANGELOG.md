@@ -10,6 +10,36 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v0.23.0 (2026-10-23)
+
+### Added
+- **Include pre-releases** (Dashboard → EdgeTAK updates, off by default):
+  the console offers release candidates for testing (such as
+  v1.0.0-rc.1) as updates too, marked *pre-release*, with a warning before
+  installing one. Leave it off on servers people rely on. A server on a
+  release candidate is offered the release when it is out.
+- **Compatibility promise** (README, *Upgrading and compatibility*): upgrades
+  keep users, groups, passwords, certificates, packages, missions and
+  settings, and enrolled devices keep working without enrolling again;
+  backups restore into the same or later releases; from 1.0, changes that
+  would break a working setup wait for 2.0.
+- **Upgrade tests** in the release workflow: the oldest release, filled with
+  data, upgraded in place, and a backup from the first release with backups
+  restored, checked before every release is published.
+- **Device checklist** (`docs/device-checklist.md`) for real ATAK, iTAK and
+  WinTAK devices before major releases.
+
+### Changed
+- **README** reorganised for new users: install, connecting devices and
+  first steps, then a guide arranged like the console.
+- Release candidates (`-rc.N`) are published as GitHub pre-releases and
+  don't move the Docker `latest` tag.
+
+### Upgrading
+- Updating to v0.23.0 from the console also updates the server's updater,
+  which then accepts pre-release versions; so after this update, turning on
+  **Include pre-releases** is all a test server needs.
+
 ## v1.0.0-rc.1 (2026-10-23)
 
 The first release candidate for EdgeTAK 1.0: the features are complete and

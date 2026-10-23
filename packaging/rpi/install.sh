@@ -287,7 +287,7 @@ fetch() { # url file
 mkdir -p "$STATE"
 [ -f "$REQUEST" ] && [ ! -L "$REQUEST" ] || exit 0
 v=$(head -c 32 "$REQUEST" | tr -d '\r\n ')
-printf '%s' "$v" | grep -Eq '^v[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}$' || fail "invalid version requested"
+printf '%s' "$v" | grep -Eq '^v[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}(-(alpha|beta|rc)(\.[0-9]{1,3})?)?$' || fail "invalid version requested"
 [ "$(printf '%s\n%s\n' "${v#v}" "$MIN" | sort -V | head -n1)" = "$MIN" ] || fail "versions before v$MIN cannot be installed from the console"
 
 tmp=$(mktemp -d)

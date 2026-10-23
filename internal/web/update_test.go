@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
 func TestSelfUpdate(t *testing.T) {
@@ -80,5 +82,22 @@ func TestSelfUpdate(t *testing.T) {
 	s.Version = "v0.3.0-2-gabc123-dirty" // a development build of the latest release
 	if v := s.selfUpdateView(); v["update_available"] != false {
 		t.Fatalf("dev build of the latest = %v", v["update_available"])
+	}
+
+	// A release candidate can only be requested with pre-releases on.
+	st, err := store.Open(filepath.Join(dir, "db.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Store = st
+	if err := s.requestUpdate("v1.0.0-rc.1"); err == nil {
+		t.Error("a release candidate was accepted with pre-releases off")
+	}
+	st.SetSelfUpdate(store.SelfUpdateSettings{PreReleases: true})
+	if err := s.requestUpdate("v1.0.0-rc.1"); err != nil {
+		t.Errorf("release candidate with pre-releases on: %v", err)
+	}
+	if err := s.requestUpdate("v1.0.0-rc.1; rm -rf /"); err == nil {
+		t.Error("a bad version was accepted")
 	}
 }

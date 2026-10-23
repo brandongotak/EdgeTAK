@@ -94,6 +94,7 @@ var auditActions = map[string]string{
 	"POST /admin/api/send/package":                       "Sent a data package to devices",
 	"POST /admin/api/send/reply":                         "Replied as the server contact",
 	"POST /admin/api/server/update":                      "Updated EdgeTAK",
+	"PUT /admin/api/server/update/settings":              "Changed whether pre-releases are offered",
 	"POST /admin/api/sim/start":                          "Started the simulator",
 	"POST /admin/api/sim/stop":                           "Stopped the simulator",
 	"POST /admin/api/takgov/install":                     "Added a plugin from tak.gov",

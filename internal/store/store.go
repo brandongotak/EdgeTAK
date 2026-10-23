@@ -227,6 +227,8 @@ type db struct {
 	Schedules []Schedule `json:"schedules,omitempty"`
 
 	LoginProtection LoginProtection `json:"login_protection"`
+
+	SelfUpdate SelfUpdateSettings `json:"self_update"`
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -2011,6 +2013,27 @@ func (s *Store) DeleteDrawing(id string) (Drawing, error) {
 	}
 	delete(s.db.Drawings, id)
 	return cloneDrawing(d), s.save()
+}
+
+// ---- EdgeTAK updates ----
+
+// SelfUpdateSettings: whether the console offers pre-releases (release
+// candidates) as updates.
+type SelfUpdateSettings struct {
+	PreReleases bool `json:"prereleases,omitempty"`
+}
+
+func (s *Store) SelfUpdate() SelfUpdateSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.SelfUpdate
+}
+
+func (s *Store) SetSelfUpdate(v SelfUpdateSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.SelfUpdate = v
+	return s.save()
 }
 
 // ---- login protection ----

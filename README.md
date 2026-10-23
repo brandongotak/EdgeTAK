@@ -942,6 +942,12 @@ restored into it.
   reruns it with this server's options. EdgeTAK restarts, and the page reloads
   when it is back. Servers installed before v0.2.15 need one manual upgrade
   (below) to get this.
+- **Pre-releases:** release candidates (`v1.0.0-rc.1`) are for testing
+  before a release. They aren't offered as updates unless **Include
+  pre-releases** is ticked on the update card; to install one by hand, run
+  the one-line install with `sudo EDGETAK_VERSION=v1.0.0-rc.1 sh`, or use
+  the image tag of the same name. A server on a release candidate is offered
+  the release when it is out.
 - **By hand:** rerun the one-line install (or a newer installer file). The
   installer remembers the options from the last install in
   `/etc/edgetak/install.conf`, so flags can be left out; flags you give

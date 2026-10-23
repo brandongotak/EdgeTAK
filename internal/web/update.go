@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/brandongotak/EdgeTAK/internal/release"
+	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
 // Updating EdgeTAK from the admin console.
@@ -97,6 +98,9 @@ func (s *Server) selfUpdateView() map[string]any {
 	latest, requested, at, checked := s.selfUpdate.latest, s.selfUpdate.requested, s.selfUpdate.at, s.selfUpdate.checkedAt
 	s.selfUpdate.mu.Unlock()
 	v := map[string]any{"version": s.Version, "available": ok, "reason": why, "latest": latest, "status": readUpdateStatus()}
+	if s.Store != nil {
+		v["prereleases"] = s.Store.SelfUpdate().PreReleases
+	}
 	if !checked.IsZero() {
 		v["checked_at"] = checked
 	}
@@ -120,6 +124,22 @@ func (s *Server) updateRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, s.selfUpdateView())
 	}))
+	// Offer pre-releases (release candidates) as updates, or not.
+	mux.HandleFunc("PUT /admin/api/server/update/settings", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
+		var req store.SelfUpdateSettings
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&req); err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid request")
+			return
+		}
+		if err := s.Store.SetSelfUpdate(req); err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		s.Log.Info("update settings changed", "admin", id.Username, "prereleases", req.PreReleases)
+		// Look again: the newest release offered may have changed.
+		s.checkSelfUpdate(r.Context())
+		writeJSON(w, http.StatusOK, s.selfUpdateView())
+	}))
 	mux.HandleFunc("POST /admin/api/server/update", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
 		var req struct {
 			Version string `json:"version"`
@@ -136,7 +156,11 @@ func (s *Server) updateRoutes(mux *http.ServeMux) {
 
 // checkSelfUpdate looks up the latest EdgeTAK release.
 func (s *Server) checkSelfUpdate(ctx context.Context) error {
-	rel, err := release.Latest(ctx, githubAPI, edgetakRepo)
+	lookup := release.Latest
+	if s.Store != nil && s.Store.SelfUpdate().PreReleases {
+		lookup = release.LatestAny // release candidates too
+	}
+	rel, err := lookup(ctx, githubAPI, edgetakRepo)
 	if err != nil {
 		return err
 	}
@@ -151,7 +175,8 @@ func (s *Server) requestUpdate(version string) error {
 	if ok, why := s.updaterAvailable(); !ok {
 		return errors.New(why)
 	}
-	if !release.VersionRE.MatchString(version) || !strings.HasPrefix(version, "v") {
+	pre := s.Store != nil && s.Store.SelfUpdate().PreReleases
+	if !strings.HasPrefix(version, "v") || !(release.VersionRE.MatchString(version) || pre && release.TagRE.MatchString(version)) {
 		return errors.New("invalid version")
 	}
 	if release.Newer(minUpdateVersion, version) {
