@@ -13,11 +13,19 @@ number.
 ## v1.4.2 (2026-10-23)
 
 **Fix: TROP couldn't enroll.** TROP (an iOS TAK client) got its certificate,
-then dropped the reply and enrolled again, over and over, without ever
-connecting. Like iTAK, it needs the CA in the reply twice (`ca0` and `ca1`, as
-OpenTAKServer sends it); EdgeTAK did that only for clients calling
-themselves iTAK. Clients that send no User-Agent, as TROP does, now get it
-too. ATAK, WinTAK and TAKX keep the official reply.
+then said "check credentials" and never connected. EdgeTAK's enrollment
+reply carries the certificates as base64 broken into 64-character lines,
+which iOS's standard decoder rejects. iOS-style clients (iTAK, and clients
+that send no User-Agent, as TROP does) now get the base64 on one line, and
+the CA twice (`ca0` and `ca1`, as OpenTAKServer sends it). ATAK, WinTAK and
+TAKX keep the reply they had.
+
+## v1.4.2-rc.2 (2026-10-23)
+
+The second release candidate for v1.4.2: rc.1 (which added `ca1` for TROP but
+didn't fix it) plus the certificates on one line for iOS clients. See v1.4.2
+above. A pre-release: servers only get it with **Include pre-releases**
+ticked.
 
 ## v1.4.2-rc.1 (2026-10-23)
 

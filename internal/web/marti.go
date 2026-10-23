@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -143,9 +144,13 @@ func (s *Server) signClient(w http.ResponseWriter, r *http.Request, id *identity
 	}
 	signed, ca := pki.PEMBody(cert), pki.PEMBody(s.CA.Cert)
 	accept := strings.ToLower(r.Header.Get("Accept"))
-	// TROP (an iOS TAK client) sends no User-Agent and, like iTAK, drops
-	// the reply without ca1: it enrolls over and over and never connects.
+	// iOS clients: iTAK, and TROP, which sends no User-Agent. They get
+	// ca1 (below) and the base64 on one line: iOS's decoder rejects the
+	// line breaks, so TROP failed with "check credentials".
 	iTAK := strings.Contains(r.UserAgent(), "iTAK") || r.UserAgent() == ""
+	if iTAK {
+		signed, ca = base64.StdEncoding.EncodeToString(cert.Raw), base64.StdEncoding.EncodeToString(s.CA.Cert.Raw)
+	}
 	switch {
 	case iTAK || strings.Contains(accept, "text/plain") && !strings.Contains(accept, "application/json"):
 		// iTAK quietly drops the reply unless it has the CA as both ca0 and

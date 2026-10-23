@@ -117,11 +117,21 @@ func TestEnrollmentForms(t *testing.T) {
 	if ct, m := enrollAs("iTAK%20App%20Store/651 CFNetwork/3896.100.1.2.1 Darwin/27.0.0"); ct != "application/json" || m["ca1"] == "" || m["ca1"] != m["ca0"] {
 		t.Errorf("iTAK */* enrollment: %q %v", ct, m)
 	}
-	// TROP sends no User-Agent and needs ca1 too.
-	if ct, m := enrollAs(""); ct != "application/json" || m["ca1"] == "" || m["ca1"] != m["ca0"] {
+	// TROP sends no User-Agent and needs ca1 too, and, like any iOS
+	// decoder, base64 without line breaks.
+	ct, m := enrollAs("")
+	if ct != "application/json" || m["ca1"] == "" || m["ca1"] != m["ca0"] {
 		t.Errorf("TROP enrollment: %q %v", ct, m)
 	}
-	if _, m := enrollAs("TAK/5.5 (Android)"); m["ca0"] == "" || m["ca1"] != "" {
+	for _, k := range []string{"signedCert", "ca0"} {
+		raw, err := base64.StdEncoding.Strict().DecodeString(m[k])
+		if err != nil || strings.Contains(m[k], "\n") {
+			t.Errorf("TROP %s isn't one-line base64: %v", k, err)
+		} else if _, err := x509.ParseCertificate(raw); err != nil {
+			t.Errorf("TROP %s: %v", k, err)
+		}
+	}
+	if _, m := enrollAs("TAK/5.5 (Android)"); m["ca0"] == "" || m["ca1"] != "" || !strings.Contains(m["signedCert"], "\n") {
 		t.Errorf("non-iTAK enrollment changed: %v", m)
 	}
 }
