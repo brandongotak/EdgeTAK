@@ -874,6 +874,32 @@ records of certificates that are still valid.
 
 **Backups** are on the same page; see [Back up and restore](#back-up-and-restore).
 
+### ZeroTier
+
+**Server → Settings → ZeroTier** puts the server on a
+[ZeroTier](https://www.zerotier.com) network, so devices anywhere reach it
+without opening ports on your router (handy for a Raspberry Pi behind a home
+or mobile connection). Devices need the ZeroTier app, joined to the same
+network.
+
+1. **Install ZeroTier** (servers set up with the Linux installer). A
+   root-owned helper the installer adds, like the one for updates, installs
+   `zerotier-one` from ZeroTier's apt repository, which apt verifies against
+   ZeroTier's release signing key pinned in EdgeTAK (fingerprint `74A5 E9C4
+   58E1 A431 F1DA 57A7 1657 1988 23E5 2A61`); no script is downloaded and
+   run. It works on Debian, Ubuntu and Raspberry Pi OS. Elsewhere, install
+   ZeroTier yourself; if it's already installed, the same button connects
+   EdgeTAK to it.
+2. **Join** your network by its 16-character ID, then authorize this
+   server's node in ZeroTier Central (the card shows the node ID).
+3. The card lists the server's ZeroTier address. **Open console** opens the
+   console there, so packages and QR codes made in it point devices at that
+   address. EdgeTAK adds a new address to its certificate when it starts;
+   the card offers **Restart EdgeTAK** until it has.
+
+Managing the network itself (its members, rules) stays in ZeroTier Central
+or your own controller. With Docker, install ZeroTier on the host.
+
 ### Login protection
 
 **Server → Settings → Login protection** (on by default): an address that

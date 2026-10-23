@@ -53,6 +53,9 @@ type Server struct {
 		Set(on bool) error
 		Addr() string
 	}
+	// ZeroTierAPI is the local ZeroTier service's API ("" =
+	// http://127.0.0.1:9993; tests use a fake).
+	ZeroTierAPI string
 	// FederationDial reaches other servers for federation setup (tests).
 	FederationDial func(addr string) (net.Conn, error)
 	MediaMTX       *mediamtx.Manager // nil unless EdgeTAK runs MediaMTX itself
@@ -167,6 +170,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.loginGuardRoutes(mux)
 	s.enrollCodeRoutes(mux)
 	s.plainTCPRoutes(mux)
+	s.zerotierRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)

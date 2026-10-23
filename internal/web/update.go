@@ -75,8 +75,11 @@ type updateStatus struct {
 }
 
 // readUpdateStatus parses the updater's "<time> <state> <message>" line.
-func readUpdateStatus() *updateStatus {
-	b, err := os.ReadFile(updateStatusFile)
+func readUpdateStatus() *updateStatus { return readStatusFile(updateStatusFile) }
+
+// readStatusFile parses a root helper's "<time> <state> <message>" line.
+func readStatusFile(path string) *updateStatus {
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil
 	}

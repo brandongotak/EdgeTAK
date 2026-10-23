@@ -157,7 +157,7 @@ const loaders = {
   simulator: loadSim,
   webhooks: loadWebhooks,
   audit: () => loadAudit(),
-  settings: () => Promise.all([loadPlainTCP(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
+  settings: () => Promise.all([loadPlainTCP(), loadZeroTier(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
 };
 
 let currentTab = '';
@@ -3739,6 +3739,96 @@ $('#tcp-on').addEventListener('change', guard(async (e) => {
     e.target.checked = !on;
     throw ex;
   }
+}));
+
+// ---- ZeroTier ----
+
+let ztTimer = null;
+
+const ztStatus = {
+  OK: '<span class="pill ok">connected</span>',
+  REQUESTING_CONFIGURATION: '<span class="pill warn">joining…</span>',
+  ACCESS_DENIED: '<span class="pill warn">waiting for authorization</span>',
+  NOT_FOUND: '<span class="pill bad">no such network</span>',
+  PORT_ERROR: '<span class="pill bad">port error</span>',
+};
+
+// The console at another of this server's addresses.
+function consoleAt(ip) {
+  const host = ip.includes(':') ? `[${ip}]` : ip;
+  return `${location.protocol}//${host}${location.port ? ':' + location.port : ''}/admin/`;
+}
+
+function renderZeroTier(v) {
+  const box = $('#zt-body');
+  const inst = v.install;
+  const busy = inst && inst.state === 'running';
+  if (!v.connected) {
+    $('#zt-state').innerHTML = busy ? '<span class="pill warn">installing…</span>' : '<span class="pill">not set up</span>';
+    box.innerHTML = `
+      ${inst ? `<p class="${inst.state === 'error' ? 'error' : 'muted'}">${esc(inst.message)}</p>` : ''}
+      ${v.error ? `<p class="error">${esc(v.error)}</p>` : ''}
+      ${v.can_install
+        ? `<p class="muted">Installs ZeroTier from its official package repository (checked against ZeroTier's signing key), or connects EdgeTAK to a ZeroTier already installed on this server.</p>
+           <button type="button" class="primary" id="zt-install"${busy ? ' disabled' : ''}>${busy ? 'Installing…' : 'Install ZeroTier'}</button>`
+        : `<p class="muted">${esc(v.install_note)}</p>`}`;
+  } else {
+    const n = v.node;
+    $('#zt-state').innerHTML = n.online ? '<span class="pill ok">online</span>' : '<span class="pill warn">offline</span>';
+    const rows = v.networks.map((nw) => {
+      const ips = (nw.assignedAddresses || []).map((a) => a.split('/')[0]);
+      return `<tr>
+        <td><strong>${esc(nw.name || '(unnamed)')}</strong><div class="muted mono">${esc(nw.id)}</div></td>
+        <td>${ztStatus[nw.status] || esc(nw.status)}${nw.status === 'ACCESS_DENIED' ? `<div class="muted">Authorize node <span class="mono">${esc(n.address)}</span> in ZeroTier Central (my.zerotier.com)</div>` : ''}</td>
+        <td>${ips.map((ip) => `<div class="mono">${esc(ip)} <a href="${esc(consoleAt(ip))}" title="Open the console at this address: packages and QR codes made there point devices at it">open console</a></div>`).join('') || '<span class="muted">none yet</span>'}</td>
+        <td class="actions"><button class="small danger" data-zt-leave="${esc(nw.id)}">Leave</button></td></tr>`;
+    }).join('') || emptyRow(4, 'Not on any network yet');
+    box.innerHTML = `
+      <dl class="kv"><dt>Node ID</dt><dd class="mono">${esc(n.address)}</dd><dt>Version</dt><dd>${esc(n.version)}</dd></dl>
+      ${v.error ? `<p class="error">${esc(v.error)}</p>` : ''}
+      <form id="zt-join" class="inline-form">
+        <input name="nwid" placeholder="Network ID (16 characters)" pattern="[0-9a-fA-F]{16}" required aria-label="ZeroTier network ID">
+        <button type="submit">Join network</button>
+      </form>
+      <div class="table-wrap"><table id="zt-networks">
+        <thead><tr><th>Network</th><th>Status</th><th>This server's address</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+      ${(v.cert_missing || []).length ? `<p class="muted">EdgeTAK's certificate doesn't cover ${v.cert_missing.map(esc).join(', ')} yet; devices connecting there need it. EdgeTAK adds this machine's addresses when it starts.
+        <button type="button" class="small" id="zt-restart">Restart EdgeTAK</button></p>` : ''}
+      <p class="muted">Devices on the network connect to this server's ZeroTier address. Open the console at that address (<em>open console</em>) to make connection packages and QR codes that point at it.</p>`;
+  }
+  // Keep watching while something is changing.
+  clearTimeout(ztTimer);
+  if (busy || (v.connected && v.networks.some((nw) => nw.status !== 'OK'))) {
+    ztTimer = setTimeout(() => { if (currentTab === 'settings') loadZeroTier().catch(() => {}); }, 4000);
+  }
+}
+
+async function loadZeroTier() {
+  renderZeroTier(await api('GET', 'api/zerotier'));
+}
+
+$('#zt-body').addEventListener('click', guard(async (e) => {
+  if (e.target.id === 'zt-install') {
+    renderZeroTier(await api('POST', 'api/zerotier/install'));
+    toast('Installing ZeroTier…');
+    setTimeout(() => loadZeroTier().catch(() => {}), 1500);
+  } else if (e.target.dataset.ztLeave) {
+    if (!confirm(`Leave ZeroTier network ${e.target.dataset.ztLeave}? Devices that reach this server through it lose their connection.`)) return;
+    renderZeroTier(await api('DELETE', `api/zerotier/networks/${e.target.dataset.ztLeave}`));
+  } else if (e.target.id === 'zt-restart') {
+    if (!confirm('Restart EdgeTAK? Devices reconnect by themselves within a few seconds.')) return;
+    await api('POST', 'api/server/restart');
+    toast('Restarting EdgeTAK…');
+    setTimeout(() => location.reload(), 8000);
+  }
+}));
+$('#zt-body').addEventListener('submit', guard(async (e) => {
+  if (e.target.id !== 'zt-join') return;
+  e.preventDefault();
+  renderZeroTier(await api('POST', 'api/zerotier/networks', { network_id: e.target.nwid.value }));
+  toast('Joining the network…');
 }));
 
 // ---- help ----

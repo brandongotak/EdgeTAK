@@ -45,6 +45,14 @@ UPDATE_STATE=/var/lib/edgetak-update
 UPDATE_PATH_UNIT=/etc/systemd/system/edgetak-update.path
 UPDATE_SVC_UNIT=/etc/systemd/system/edgetak-update.service
 
+# ZeroTier from the admin console: EdgeTAK writes "install" into
+# $DATA_DIR/zerotier/request; the path unit runs the root-owned ZT_HELPER,
+# which installs ZeroTier and gives EdgeTAK its API token.
+ZT_HELPER=/usr/local/lib/edgetak/edgetak-zerotier.sh
+ZT_STATE=/var/lib/edgetak-zerotier
+ZT_PATH_UNIT=/etc/systemd/system/edgetak-zerotier.path
+ZT_SVC_UNIT=/etc/systemd/system/edgetak-zerotier.service
+
 # MediaMTX companion (--video), pinned with its official release checksums.
 # EdgeTAK runs it as a child process from its data directory, so the admin
 # console can restart and update it without root.
@@ -198,6 +206,9 @@ do_uninstall() {
 	systemctl disable --now edgetak-update.path >/dev/null 2>&1 || true
 	rm -f "$UPDATE_PATH_UNIT" "$UPDATE_SVC_UNIT" "$UPDATER"
 	rm -rf "$UPDATE_STATE"
+	systemctl disable --now edgetak-zerotier.path >/dev/null 2>&1 || true
+	rm -f "$ZT_PATH_UNIT" "$ZT_SVC_UNIT" "$ZT_HELPER"
+	rm -rf "$ZT_STATE" # ZeroTier itself stays installed
 	systemctl disable --now edgetak.service >/dev/null 2>&1 || true
 	rm -f "$UNIT"
 	systemctl daemon-reload
@@ -338,6 +349,183 @@ Type=oneshot
 ExecStart=/bin/sh $UPDATER
 TimeoutStartSec=20min
 EOF
+}
+
+# write_zerotier_helper installs the root-owned ZeroTier helper and the
+# units that run it when the admin console asks for ZeroTier.
+write_zerotier_helper() {
+	mkdir -p "$(dirname "$ZT_HELPER")" "$ZT_STATE"
+	chmod 0755 "$ZT_STATE"
+	install -d -o "$SVC_USER" -g "$SVC_USER" -m 0750 "$DATA_DIR/zerotier"
+	cat >"$ZT_HELPER.tmp" <<'ZTEOF'
+#!/bin/sh
+# EdgeTAK ZeroTier helper, installed by the EdgeTAK installer.
+# edgetak-zerotier.service runs it as root when the admin console asks for
+# ZeroTier. The only input it takes from EdgeTAK is the word "install". It
+# installs zerotier-one from ZeroTier's apt repository, which apt verifies
+# with ZeroTier's release signing key pinned below (fingerprint
+# 74A5 E9C4 58E1 A431 F1DA 57A7 1657 1988 23E5 2A61), and gives EdgeTAK a
+# copy of the ZeroTier service's API token. No script is downloaded and run.
+set -eu
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+REQUEST=/var/lib/edgetak/zerotier/request
+TOKEN=/var/lib/edgetak/zerotier/authtoken
+STATE=/var/lib/edgetak-zerotier
+KEYRING=/usr/share/keyrings/zerotier-edgetak.asc
+LIST=/etc/apt/sources.list.d/zerotier.list
+ZT_TOKEN=/var/lib/zerotier-one/authtoken.secret
+
+status() { # state message
+	printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >"$STATE/status.tmp"
+	mv -f "$STATE/status.tmp" "$STATE/status"
+	echo "$1: $2"
+}
+fail() { status error "$*"; exit 1; }
+
+# codename picks ZeroTier's repository for this system (as ZeroTier's own
+# install script does): Debian and Raspberry Pi OS 10 to 13 by codename
+# (newer use trixie), Ubuntu LTS releases (others use the LTS before them).
+codename() {
+	[ -r /etc/os-release ] || return 1
+	. /etc/os-release
+	case " ${ID:-} ${ID_LIKE:-} " in
+	*" ubuntu "*)
+		v=${VERSION_ID:-0}
+		[ "${ID:-}" = ubuntu ] || { case "${UBUNTU_CODENAME:-}" in focal|jammy|noble) echo "$UBUNTU_CODENAME"; return 0 ;; *) return 1 ;; esac; }
+		major=${v%%.*}
+		if [ "$major" -ge 24 ]; then echo noble
+		elif [ "$major" -ge 22 ]; then echo jammy
+		elif [ "$major" -ge 20 ]; then echo focal
+		else return 1; fi ;;
+	*" debian "*|*" raspbian "*)
+		major=${VERSION_ID:-99}
+		major=${major%%.*}
+		case "$major" in
+		10) echo buster ;; 11) echo bullseye ;; 12) echo bookworm ;;
+		*) [ "$major" -ge 13 ] 2>/dev/null && echo trixie || return 1 ;;
+		esac ;;
+	*) return 1 ;;
+	esac
+}
+
+copy_token() {
+	i=0
+	while [ ! -s "$ZT_TOKEN" ] && [ $i -lt 30 ]; do sleep 1; i=$((i + 1)); done
+	[ -s "$ZT_TOKEN" ] || fail "ZeroTier is installed, but its API token didn't appear; is the zerotier-one service running?"
+	install -o edgetak -g edgetak -m 0600 "$ZT_TOKEN" "$TOKEN.tmp"
+	mv -f "$TOKEN.tmp" "$TOKEN"
+}
+
+mkdir -p "$STATE"
+[ -f "$REQUEST" ] && [ ! -L "$REQUEST" ] || exit 0
+req=$(head -c 16 "$REQUEST" | tr -d '\r\n ')
+[ "$req" = install ] || fail "unknown request"
+
+if [ -x /usr/sbin/zerotier-one ] || command -v zerotier-one >/dev/null 2>&1; then
+	status running "ZeroTier is already installed; connecting EdgeTAK to it"
+else
+	command -v apt-get >/dev/null 2>&1 || fail "installing ZeroTier from the console works on Debian, Ubuntu and Raspberry Pi OS; install it yourself (zerotier.com/download), then click Install again"
+	cn=$(codename) || fail "this system's version isn't one ZeroTier publishes packages for; install it yourself (zerotier.com/download), then click Install again"
+	tmp=$(mktemp)
+	trap 'rm -f "$tmp"' EXIT INT TERM
+	cat >"$KEYRING.tmp" <<'ZTKEY'
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Comment: GPGTools - https://gpgtools.org
+
+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
+=JgAv
+-----END PGP PUBLIC KEY BLOCK-----
+ZTKEY
+	chmod 0644 "$KEYRING.tmp"
+	mv -f "$KEYRING.tmp" "$KEYRING"
+	echo "deb [signed-by=$KEYRING] http://download.zerotier.com/debian/$cn $cn main" >"$LIST"
+	status running "downloading ZeroTier ($cn)"
+	apt-get update -o Dir::Etc::sourcelist="$LIST" -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0 >"$tmp" 2>&1 ||
+		fail "the ZeroTier package list couldn't be downloaded or verified: $(tail -n1 "$tmp" | cut -c1-200)"
+	status running "installing ZeroTier"
+	DEBIAN_FRONTEND=noninteractive apt-get install -y zerotier-one >"$tmp" 2>&1 ||
+		fail "installing zerotier-one failed: $(grep -i 'e:' "$tmp" | tail -n1 | cut -c1-200)"
+fi
+systemctl enable --now zerotier-one >/dev/null 2>&1 || true
+copy_token
+status done "ZeroTier is installed and EdgeTAK is connected to it"
+ZTEOF
+	chmod 0755 "$ZT_HELPER.tmp"
+	mv -f "$ZT_HELPER.tmp" "$ZT_HELPER"
+
+	cat >"$ZT_PATH_UNIT" <<EOF
+# Installed by the EdgeTAK installer: runs edgetak-zerotier.service when the
+# admin console asks for ZeroTier.
+[Unit]
+Description=Watch for ZeroTier requests from the EdgeTAK admin console
+
+[Path]
+PathChanged=$DATA_DIR/zerotier/request
+Unit=edgetak-zerotier.service
+
+[Install]
+WantedBy=multi-user.target
+EOF
+	cat >"$ZT_SVC_UNIT" <<EOF
+# Installed by the EdgeTAK installer. Runs as root: it installs ZeroTier.
+[Unit]
+Description=Install ZeroTier for EdgeTAK (requested from the admin console)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh $ZT_HELPER
+TimeoutStartSec=15min
+EOF
+	# ZeroTier installed already (here or by hand): keep EdgeTAK's token copy current.
+	if [ -s /var/lib/zerotier-one/authtoken.secret ]; then
+		install -o "$SVC_USER" -g "$SVC_USER" -m 0600 /var/lib/zerotier-one/authtoken.secret "$DATA_DIR/zerotier/authtoken"
+	fi
 }
 
 write_unit() {
@@ -529,10 +717,12 @@ do_install() {
 
 	write_unit
 	write_updater
+	write_zerotier_helper
 	save_options
 	systemctl daemon-reload
 	systemctl enable edgetak.service >/dev/null 2>&1
 	systemctl enable --now edgetak-update.path >/dev/null 2>&1 || warn "could not enable updates from the console (edgetak-update.path)"
+	systemctl enable --now edgetak-zerotier.path >/dev/null 2>&1 || warn "could not enable installing ZeroTier from the console (edgetak-zerotier.path)"
 	firewall open
 	systemctl restart edgetak.service
 

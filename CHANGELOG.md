@@ -10,6 +10,33 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.6.0 (2026-10-23)
+
+**ZeroTier from the console.** A **ZeroTier** card on the Settings page puts
+the server on a ZeroTier network, so devices anywhere reach it without
+opening router ports:
+
+- **Install ZeroTier** installs it on servers set up with the Linux
+  installer, through a root-owned helper the installer adds (like the one for
+  updates). It installs `zerotier-one` from ZeroTier's apt repository,
+  verified against ZeroTier's release signing key pinned in EdgeTAK; no
+  script is downloaded and run. If ZeroTier is already installed, the same
+  button connects EdgeTAK to it.
+- Join and leave networks by ID, see each network's state (including
+  "waiting for authorization", with the node ID to authorize in ZeroTier
+  Central) and the server's ZeroTier addresses.
+- **Open console** at a ZeroTier address, so packages and QR codes point
+  devices there; **Restart EdgeTAK** adds a new address to the server
+  certificate.
+
+Servers get the install helper when they update to this version.
+
+## v1.6.0-rc.1 (2026-10-23)
+
+A release candidate for v1.6.0 (above), to try installing ZeroTier from the
+console on a real server. A pre-release: servers only get it with **Include
+pre-releases** ticked on the update card.
+
 ## v1.5.0 (2026-10-23)
 
 **Packages and QR codes follow the address you opened the console at.** On

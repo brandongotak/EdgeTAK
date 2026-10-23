@@ -250,6 +250,7 @@
     <li><strong>Lost contact alerts:</strong> an amber alert with the last position when a device stops reporting (not when someone signs off on purpose). Untick to turn off.</li>
     <li><strong>Geofences:</strong> draw an area or circle and get an alert when devices enter or leave it.</li>
     <li><strong>Plain TCP:</strong> turn port 8087 (unencrypted, anonymous devices that only see <code>__ANON__</code>) on or off without a restart. Turning it off closes the port and disconnects those devices. If the server has a firewall, open 8087 there too (<code>sudo ufw allow 8087/tcp</code>).</li>
+    <li><strong>ZeroTier:</strong> put the server on a ZeroTier network so devices anywhere reach it without opening router ports. <em>Install ZeroTier</em>, join your network by its ID, then authorize this server's node in ZeroTier Central. Open the console at the server's ZeroTier address to make packages and QR codes that point there.</li>
     <li><strong>Login protection:</strong> blocks an address after too many wrong passwords. Add your own networks to <em>Never block</em>, and unblock people here.</li>
     <li><strong>Data retention:</strong> how long to keep packages, missions, messages, the chat log and the audit log. It shows what would be removed before you save.</li>
     <li><strong>Backup and restore:</strong> download a backup (or schedule them) and restore one onto this or a new server.</li>
