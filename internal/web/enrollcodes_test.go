@@ -41,3 +41,31 @@ func TestEnrollCodeRules(t *testing.T) {
 		t.Errorf("states = %v", states)
 	}
 }
+
+// TestDeviceHost covers the address packages and QR codes use: on a local
+// server, the one the request came in on, unless that is localhost.
+func TestDeviceHost(t *testing.T) {
+	s := guardServer(t)
+	s.Cfg.PublicHost = "10.0.0.5"
+	for host, want := range map[string]string{
+		"192.168.1.50:8443":  "192.168.1.50", // the Pi's new address
+		"edgetak.local:8443": "edgetak.local",
+		"[fd00::7]:8443":     "fd00::7",
+		"localhost:8443":     "10.0.0.5", // on the server itself
+		"127.0.0.1:8443":     "10.0.0.5",
+		"[::1]:8443":         "10.0.0.5",
+		"bad/host":           "10.0.0.5",
+	} {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Host = host
+		if got := s.deviceHost(r); got != want {
+			t.Errorf("%s: %q, want %q", host, got, want)
+		}
+	}
+	s.Cfg.PublicHost = ""
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Host = "localhost:8443"
+	if got := s.deviceHost(r); got != "" {
+		t.Errorf("localhost without public_host: %q", got)
+	}
+}

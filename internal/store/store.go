@@ -2072,6 +2072,7 @@ type EnrollCode struct {
 	// certificates are revoked (a replacement phone).
 	Replace bool     `json:"replace,omitempty"`
 	Certs   []string `json:"certs,omitempty"` // serials of the certificates it issued
+	App     string   `json:"app,omitempty"`   // "itak", or "" for ATAK
 }
 
 func (s *Store) EnrollCodes() []EnrollCode {

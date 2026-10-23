@@ -97,6 +97,7 @@ type enrollCodeView struct {
 	CreatedBy string       `json:"created_by"`
 	State     string       `json:"state"` // active, used or expired
 	Replace   bool         `json:"replace,omitempty"`
+	App       string       `json:"app,omitempty"`
 	Devices   []codeDevice `json:"devices"` // what it set up
 }
 
@@ -126,7 +127,7 @@ func (s *Server) enrollCodeViews() []enrollCodeView {
 	out := []enrollCodeView{}
 	for _, c := range s.Store.EnrollCodes() {
 		v := enrollCodeView{ID: c.ID, Username: c.Username, Expires: c.Expires, OneDevice: c.OneDevice, Used: c.Used,
-			Created: c.Created, CreatedBy: c.CreatedBy, State: "active", Replace: c.Replace, Devices: []codeDevice{}}
+			Created: c.Created, CreatedBy: c.CreatedBy, State: "active", Replace: c.Replace, App: c.App, Devices: []codeDevice{}}
 		for _, serial := range c.Certs {
 			callsign, on := online[serial]
 			v.Devices = append(v.Devices, codeDevice{Serial: serial, Revoked: certs[serial].Revoked, Connected: certs[serial].Connected,
@@ -237,21 +238,35 @@ func (s *Server) qrLink(host, username, code string) string {
 	return enrollLink(host, username, code)
 }
 
-// qrHost is the server address to put in a QR code made from r.
-func (s *Server) qrHost(r *http.Request) string {
-	if s.Cfg.PublicHost != "" {
-		return s.Cfg.PublicHost
-	}
-	host, _, err := net.SplitHostPort(r.Host)
-	if err != nil {
+// deviceHost is the server address to give devices in the connection
+// packages, QR codes and links made for request r. Without a public
+// certificate (a local server), it is the address r came in on, as on
+// OpenTAKServer: the one in the admin's or user's address bar, so a server
+// whose IP address changes needs no setting. That isn't used when it is
+// this machine itself (localhost), and with Let's Encrypt the certificate
+// only covers public_host, so then it's always public_host.
+func (s *Server) deviceHost(r *http.Request) string {
+	host := ""
+	if r != nil {
 		host = r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		host = strings.Trim(host, "[]")
+	}
+	usable := host != "" && !strings.ContainsAny(host, "/?#@ ") && host != "localhost" && !isLoopbackIP(host)
+	if usable && !s.Public.Uses("enroll") {
+		return host
+	}
+	if s.Cfg.PublicHost != "" || !usable {
+		return s.Cfg.PublicHost
 	}
 	return host
 }
 
 // newEnrollCode makes and saves a code for username that works for hours.
 // The code is returned only here.
-func (s *Server) newEnrollCode(username string, hours int, oneDevice, replace bool, host, by string) (string, store.EnrollCode, error) {
+func (s *Server) newEnrollCode(username string, hours int, oneDevice, replace bool, app, host, by string) (string, store.EnrollCode, error) {
 	if host == "" || strings.ContainsAny(host, "/?#@ ") {
 		return "", store.EnrollCode{}, errNoHost
 	}
@@ -260,7 +275,7 @@ func (s *Server) newEnrollCode(username string, hours int, oneDevice, replace bo
 	code := base64.RawURLEncoding.EncodeToString(b)
 	now := time.Now().UTC()
 	c := store.EnrollCode{ID: uuid(), Username: username, Hash: hashCode(code), Expires: now.Add(time.Duration(hours) * time.Hour),
-		OneDevice: oneDevice, Created: now, CreatedBy: by, Host: host, Replace: replace}
+		OneDevice: oneDevice, Created: now, CreatedBy: by, Host: host, Replace: replace, App: app}
 	if err := s.Store.AddEnrollCode(c, now); err != nil {
 		return "", store.EnrollCode{}, err
 	}
@@ -269,6 +284,38 @@ func (s *Server) newEnrollCode(username string, hours int, oneDevice, replace bo
 }
 
 var errNoHost = errors.New("set the server address devices use")
+
+// itakRegistration is iTAK's registration QR code: JSON with the server's
+// connection string and a login, here the one-time code as the password.
+// iTAK then enrolls on its own, so it needs the enrollment port to have a
+// certificate it trusts (Let's Encrypt).
+func (s *Server) itakRegistration(host, username, code, id string) string {
+	type server struct {
+		ConnectionString string `json:"connectionString"`
+	}
+	type user struct {
+		Username       string `json:"username"`
+		Password       string `json:"password"`
+		RegistrationID string `json:"registrationId"`
+	}
+	b, _ := json.Marshal(struct {
+		Passphrase string `json:"passphrase"`
+		Type       string `json:"type"`
+		Server     server `json:"serverCredentials"`
+		User       user   `json:"userCredentials"`
+	}{"false", "registration", server{host + ":" + firstNonEmpty(port(s.Addrs["tls"]), "8089") + ":ssl"}, user{username, code, id}})
+	return string(b)
+}
+
+// itakPackageLink is a plain link to the iTAK connection package for code
+// (opened with the phone's camera, then imported into iTAK), or "" when the
+// plain HTTP port is off.
+func (s *Server) itakPackageLink(host, username, code string) string {
+	if s.Addrs["http"] == "" {
+		return ""
+	}
+	return "http://" + net.JoinHostPort(host, port(s.Addrs["http"])) + "/qr/" + url.PathEscape(code) + "/" + sanitize(s.Cfg.ServerName) + "-" + sanitize(username) + "-itak.zip"
+}
 
 // qrPackage serves the connection package for a code: anyone with the code
 // gets it, as anyone with it could enroll. An active shared event's
@@ -307,7 +354,14 @@ func (s *Server) qrPackage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "This QR code has expired or was revoked. Ask for a new one.", http.StatusNotFound)
 		return
 	}
-	data, serial, err := s.buildCertPackage(firstNonEmpty(host, s.Cfg.PublicHost), u.Username)
+	var data []byte
+	var serial string
+	var err error
+	if code != nil && code.App == "itak" {
+		data, serial, err = s.buildITAKPackage(firstNonEmpty(host, s.Cfg.PublicHost), u.Username, "QR code")
+	} else {
+		data, serial, err = s.buildCertPackage(firstNonEmpty(host, s.Cfg.PublicHost), u.Username)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -322,7 +376,7 @@ func (s *Server) qrPackage(w http.ResponseWriter, r *http.Request) {
 			Details: "certificate " + serial + ", " + details})
 	}
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+sanitize(s.Cfg.ServerName)+"-"+sanitize(u.Username)+`.zip"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+sanitize(r.PathValue("file"))+`"`)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(data)
 }
@@ -340,6 +394,7 @@ func (s *Server) enrollCodeRoutes(mux *http.ServeMux) {
 			Hours     int    `json:"hours"`
 			OneDevice bool   `json:"one_device"`
 			Replace   bool   `json:"replace"`
+			App       string `json:"app"` // "itak", or "" for ATAK
 			Host      string `json:"host"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
@@ -363,10 +418,19 @@ func (s *Server) enrollCodeRoutes(mux *http.ServeMux) {
 			jsonError(w, http.StatusBadRequest, u.Username+" is an event's shared account: every device uses it, so they can't be replaced one by one")
 			return
 		}
+		if req.App != "" && req.App != "itak" {
+			jsonError(w, http.StatusBadRequest, "app must be itak or empty (ATAK)")
+			return
+		}
 		// A replacement code sets up one phone.
 		req.OneDevice = req.OneDevice || req.Replace
-		host := firstNonEmpty(strings.TrimSpace(req.Host), s.Cfg.PublicHost)
-		code, c, err := s.newEnrollCode(u.Username, req.Hours, req.OneDevice, req.Replace, host, id.Username)
+		host := firstNonEmpty(strings.TrimSpace(req.Host), s.deviceHost(r))
+		local := !s.Public.Uses("enroll")
+		if req.App == "itak" && local && s.Addrs["http"] == "" {
+			jsonError(w, http.StatusBadRequest, "an iTAK QR code on a server without Let's Encrypt downloads a package over plain HTTP (port 8080), which is turned off here; use the iTAK package instead")
+			return
+		}
+		code, c, err := s.newEnrollCode(u.Username, req.Hours, req.OneDevice, req.Replace, req.App, host, id.Username)
 		if errors.Is(err, errNoHost) {
 			jsonError(w, http.StatusBadRequest, err.Error())
 			return
@@ -376,9 +440,21 @@ func (s *Server) enrollCodeRoutes(mux *http.ServeMux) {
 		}
 		// Without a public certificate on the enrollment port ATAK can't
 		// trust it yet, so the QR code imports a package instead.
-		writeJSON(w, http.StatusCreated, map[string]any{"id": c.ID, "username": u.Username, "expires": c.Expires, "one_device": c.OneDevice, "replace": c.Replace,
-			"link": enrollLink(host, u.Username, code), "package_link": s.qrPackageLink(host, u.Username, code), "local": !s.Public.Uses("enroll"),
-			"qr_link": s.qrLink(host, u.Username, code), "codes": s.enrollCodeViews()})
+		out := map[string]any{"id": c.ID, "username": u.Username, "expires": c.Expires, "one_device": c.OneDevice, "replace": c.Replace,
+			"local": local, "codes": s.enrollCodeViews()}
+		if req.App == "itak" {
+			// iTAK: with Let's Encrypt, its registration QR code (it enrolls
+			// with the code); otherwise a link to its package.
+			out["app"] = "itak"
+			if local {
+				out["qr_link"] = s.itakPackageLink(host, u.Username, code)
+			} else {
+				out["qr_link"] = s.itakRegistration(host, u.Username, code, c.ID)
+			}
+		} else {
+			out["link"], out["package_link"], out["qr_link"] = enrollLink(host, u.Username, code), s.qrPackageLink(host, u.Username, code), s.qrLink(host, u.Username, code)
+		}
+		writeJSON(w, http.StatusCreated, out)
 	}))
 	// A code each for several users, for a printed sheet of QR codes.
 	mux.HandleFunc("POST /admin/api/enroll-codes/batch", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
@@ -400,7 +476,7 @@ func (s *Server) enrollCodeRoutes(mux *http.ServeMux) {
 			req.Hours = 24
 		}
 		req.Hours = min(req.Hours, 30*24)
-		host := firstNonEmpty(strings.TrimSpace(req.Host), s.Cfg.PublicHost)
+		host := firstNonEmpty(strings.TrimSpace(req.Host), s.deviceHost(r))
 		type card struct {
 			Username string    `json:"username"`
 			Expires  time.Time `json:"expires"`
@@ -413,7 +489,7 @@ func (s *Server) enrollCodeRoutes(mux *http.ServeMux) {
 				skipped = append(skipped, name)
 				continue
 			}
-			code, c, err := s.newEnrollCode(u.Username, req.Hours, req.OneDevice, false, host, id.Username)
+			code, c, err := s.newEnrollCode(u.Username, req.Hours, req.OneDevice, false, "", host, id.Username)
 			if errors.Is(err, errNoHost) {
 				jsonError(w, http.StatusBadRequest, err.Error())
 				return

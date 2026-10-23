@@ -90,7 +90,8 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request, _ *identity) {
 		"memory_mb": mem.Alloc >> 20, "goroutines": runtime.NumGoroutine(),
 		"listeners":  listeners,
 		"ca_subject": s.CA.Cert.Subject.CommonName, "ca_expires": s.CA.Cert.NotAfter,
-		"public_cert": s.Public.Info(), "signin_url": strings.TrimSuffix(s.registerURL(""), "register"),
+		"public_cert": s.Public.Info(), "signin_url": strings.TrimSuffix(s.registerURL(r, ""), "register"),
+		"device_host": s.deviceHost(r), // what packages and QR codes use
 	})
 }
 

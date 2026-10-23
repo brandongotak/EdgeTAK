@@ -33,8 +33,8 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /admin/api/registration", s.admin(func(w http.ResponseWriter, r *http.Request, _ *identity) {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"settings": s.Store.Registration(), "invites": s.inviteViews(), "requests": s.Store.Requests(),
-			"register_url": s.registerURL(""),
+			"settings": s.Store.Registration(), "invites": s.inviteViews(r), "requests": s.Store.Requests(),
+			"register_url": s.registerURL(r, ""),
 		})
 	}))
 	mux.HandleFunc("PUT /admin/api/registration", s.admin(s.setRegistration))
@@ -61,14 +61,14 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 
 // registerURL is the public sign-up page, on the enrollment port (which has
 // the publicly trusted certificate when Let's Encrypt is on).
-func (s *Server) registerURL(code string) string {
+func (s *Server) registerURL(r *http.Request, code string) string {
 	_, port, err := net.SplitHostPort(s.Addrs["enroll"])
 	if err != nil {
 		if _, port, err = net.SplitHostPort(s.Addrs["https"]); err != nil {
 			return ""
 		}
 	}
-	u := "https://" + net.JoinHostPort(s.Cfg.PublicHost, port) + "/register"
+	u := "https://" + net.JoinHostPort(s.deviceHost(r), port) + "/register"
 	if code != "" {
 		u += "?invite=" + code
 	}
@@ -81,11 +81,11 @@ type inviteView struct {
 	Usable bool   `json:"usable"`
 }
 
-func (s *Server) inviteViews() []inviteView {
+func (s *Server) inviteViews(r *http.Request) []inviteView {
 	out := []inviteView{}
 	now := time.Now()
 	for _, i := range s.Store.Invites() {
-		out = append(out, inviteView{Invite: i, URL: s.registerURL(i.Code), Usable: i.Usable(now)})
+		out = append(out, inviteView{Invite: i, URL: s.registerURL(r, i.Code), Usable: i.Usable(now)})
 	}
 	return out
 }
@@ -96,8 +96,8 @@ func (s *Server) inviteViews() []inviteView {
 // that sets up one device, so the new user's phone connects in one scan.
 func (s *Server) signedUp(r *http.Request, username string) map[string]any {
 	out := map[string]any{"status": "created", "username": username}
-	host := s.qrHost(r)
-	if code, c, err := s.newEnrollCode(username, 24, true, false, host, "sign-up"); err == nil {
+	host := s.deviceHost(r)
+	if code, c, err := s.newEnrollCode(username, 24, true, false, "", host, "sign-up"); err == nil {
 		out["qr_link"], out["qr_expires"] = s.qrLink(host, username, code), c.Expires
 	}
 	return out
@@ -106,7 +106,7 @@ func (s *Server) signedUp(r *http.Request, username string) map[string]any {
 func (s *Server) registerInfo(w http.ResponseWriter, r *http.Request) {
 	reg := s.Store.Registration()
 	info := map[string]any{
-		"server_name": s.Cfg.ServerName, "host": s.Cfg.PublicHost, "mode": reg.Mode,
+		"server_name": s.Cfg.ServerName, "host": s.deviceHost(r), "mode": reg.Mode,
 		"quick_connect": s.Public.Info()["mode"] != "off", "streaming_port": port(s.Addrs["tls"]),
 	}
 	if code := r.URL.Query().Get("invite"); code != "" {
@@ -208,13 +208,13 @@ func (s *Server) registrationError(w http.ResponseWriter, err error) bool {
 
 // ownPackage gives a registered user their connection package.
 func (s *Server) ownPackage(w http.ResponseWriter, r *http.Request, id *identity) {
-	host := s.Cfg.PublicHost
+	host := s.deviceHost(r)
 	var data []byte
 	var err error
 	mode := r.URL.Query().Get("mode")
 	switch mode {
 	case "itak":
-		data, err = s.buildITAKPackage(host, id.Username, id.Username)
+		data, _, err = s.buildITAKPackage(host, id.Username, id.Username)
 	default:
 		mode = "ssl"
 		data, err = s.buildConnectionPackage("ssl", host, id.Username)
@@ -275,7 +275,7 @@ func (s *Server) createInvite(w http.ResponseWriter, r *http.Request, id *identi
 		return
 	}
 	s.Log.Info("invite created", "admin", id.Username, "label", inv.Label, "groups", inv.Groups, "max_uses", inv.MaxUses)
-	writeJSON(w, http.StatusCreated, inviteView{Invite: created, URL: s.registerURL(created.Code), Usable: true})
+	writeJSON(w, http.StatusCreated, inviteView{Invite: created, URL: s.registerURL(r, created.Code), Usable: true})
 }
 
 func (s *Server) approveRequest(w http.ResponseWriter, r *http.Request, id *identity) {

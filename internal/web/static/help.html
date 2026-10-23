@@ -10,7 +10,7 @@
     <li><strong>Change the admin password:</strong> on <a data-goto="users">Users</a>, click <em>Password</em> on <code>admin</code>.</li>
     <li><strong>Create groups</strong> on <a data-goto="groups">Groups</a>, for example <code>Cyan</code> and <code>Command</code>. Devices only see traffic from groups they share.</li>
     <li><strong>Create users</strong> on <a data-goto="users">Users</a> and tick their groups. Give each person their own user, so you can cut off one device without affecting the rest.</li>
-    <li><strong>Check the server address:</strong> <em>Public host</em> on the <a data-goto="dashboard">Dashboard</a> must be the address devices use (an IP on a local network, or a domain name).</li>
+    <li><strong>Check the server address:</strong> on a local server, packages and QR codes use the address you opened this console at, so open it at the address devices use (not <code>localhost</code>). With Let's Encrypt they use <em>Public host</em> on the <a data-goto="dashboard">Dashboard</a>.</li>
     <li><strong>Connect a device:</strong> on <a data-goto="connect">Connect</a>, make a QR code for a user and scan it with the phone's camera. See <a data-help="connect">Connecting devices</a>.</li>
   </ol>
   <h3>Tips</h3>
@@ -212,6 +212,7 @@
     <li>The code is like a password until it expires: don't post it publicly. <em>One device only</em> codes stop 10 minutes after their first use.</li>
     <li><strong>Lost or new phone:</strong> tick <em>New phone: replace their devices</em>. When the new phone scans the code, the user's other devices are disconnected (you confirm first; nothing happens until the scan).</li>
     <li><strong>Print a QR sheet…</strong> makes a card per user for a briefing.</li>
+    <li><strong>iTAK:</strong> choose <em>iTAK</em> under <em>App</em>. With Let's Encrypt, iTAK scans the code (Settings → Network → Servers → + → Scan QR) and signs in and enrolls by itself with the one-time code in it. On a local server, the iPhone's camera downloads a package instead, which you add in iTAK with <em>Upload Server Package</em>.</li>
   </ul>
   <h3>The code list</h3>
   <p>Updates live. <em>Devices</em> shows what each code set up: <em>online</em> with the callsign, <em>offline</em>, <em>revoked</em>, or <em>never connected</em>. If a phone that was already connected to this server as someone else scanned the code, restart ATAK. <strong>Revoke</strong> stops a code; <strong>Disconnect</strong> also cuts off the devices it set up.</p>

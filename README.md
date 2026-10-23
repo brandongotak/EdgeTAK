@@ -226,6 +226,11 @@ not covered by the image; use the installer.
 
 ## Connect devices
 
+On a local server, connection packages, QR codes and sign-up links point at
+the address you opened the console with (as on OpenTAKServer), so a
+Raspberry Pi whose IP address changes needs no setting: open the console at
+its new address. With Let's Encrypt they use the server's domain.
+
 There are two ways to connect, depending on the server:
 
 - **Quick connect** (servers with Let's Encrypt): add a server in the client
@@ -250,6 +255,12 @@ There are two ways to connect, depending on the server:
     unencrypted, so use these codes on networks you trust; with plain HTTP
     turned off, the QR code only works on phones that already imported a
     connection package from the server.
+  - **iTAK:** choose **iTAK** under **App**. With Let's Encrypt, the QR code
+    is iTAK's registration code (Settings → Network → Servers → + → Scan QR),
+    holding the server and the one-time code, so iTAK enrolls by itself. On
+    a local server it is a link the iPhone's camera opens to download the
+    iTAK package (a certificate for the user), which you add in iTAK with
+    **Upload Server Package**.
   - **Print a QR sheet…** (on the Connect page or above the Users list)
     makes a code for each chosen user, or a whole group, and opens a
     printable page of labelled QR cards to hand out.
@@ -1083,9 +1094,13 @@ the rest) are made in the console and kept in the database.
   run `journalctl -u edgetak -f`. Every HTTP request is logged with its path,
   status and client, and failed TLS handshakes are traced step by step. Set it
   back to `info` afterwards, especially on internet servers.
-- **Packages point at the wrong address:** check **Public host** on the
-  Dashboard. The server warns at startup when `public_host` is neither a local
-  address nor a resolvable name.
+- **Packages point at the wrong address:** on a local server (no Let's
+  Encrypt), packages, QR codes and sign-up links use the address you opened
+  the console or account page at, so open it at the address devices use (not
+  `localhost`); it follows the server when its IP address changes. With
+  Let's Encrypt they use **Public host** (on the Dashboard). The address
+  field on the Connect page overrides both. The server warns at startup when
+  `public_host` is neither a local address nor a resolvable name.
 - **Let's Encrypt is stuck on "pending":** the domain must resolve to this
   server and port 80 must be reachable from the internet. The log explains
   why issuance failed.

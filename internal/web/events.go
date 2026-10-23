@@ -47,7 +47,8 @@ type eventView struct {
 	Host       string `json:"host"`
 }
 
-func (s *Server) eventViews() []eventView {
+func (s *Server) eventViews(r *http.Request) []eventView {
+	host := s.deviceHost(r)
 	counts := map[string]int{}
 	users := map[string]string{} // username -> event
 	for _, u := range s.Store.Users() {
@@ -64,13 +65,13 @@ func (s *Server) eventViews() []eventView {
 	}
 	out := []eventView{}
 	for _, e := range s.Store.Events() {
-		v := eventView{Event: e, Joined: counts[e.ID], Online: online[e.ID], Host: s.Cfg.PublicHost}
+		v := eventView{Event: e, Joined: counts[e.ID], Online: online[e.ID], Host: host}
 		if e.Ended.IsZero() {
 			switch e.Mode {
 			case "person":
-				v.JoinURL = s.registerURL(e.Invite)
+				v.JoinURL = s.registerURL(r, e.Invite)
 			case "shared":
-				v.EnrollLink = s.qrLink(s.Cfg.PublicHost, e.Account, e.Password)
+				v.EnrollLink = s.qrLink(host, e.Account, e.Password)
 			}
 		}
 		if !e.Ended.IsZero() || e.Mode != "shared" {
@@ -83,7 +84,7 @@ func (s *Server) eventViews() []eventView {
 
 func (s *Server) eventRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/events", s.admin(func(w http.ResponseWriter, r *http.Request, _ *identity) {
-		writeJSON(w, http.StatusOK, s.eventViews())
+		writeJSON(w, http.StatusOK, s.eventViews(r))
 	}))
 	mux.HandleFunc("POST /admin/api/events", s.admin(s.createEvent))
 	// Change when it ends (extend or shorten) and how many may join.
@@ -119,7 +120,7 @@ func (s *Server) eventRoutes(mux *http.ServeMux) {
 			return
 		}
 		s.Log.Info("event changed", "admin", id.Username, "event", e.Name, "expires", e.Expires)
-		writeJSON(w, http.StatusOK, s.eventViews())
+		writeJSON(w, http.StatusOK, s.eventViews(r))
 	}))
 	mux.HandleFunc("POST /admin/api/events/{id}/end", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
 		e, ok := s.Store.Event(r.PathValue("id"))
@@ -128,7 +129,7 @@ func (s *Server) eventRoutes(mux *http.ServeMux) {
 			return
 		}
 		s.endEvent(e, id.Username)
-		writeJSON(w, http.StatusOK, s.eventViews())
+		writeJSON(w, http.StatusOK, s.eventViews(r))
 	}))
 	// Delete an ended event's record (its mission stays).
 	mux.HandleFunc("DELETE /admin/api/events/{id}", s.admin(func(w http.ResponseWriter, r *http.Request, id *identity) {
@@ -142,7 +143,7 @@ func (s *Server) eventRoutes(mux *http.ServeMux) {
 			return
 		}
 		s.Store.DeleteEvent(e.ID)
-		writeJSON(w, http.StatusOK, s.eventViews())
+		writeJSON(w, http.StatusOK, s.eventViews(r))
 	}))
 }
 
@@ -226,7 +227,7 @@ func (s *Server) createEvent(w http.ResponseWriter, r *http.Request, id *identit
 		return
 	}
 	s.Log.Info("event created", "admin", id.Username, "event", e.Name, "mode", e.Mode, "group", e.Group, "mission", e.Mission, "expires", e.Expires)
-	writeJSON(w, http.StatusCreated, s.eventViews())
+	writeJSON(w, http.StatusCreated, s.eventViews(r))
 }
 
 // endEvent erases an event's accounts and removes its group and invite.

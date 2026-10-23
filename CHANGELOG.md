@@ -10,6 +10,36 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.5.0 (2026-10-23)
+
+**Packages and QR codes follow the address you opened the console at.** On
+a local server (no Let's Encrypt), connection packages, QR codes, sign-up
+and invite links, the account page and events now use the address in your
+browser's address bar, as OpenTAKServer does, instead of the fixed public
+host. A Raspberry Pi whose IP address changes needs no setting: open the
+console at its new address and everything made there points at it. Opening
+it as `localhost` on the server itself still uses the public host, and
+servers with Let's Encrypt keep using their domain (the certificate only
+covers that name). The address field on the Connect page still overrides
+it.
+
+**iTAK QR codes.** The Connect page's QR code now has an **App** choice:
+ATAK or iTAK. With Let's Encrypt, the iTAK code is iTAK's registration QR
+code: it carries the server and a one-time code (never the user's
+password), so iTAK signs in and enrolls by itself after one scan. On a local
+server, where iTAK can't trust the server's certificate yet, it's a link
+the iPhone's camera opens to download the iTAK package (with a certificate
+for the user), which you add in iTAK with **Upload Server Package**. Both
+follow the same rules as ATAK codes: expiry, one device, New phone, and
+the live code list.
+
+## v1.5.0-rc.1 (2026-10-23)
+
+A release candidate for v1.5.0 (above), to try the iTAK QR codes on an
+iPhone and check that iTAK still enrolls normally with the enrollment reply
+changes from the v1.4.2 candidates (below), which v1.5.0 includes. A
+pre-release: servers only get it with **Include pre-releases** ticked.
+
 ## v1.4.2 (2026-10-23)
 
 **Fix: TROP couldn't enroll.** TROP (an iOS TAK client) got its certificate,

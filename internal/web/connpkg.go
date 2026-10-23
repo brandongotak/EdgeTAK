@@ -22,7 +22,7 @@ import (
 func (s *Server) connectionPackage(w http.ResponseWriter, r *http.Request, id *identity) {
 	q := r.URL.Query()
 	mode := firstNonEmpty(q.Get("mode"), "ssl")
-	host := firstNonEmpty(q.Get("host"), s.Cfg.PublicHost)
+	host := firstNonEmpty(q.Get("host"), s.deviceHost(r))
 	username := q.Get("username")
 	if host == "" {
 		jsonError(w, http.StatusBadRequest, "public_host is not configured; pass ?host=")
@@ -38,7 +38,7 @@ func (s *Server) connectionPackage(w http.ResponseWriter, r *http.Request, id *i
 			jsonError(w, http.StatusBadRequest, "iTAK packages contain a client certificate: choose an existing username")
 			return
 		}
-		data, err = s.buildITAKPackage(host, username, id.Username)
+		data, _, err = s.buildITAKPackage(host, username, id.Username)
 	default:
 		jsonError(w, http.StatusBadRequest, "mode must be ssl, tcp or itak")
 		return
@@ -191,21 +191,21 @@ var itakPrefTmpl = template.Must(template.New("itak").Parse(`<?xml version='1.0'
 // freshly issued client certificate and the truststore, all at the zip
 // root. iTAK does not enroll, so the certificate is issued here and
 // recorded like any other (revocable from the Certificates tab).
-func (s *Server) buildITAKPackage(host, username, admin string) ([]byte, error) {
+func (s *Server) buildITAKPackage(host, username, admin string) (data []byte, serial string, err error) {
 	if s.Addrs["tls"] == "" {
-		return nil, fmt.Errorf("the TLS streaming listener is disabled")
+		return nil, "", fmt.Errorf("the TLS streaming listener is disabled")
 	}
 	_, port, err := net.SplitHostPort(s.Addrs["tls"])
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	clientP12, serial, err := s.packageCert(username, "itak-package")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	trust, err := s.CA.TrustStoreP12(s.Cfg.TruststorePassword)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	s.Log.Info("issued iTAK connection package", "admin", admin, "user", username, "serial", serial)
 
@@ -215,7 +215,7 @@ func (s *Server) buildITAKPackage(host, username, admin string) ([]byte, error) 
 		"Name": xmlEscape(s.Cfg.ServerName), "Connect": xmlEscape(fmt.Sprintf("%s:%s:ssl", host, port)),
 		"Password": xmlEscape(s.Cfg.TruststorePassword), "ClientFile": xmlEscape(clientFile),
 	}); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
@@ -225,16 +225,16 @@ func (s *Server) buildITAKPackage(host, username, admin string) ([]byte, error) 
 	}{{"config.pref", pref.Bytes()}, {clientFile, clientP12}, {"truststore-root.p12", trust}} {
 		w, err := zw.CreateHeader(&zip.FileHeader{Name: f.name, Method: zip.Deflate, Modified: time.Now()})
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		if _, err := w.Write(f.data); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 	if err := zw.Close(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return buf.Bytes(), nil
+	return buf.Bytes(), serial, nil
 }
 
 // packageCert issues a client certificate for a connection package and

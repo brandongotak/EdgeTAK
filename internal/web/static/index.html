@@ -1151,6 +1151,7 @@
           <p class="muted">Pick a user: scanning the QR code with the phone's camera connects ATAK 5.x as them, on servers with or without Let's Encrypt. It holds a one-time code, not their password: the code only sets up a device, stops working when it expires (or soon after its first use, for one device), and can be revoked below.</p>
           <form id="qr-form" class="stack">
             <label>User <select name="username" id="qr-user" required><option value="">Choose a user</option></select></label>
+            <label>App <select name="app"><option value="">ATAK</option><option value="itak">iTAK (iPhone, iPad)</option></select></label>
             <div class="inline-form">
               <label>Works for <select name="hours"><option value="1">1 hour</option><option value="24" selected>24 hours</option><option value="168">7 days</option><option value="720">30 days</option></select></label>
               <label class="check"><input type="checkbox" name="one" checked> One device only</label>

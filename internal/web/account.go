@@ -54,7 +54,7 @@ func (s *Server) accountRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /account", serve("account.html"))
 	mux.HandleFunc("GET /account/{$}", serve("account.html"))
 	mux.HandleFunc("GET /account/api/info", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"server_name": s.Cfg.ServerName, "host": s.Cfg.PublicHost,
+		writeJSON(w, http.StatusOK, map[string]any{"server_name": s.Cfg.ServerName, "host": s.deviceHost(r),
 			"quick_connect": s.Public.Info()["mode"] != "off", "streaming_port": port(s.Addrs["tls"]),
 			"signup": s.Store.Registration().Mode != "off"})
 	})
@@ -68,7 +68,7 @@ func (s *Server) accountRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /account/api/certs/{serial}/revoke", s.accountAuth(s.accountRevoke))
 	// A QR code that sets up one device, made when the user asks for it.
 	mux.HandleFunc("POST /account/api/qr", s.accountAuth(func(w http.ResponseWriter, r *http.Request, u *store.User, _ string) {
-		host := s.qrHost(r)
+		host := s.deviceHost(r)
 		var req struct {
 			Replace bool `json:"replace"`
 		}
@@ -77,7 +77,7 @@ func (s *Server) accountRoutes(mux *http.ServeMux) {
 			jsonError(w, http.StatusBadRequest, "this is a shared account; its devices can't be replaced one by one")
 			return
 		}
-		code, c, err := s.newEnrollCode(u.Username, 1, true, req.Replace, host, u.Username)
+		code, c, err := s.newEnrollCode(u.Username, 1, true, req.Replace, "", host, u.Username)
 		if err != nil {
 			jsonError(w, http.StatusBadRequest, err.Error())
 			return

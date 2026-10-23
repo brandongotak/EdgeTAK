@@ -3686,7 +3686,7 @@ let connectPick = null;
 let qrPick = null;
 
 async function loadConnect() {
-  if (!$('#connect-host').value && status) $('#connect-host').value = status.public_host || location.hostname;
+  if (!$('#connect-host').value && status) $('#connect-host').value = status.device_host || status.public_host || location.hostname;
   const users = await api('GET', 'api/users');
   const sel = $('#connect-user');
   const keep = connectPick ?? sel.value;
@@ -3911,7 +3911,7 @@ function renderQRCodes(list) {
     ].join('');
     return `<tr${c.state === 'active' || live ? '' : ' class="dim"'}>
     <td><strong>${esc(c.username)}</strong></td>
-    <td><div>${state[c.state] || esc(c.state)}${c.replace ? ' <span class="pill warn">replaces devices</span>' : ''}</div>
+    <td><div>${state[c.state] || esc(c.state)}${c.app === 'itak' ? ' <span class="pill">iTAK</span>' : ''}${c.replace ? ' <span class="pill warn">replaces devices</span>' : ''}</div>
       <div class="muted">${c.one_device ? 'one device' : 'any number of devices'}${c.state === 'active' ? ' · until ' + esc(date(c.expires)) : ''}</div>
       <div class="muted">made ${esc(ago(c.created))} by ${esc(c.created_by)}${c.used ? ' · first used ' + esc(ago(c.used)) : ''}</div></td>
     <td>${(c.devices || []).map(qrDevice).join('') || '<span class="muted">none yet</span>'}</td>
@@ -3930,11 +3930,12 @@ $('#qr-form').addEventListener('submit', guard(async (e) => {
     const what = n ? `${user}'s ${n === 1 ? 'current device certificate is' : `${n} current device certificates are`} revoked and ${n === 1 ? 'that device' : 'those devices'} disconnected` : `any devices ${user} has are disconnected (none have a certificate now)`;
     if (!confirm(`Replace ${user}'s devices?\n\nWhen the new phone scans this code, ${what}. They would need a new QR code to connect again.\n\nNothing changes until the code is scanned.`)) return;
   }
-  const r = await api('POST', 'api/enroll-codes', { username: user, hours: Number(f.hours.value), one_device: f.one.checked, replace: f.replace.checked, host });
+  const r = await api('POST', 'api/enroll-codes', { username: user, hours: Number(f.hours.value), one_device: f.one.checked, replace: f.replace.checked, app: f.app.value, host });
   f.replace.checked = false;
   // Without Let's Encrypt, ATAK doesn't trust this server yet: the QR code
   // imports a connection package with a certificate instead of enrolling.
-  const link = r.local && r.package_link ? r.package_link : r.link;
+  // The server picks iTAK's QR code the same way.
+  const link = r.app === 'itak' ? r.qr_link : r.local && r.package_link ? r.package_link : r.link;
   const box = $('#qr');
   box.innerHTML = '';
   if (window.QRCode) {
@@ -3943,7 +3944,9 @@ $('#qr-form').addEventListener('submit', guard(async (e) => {
     toast('QR library unavailable offline; use the link below', true);
   }
   let how = 'ATAK enrolls and connects.';
-  if (r.local && r.package_link) how = 'ATAK imports a connection package with a certificate for them and connects.';
+  if (r.app === 'itak' && !r.local) how = "In iTAK, add a server and scan this code (Settings → Network → Servers → + → Scan QR). It holds a one-time code, so iTAK signs in and enrolls by itself.";
+  else if (r.app === 'itak') how = "Scan it with the iPhone's camera and download the file. Then in iTAK add a server with Upload Server Package and choose the file (Files → Downloads). iTAK connects with a certificate for them.";
+  else if (r.local && r.package_link) how = 'ATAK imports a connection package with a certificate for them and connects.';
   else if (r.local) how = 'Plain HTTP (port 8080) is off, so this only works on a phone that already trusts this server (one that imported a connection package from it).';
   if (r.replace) how += ` When it is scanned, ${r.username}'s other devices are disconnected.`;
   $('#qr-info').textContent = `For ${r.username}: works until ${date(r.expires)}${r.one_device ? ', for one device' : ''}. ${how} Treat it like a password until then.`;
