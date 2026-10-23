@@ -92,6 +92,17 @@ func (s *Server) inviteViews() []inviteView {
 
 // ---- public ----
 
+// signedUp is the answer to a sign-up that made an account: with a QR code
+// that sets up one device, so the new user's phone connects in one scan.
+func (s *Server) signedUp(r *http.Request, username string) map[string]any {
+	out := map[string]any{"status": "created", "username": username}
+	host := s.qrHost(r)
+	if code, c, err := s.newEnrollCode(username, 24, true, host, "sign-up"); err == nil {
+		out["qr_link"], out["qr_expires"] = s.qrLink(host, username, code), c.Expires
+	}
+	return out
+}
+
 func (s *Server) registerInfo(w http.ResponseWriter, r *http.Request) {
 	reg := s.Store.Registration()
 	info := map[string]any{
@@ -155,7 +166,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		s.signupLimiter.refund(remote)
 		s.Log.Info("user registered with invite", "user", u.Username, "groups", u.Groups, "remote", remote)
 		s.notify(notice{Kind: "signup", Title: "New account", Username: u.Username, Text: u.Username + " signed up with an invite."})
-		writeJSON(w, http.StatusCreated, map[string]any{"status": "created", "username": u.Username})
+		writeJSON(w, http.StatusCreated, s.signedUp(r, u.Username))
 	case reg.Mode == "open":
 		u, err := s.Store.CreateUserWithHash(req.Username, hash, reg.DefaultGroups)
 		if s.registrationError(w, err) {
@@ -163,7 +174,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		}
 		s.Log.Info("user registered (open sign-up)", "user", u.Username, "groups", u.Groups, "remote", remote)
 		s.notify(notice{Kind: "signup", Title: "New account", Username: u.Username, Text: u.Username + " signed up."})
-		writeJSON(w, http.StatusCreated, map[string]any{"status": "created", "username": u.Username})
+		writeJSON(w, http.StatusCreated, s.signedUp(r, u.Username))
 	case reg.Mode == "approval":
 		err := s.Store.AddRequest(store.SignupRequest{ID: uuid(), Username: req.Username, PasswordHash: hash,
 			Note: truncate(strings.TrimSpace(req.Note), 300), Remote: remote, Created: time.Now().UTC()})

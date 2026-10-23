@@ -4,11 +4,13 @@ import (
 	"archive/zip"
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"software.sslmate.com/src/go-pkcs12"
 )
@@ -111,4 +113,152 @@ func TestQRPackage(t *testing.T) {
 	if resp, _ := get(pkgURL); resp.StatusCode != 404 {
 		t.Errorf("revoked code = %d", resp.StatusCode)
 	}
+}
+
+// qrDownload follows an ATAK import link (as ATAK does) and returns the
+// package's files, failing unless it downloads.
+func qrDownload(t *testing.T, a *App, importLink string) map[string][]byte {
+	t.Helper()
+	link, err := url.Parse(importLink)
+	if err != nil || link.Scheme != "tak" || link.Path != "/import" {
+		t.Fatalf("not an import link: %s", importLink)
+	}
+	resp, err := (&http.Client{Transport: memTransport(nil)}).Get(link.Query().Get("url"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("download = %d %s", resp.StatusCode, body)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string][]byte{}
+	for _, f := range zr.File {
+		rc, _ := f.Open()
+		files[f.Name], _ = io.ReadAll(rc)
+		rc.Close()
+	}
+	return files
+}
+
+// qrPackageUser is the user a downloaded QR package's certificate is for.
+func qrPackageUser(t *testing.T, a *App, files map[string][]byte) string {
+	t.Helper()
+	for name, data := range files {
+		if strings.HasPrefix(name, "certs/") && strings.HasSuffix(name, ".p12") && !strings.Contains(name, "truststore") {
+			_, leaf, _, err := pkcs12.DecodeChain(data, a.Cfg.TruststorePassword)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return leaf.Subject.CommonName
+		}
+	}
+	t.Fatalf("no client certificate in %v", files)
+	return ""
+}
+
+// TestQRCodesEverywhere covers the other QR codes on a server without
+// Let's Encrypt: the account page's, the one after signing up, a shared
+// event's, and a printed sheet's all set up ATAK with a package.
+func TestQRCodesEverywhere(t *testing.T) {
+	a := startApp(t)
+	call, _ := adminJSON(t, a)
+	a.Store.CreateUser("fay", "fays-password-1", []string{"Cyan"}, false)
+	a.Store.CreateUser("gus", "guss-password-1", []string{"Cyan"}, false)
+	call("PATCH", "/admin/api/users/gus", map[string]bool{"disabled": true})
+
+	t.Run("account page", func(t *testing.T) {
+		acct, _ := accountClient(t, a, "fay", "fays-password-1")
+		code, v := acct("POST", "/account/api/qr", nil)
+		if code != 200 {
+			t.Fatalf("account qr = %d %v", code, v)
+		}
+		if u := qrPackageUser(t, a, qrDownload(t, a, v["link"].(string))); u != "fay" {
+			t.Errorf("certificate for %q", u)
+		}
+	})
+
+	t.Run("sign-up", func(t *testing.T) {
+		call("PUT", "/admin/api/registration", map[string]any{"mode": "open", "default_groups": []string{"Cyan"}})
+		hc := &http.Client{Transport: memTransport(&tls.Config{RootCAs: a.CA.Pool()})}
+		resp, err := hc.Post("https://"+a.Addrs["enroll"]+"/api/register", "application/json",
+			strings.NewReader(`{"username":"hal","password":"hals-password-1"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v map[string]any
+		json.NewDecoder(resp.Body).Decode(&v)
+		resp.Body.Close()
+		if resp.StatusCode != 201 || v["qr_link"] == nil {
+			t.Fatalf("sign-up = %d %v", resp.StatusCode, v)
+		}
+		if u := qrPackageUser(t, a, qrDownload(t, a, v["qr_link"].(string))); u != "hal" {
+			t.Errorf("certificate for %q", u)
+		}
+	})
+
+	t.Run("shared event", func(t *testing.T) {
+		if code, v := call("POST", "/admin/api/events", map[string]any{"name": "Walk Up", "mode": "shared", "expires": time.Now().Add(time.Hour)}); code != 201 {
+			t.Fatalf("event = %d %v", code, v)
+		}
+		ev := eventByName(t, a, "Walk Up")
+		files := qrDownload(t, a, ev["enroll_link"].(string))
+		if u := qrPackageUser(t, a, files); u != ev["account"] {
+			t.Errorf("certificate for %q, want %v", u, ev["account"])
+		}
+		// Many devices share it; it stops when the event ends.
+		qrDownload(t, a, ev["enroll_link"].(string))
+		call("POST", "/admin/api/events/"+ev["id"].(string)+"/end", nil)
+		link, _ := url.Parse(ev["enroll_link"].(string))
+		resp, err := (&http.Client{Transport: memTransport(nil)}).Get(link.Query().Get("url"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != 404 {
+			t.Errorf("after the event = %d", resp.StatusCode)
+		}
+	})
+
+	t.Run("sheet", func(t *testing.T) {
+		code, v := call("POST", "/admin/api/enroll-codes/batch", map[string]any{"usernames": []string{"fay", "gus", "nobody", "fay"}, "hours": 24, "one_device": true})
+		if code != 201 {
+			t.Fatalf("batch = %d %v", code, v)
+		}
+		cards, skipped := v["cards"].([]any), v["skipped"].([]any)
+		if len(cards) != 1 || len(skipped) != 2 {
+			t.Fatalf("cards %v, skipped %v", cards, skipped)
+		}
+		card := cards[0].(map[string]any)
+		if u := qrPackageUser(t, a, qrDownload(t, a, card["qr_link"].(string))); card["username"] != "fay" || u != "fay" {
+			t.Errorf("card %v, certificate for %q", card, u)
+		}
+		if code, _ := call("POST", "/admin/api/enroll-codes/batch", map[string]any{"usernames": []string{}}); code != 400 {
+			t.Errorf("empty batch = %d", code)
+		}
+	})
+}
+
+// eventByName is the admin view of an event.
+func eventByName(t *testing.T, a *App, name string) map[string]any {
+	t.Helper()
+	_, hc := adminJSON(t, a)
+	resp, err := hc.Get("https://" + a.Addrs["https"] + "/admin/api/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var list []map[string]any
+	json.NewDecoder(resp.Body).Decode(&list)
+	for _, e := range list {
+		if e["name"] == name {
+			return e
+		}
+	}
+	t.Fatalf("no event %q in %v", name, list)
+	return nil
 }

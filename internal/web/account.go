@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/brandongotak/EdgeTAK/internal/audit"
 	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
@@ -65,6 +66,20 @@ func (s *Server) accountRoutes(mux *http.ServeMux) {
 		s.ownPackage(w, r, s.fromUser(u))
 	}))
 	mux.HandleFunc("POST /account/api/certs/{serial}/revoke", s.accountAuth(s.accountRevoke))
+	// A QR code that sets up one device, made when the user asks for it.
+	mux.HandleFunc("POST /account/api/qr", s.accountAuth(func(w http.ResponseWriter, r *http.Request, u *store.User, _ string) {
+		host := s.qrHost(r)
+		code, c, err := s.newEnrollCode(u.Username, 1, true, host, u.Username)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if s.Audit != nil {
+			s.Audit.Add(audit.Entry{Actor: u.Username, IP: clientIP(r), Action: "Made a quick-connect QR code", Target: u.Username,
+				Details: "on the account page"})
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"link": s.qrLink(host, u.Username, code), "expires": c.Expires})
+	}))
 }
 
 // forgetInitialPassword deletes the first-run password file once the admin

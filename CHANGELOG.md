@@ -29,6 +29,26 @@ ATAK imports it and connects: one scan, no typing.
 - With plain HTTP turned off, the QR code only works on phones that already
   imported a connection package from the server.
 
+**The other QR codes work on local servers too**, the same way:
+
+- **Account page:** users get a QR code for one device (working for an
+  hour) with one click, without typing their password.
+- **After signing up:** the page shows a QR code for the new account (one
+  device, 24 hours).
+- **Shared events:** the event's QR code works until the event ends.
+
+**Printable QR sheet.** **Print a QR sheet…** on the Connect page or above
+the Users list: pick users (or a whole group), how long the codes work and
+whether each is for one device, and print a page of labelled QR cards to
+hand out at a briefing.
+
+## v1.2.0-rc.2 (2026-10-23)
+
+The second release candidate for v1.2.0: rc.1 plus QR codes on the account
+page, after signing up and for shared events that work on local servers,
+and the printable QR sheet. See v1.2.0 above. It is a pre-release: servers
+only get it with **Include pre-releases** ticked on the update card.
+
 ## v1.2.0-rc.1 (2026-10-23)
 
 A release candidate for v1.2.0, for testing QR codes on a local server

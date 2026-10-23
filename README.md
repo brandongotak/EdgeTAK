@@ -250,6 +250,9 @@ There are two ways to connect, depending on the server:
     unencrypted, so use these codes on networks you trust; with plain HTTP
     turned off, the QR code only works on phones that already imported a
     connection package from the server.
+  - **Print a QR sheet…** (on the Connect page or above the Users list)
+    makes a code for each chosen user, or a whole group, and opens a
+    printable page of labelled QR cards to hand out.
 - **Connection package** (any server): on the **Connect** page (Server
   section), download a package and import it on the device. For ATAK, WinTAK
   and TAKX, choose *SSL with certificate enrollment*; the client then asks
@@ -264,8 +267,8 @@ There are two ways to connect, depending on the server:
 | TAKX | add a TAK server with username and password | SSL package |
 | iTAK | add a server with address, username and password | iTAK package (Settings → Network → upload server package) |
 
-Users can also get their own packages and ATAK quick-connect code from their
-**account page** (see [Sign-in and the account page](#sign-in-and-the-account-page)).
+Users can also get their own packages and an ATAK QR code (for one device,
+working for an hour) from their **account page** (see [Sign-in and the account page](#sign-in-and-the-account-page)).
 
 **Channels:** devices enrolled on this server get ATAK's **Channels** button
 automatically. ATAK devices enrolled before channels were added need **Settings →
@@ -336,7 +339,7 @@ devices of a group's members, or of every user, as on the official server.
 
 One sign-in page at `https://<host>:8446/` serves everyone: administrators go
 on to the admin console, users to their **account page**, where they get
-their connection packages and ATAK quick-connect code, see their connected
+their connection packages and an ATAK QR code, see their connected
 devices and certificates (with expiry), revoke the certificate of a lost
 device, and change their password. Share the link from the **Connect** page.
 
@@ -368,9 +371,9 @@ page, `https://<public host>:8446/register`:
 
   Approval and Open accounts go into the **groups for new accounts**.
 
-After signing up, the page shows the server address, an ATAK quick-connect QR
-code (on servers with Let's Encrypt), and connection packages for ATAK, WinTAK,
-TAKX and iTAK. Sign-up only works over HTTPS, and attempts are rate-limited per
+After signing up, the page shows the server address, an ATAK QR code (for one
+device, working for 24 hours), and connection packages for ATAK, WinTAK, TAKX
+and iTAK. Sign-up only works over HTTPS, and attempts are rate-limited per
 address. Use **Open** only on servers you are happy for anyone to join.
 
 ### Events
@@ -378,7 +381,9 @@ address. Use **Open** only on servers you are happy for anyone to join.
 An **event** (People → Events) is a temporary operation with its own group
 and Data Sync mission. People join by scanning one QR code (printable as a
 join sheet): either each person signs up for their own account, or everyone
-enrolls with one shared account. When the event ends, at the time you set,
+connects with one shared account (on servers without Let's Encrypt, the
+shared QR code downloads a connection package, as above, until the event
+ends). When the event ends, at the time you set,
 every event account is erased (certificates revoked, devices disconnected)
 and its group removed; the mission is kept for review. Extend or end it early
 from the console.

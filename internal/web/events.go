@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -71,8 +70,7 @@ func (s *Server) eventViews() []eventView {
 			case "person":
 				v.JoinURL = s.registerURL(e.Invite)
 			case "shared":
-				v.EnrollLink = "tak://com.atakmap.app/enroll?host=" + url.QueryEscape(s.Cfg.PublicHost) +
-					"&username=" + url.QueryEscape(e.Account) + "&token=" + url.QueryEscape(e.Password)
+				v.EnrollLink = s.qrLink(s.Cfg.PublicHost, e.Account, e.Password)
 			}
 		}
 		if !e.Ended.IsZero() || e.Mode != "shared" {

@@ -501,7 +501,7 @@
         </form>
       </dialog>
       <div class="card">
-        <h2>Users</h2>
+        <div class="card-head"><h2>Users</h2><button type="button" class="small qr-sheet-open">Print a QR sheet…</button></div>
         <div class="table-wrap"><table id="users-table">
           <thead><tr><th>Username</th><th>Groups</th><th>Role</th><th>Online</th><th>Created</th><th></th></tr></thead>
           <tbody></tbody>
@@ -1139,7 +1139,10 @@
               <label>Works for <select name="hours"><option value="1">1 hour</option><option value="24" selected>24 hours</option><option value="168">7 days</option><option value="720">30 days</option></select></label>
               <label class="check"><input type="checkbox" name="one" checked> One device only</label>
             </div>
-            <button type="submit" class="primary">Make QR code</button>
+            <div class="inline-form">
+              <button type="submit" class="primary">Make QR code</button>
+              <button type="button" class="qr-sheet-open">Print a QR sheet…</button>
+            </div>
           </form>
           <div id="qr" class="qr"></div>
           <p class="muted" id="qr-info"></p>
@@ -1158,6 +1161,21 @@
       </div>
     </section>
     <footer class="console-footer muted">EdgeTAK is free software under the <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">GNU AGPL 3.0</a> · <a href="https://github.com/brandongotak/EdgeTAK" target="_blank" rel="noopener">Source code</a></footer>
+    <!-- Opened from the Connect page and the Users page. -->
+    <dialog id="qr-sheet-dialog" class="card dialog">
+      <div class="card-head"><h2>Print a QR sheet</h2><button type="button" class="small ghost" id="qr-sheet-close" title="Close">✕</button></div>
+      <form id="qr-sheet-form" class="stack">
+        <p class="muted">One labelled QR card per user, to hand out. Each card connects ATAK as that user when scanned with the phone's camera.</p>
+        <label>Group <select name="group"><option value="">All users</option></select></label>
+        <div class="inline-form"><button type="button" class="small" id="qr-sheet-all">Select all</button><button type="button" class="small" id="qr-sheet-none">Select none</button><span class="muted" id="qr-sheet-count"></span></div>
+        <div id="qr-sheet-users" class="group-rows"></div>
+        <div class="inline-form">
+          <label>Works for <select name="hours"><option value="1">1 hour</option><option value="24" selected>24 hours</option><option value="168">7 days</option><option value="720">30 days</option></select></label>
+          <label class="check"><input type="checkbox" name="one" checked> One device each</label>
+        </div>
+        <button type="submit" class="primary">Make codes and print</button>
+      </form>
+    </dialog>
   </main>
 
   <aside id="map-panel" class="map-panel" hidden>

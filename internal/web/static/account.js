@@ -74,7 +74,6 @@ async function start() {
   $('#conn-host').textContent = info.host || location.hostname;
   $('#conn-port').textContent = info.streaming_port || '8089';
   $('#conn-user').textContent = me.username;
-  $('#quick').hidden = !info.quick_connect;
   render();
   loadTwoFactor().catch(() => {});
   clearInterval(pollTimer);
@@ -253,16 +252,17 @@ $('#twofa-recovery').addEventListener('click', async () => {
   }
 });
 
-// The quick-connect code holds the password, so it is built from what the
-// user types here and never stored.
-$('#qr-form').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const pw = e.target.password.value;
-  e.target.reset();
-  const host = info.host || location.hostname;
-  const uri = `tak://com.atakmap.app/enroll?host=${encodeURIComponent(host)}&username=${encodeURIComponent(me.username)}&token=${encodeURIComponent(pw)}`;
-  $('#qr').innerHTML = '';
-  if (window.QRCode) new QRCode($('#qr'), { text: uri, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+// The QR code holds a one-time code from the server (not the password), so
+// it works on servers with or without Let's Encrypt.
+$('#qr-make').addEventListener('click', async () => {
+  try {
+    const r = await api('POST', 'qr');
+    $('#qr').innerHTML = '';
+    if (window.QRCode) new QRCode($('#qr'), { text: r.link, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+    $('#qr-info').textContent = `Works until ${new Date(r.expires).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, for one device.`;
+  } catch (ex) {
+    toast(ex.message, true);
+  }
 });
 
 for (const b of document.querySelectorAll('[data-pkg]')) {

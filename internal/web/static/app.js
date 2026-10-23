@@ -3711,6 +3711,84 @@ $('#connect-form').addEventListener('submit', guard(async (e) => {
   await download('GET', `api/connection-package?${q}`, undefined, 'edgetak.zip');
 }));
 
+// ---- printable QR sheet ----
+
+let qrSheetUsers = [];
+
+async function openQRSheet() {
+  const [users, groups] = await Promise.all([api('GET', 'api/users'), api('GET', 'api/groups')]);
+  qrSheetUsers = users.filter((u) => !u.disabled);
+  const sel = $('#qr-sheet-form').group;
+  sel.length = 1;
+  for (const g of groups) sel.add(new Option(g.name, g.name));
+  renderQRSheetUsers();
+  $('#qr-sheet-dialog').showModal();
+}
+
+function renderQRSheetUsers() {
+  const g = $('#qr-sheet-form').group.value;
+  const list = qrSheetUsers.filter((u) => !g || (u.groups || []).includes(g));
+  $('#qr-sheet-users').innerHTML = list.map((u) => `<label class="check"><input type="checkbox" value="${esc(u.username)}" checked> ${esc(u.username)}</label>`).join('')
+    || '<p class="muted">No active users in this group</p>';
+  countQRSheet();
+}
+
+function countQRSheet() {
+  const n = $('#qr-sheet-users').querySelectorAll('input:checked').length;
+  $('#qr-sheet-count').textContent = `${n} selected`;
+}
+
+for (const b of document.querySelectorAll('.qr-sheet-open')) b.addEventListener('click', guard(openQRSheet));
+$('#qr-sheet-close').addEventListener('click', () => $('#qr-sheet-dialog').close());
+$('#qr-sheet-form').group.addEventListener('change', renderQRSheetUsers);
+$('#qr-sheet-users').addEventListener('change', countQRSheet);
+for (const [id, on] of [['#qr-sheet-all', true], ['#qr-sheet-none', false]]) {
+  $(id).addEventListener('click', () => {
+    for (const c of $('#qr-sheet-users').querySelectorAll('input')) c.checked = on;
+    countQRSheet();
+  });
+}
+
+$('#qr-sheet-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const usernames = [...$('#qr-sheet-users').querySelectorAll('input:checked')].map((x) => x.value);
+  if (!usernames.length) return toast('Choose at least one user', true);
+  if (!window.QRCode) return toast('QR library unavailable offline', true);
+  // Open the window now, while the click still allows pop-ups.
+  const w = window.open('', '_blank');
+  if (!w) return toast('Allow pop-ups to print the sheet', true);
+  w.document.write('<p style="font:16px system-ui,sans-serif">Making QR codes…</p>');
+  let r;
+  try {
+    const host = $('#connect-host').value || status?.public_host || location.hostname;
+    r = await api('POST', 'api/enroll-codes/batch', { usernames, hours: Number(f.hours.value), one_device: f.one.checked, host });
+  } catch (ex) {
+    w.close();
+    return toast(ex.message, true);
+  }
+  const tmp = document.createElement('div');
+  const cards = r.cards.map((c) => {
+    tmp.innerHTML = '';
+    new QRCode(tmp, { text: c.qr_link, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+    const img = tmp.querySelector('canvas')?.toDataURL() || tmp.querySelector('img')?.src;
+    return `<div class="card"><div class="name">${esc(c.username)}</div><img src="${img}" alt="QR code for ${esc(c.username)}">
+      <div>Scan with the phone's camera: ATAK connects as <strong>${esc(c.username)}</strong>.</div>
+      <div class="muted">Works until ${esc(date(c.expires))}${f.one.checked ? ', for one device' : ''}. Keep it private.</div></div>`;
+  }).join('');
+  const name = status?.server_name || 'EdgeTAK';
+  w.document.open();
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)} QR codes</title>
+    <style>body{font:14px system-ui,sans-serif;color:#111;margin:24px}h1{font-size:20px;margin:0 0 16px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+    .card{border:1px dashed #999;border-radius:8px;padding:16px;text-align:center;break-inside:avoid;page-break-inside:avoid}.name{font-size:20px;font-weight:700}
+    img{width:200px;height:200px;margin:10px auto;display:block}.muted{color:#555;font-size:12px;margin-top:6px}</style></head>
+    <body><h1>${esc(name)}: ATAK QR codes</h1><div class="grid">${cards}</div><script>onload=()=>print()<\/script></body></html>`);
+  w.document.close();
+  $('#qr-sheet-dialog').close();
+  renderQRCodes(r.codes);
+  toast(`Made ${r.cards.length} QR code(s)` + (r.skipped.length ? `; skipped ${r.skipped.join(', ')}` : ''));
+});
+
 function renderQRCodes(list) {
   const state = { active: '<span class="pill ok">active</span>', used: '<span class="pill">used</span>', expired: '<span class="pill">expired</span>' };
   $('#qr-codes tbody').innerHTML = list.map((c) => `<tr${c.state === 'active' ? '' : ' class="dim"'}>

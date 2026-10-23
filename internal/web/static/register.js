@@ -61,7 +61,7 @@ $('#register-form').addEventListener('submit', async (e) => {
       return show('#pending');
     }
     creds = { username: body.username, password: f.get('password') };
-    showDone();
+    showDone(body.qr_link);
   } catch (ex) {
     err.textContent = ex.message;
   } finally {
@@ -69,7 +69,7 @@ $('#register-form').addEventListener('submit', async (e) => {
   }
 });
 
-function showDone() {
+function showDone(qrLink) {
   const host = info.host || location.hostname;
   $('#done-user').textContent = creds.username;
   $('#done-host').textContent = host;
@@ -78,9 +78,11 @@ function showDone() {
   // certificate; otherwise the package carries the trust store.
   $('#quick').hidden = !info.quick_connect;
   $('#package-only').hidden = info.quick_connect;
-  if (info.quick_connect && window.QRCode) {
-    const uri = `tak://com.atakmap.app/enroll?host=${encodeURIComponent(host)}&username=${encodeURIComponent(creds.username)}&token=${encodeURIComponent(creds.password)}`;
-    new QRCode($('#qr'), { text: uri, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+  // The QR code holds a one-time code from the server, so it works with or
+  // without a publicly trusted certificate.
+  $('#qr-block').hidden = !(qrLink && window.QRCode);
+  if (qrLink && window.QRCode) {
+    new QRCode($('#qr'), { text: qrLink, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
   }
   show('#done');
 }

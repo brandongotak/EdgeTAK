@@ -70,6 +70,7 @@ var auditActions = map[string]string{
 	"POST /admin/api/emergencies/{id}/ack":               "Acknowledged alert",
 	"POST /admin/api/emergencies/{id}/dismiss":           "Dismissed alert",
 	"POST /admin/api/enroll-codes":                       "Made a quick-connect QR code",
+	"POST /admin/api/enroll-codes/batch":                 "Made a QR code sheet",
 	"POST /admin/api/events":                             "Created event",
 	"POST /admin/api/events/{id}/end":                    "Ended event",
 	"POST /admin/api/federation/federates":               "Added federation link",

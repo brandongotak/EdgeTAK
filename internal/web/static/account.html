@@ -28,14 +28,12 @@
       <dt>Protocol</dt><dd>SSL</dd>
       <dt>Username</dt><dd class="mono" id="conn-user"></dd>
     </dl>
-    <div id="quick" hidden>
-      <h3>ATAK quick connect</h3>
-      <p class="muted">In ATAK open <em>Settings → Network → Servers → Quick connect</em> and scan this code. It contains your password, so it is only shown after you enter it, and only on this screen.</p>
-      <form id="qr-form" class="inline-form">
-        <input type="password" name="password" autocomplete="current-password" placeholder="Your password" aria-label="Your password" required>
-        <button type="submit">Show code</button>
-      </form>
+    <div id="quick">
+      <h3>Connect ATAK with a QR code</h3>
+      <p class="muted">Scan the code with your phone's camera to connect ATAK as you, without typing anything. Each code sets up one device and works for an hour; don't share it.</p>
+      <button type="button" id="qr-make">Show QR code</button>
       <div id="qr" class="qr"></div>
+      <p class="muted" id="qr-info"></p>
     </div>
     <h3>Connection packages</h3>
     <p class="muted">Import the package in your app, then sign in with your username and password. iTAK's package includes a certificate for one device.</p>
