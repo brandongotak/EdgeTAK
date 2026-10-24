@@ -102,7 +102,7 @@ func (s *Service) Apply(set store.FeedSettings) {
 	}
 	old := s.set
 	s.set = set
-	areaSame := old.Lat == set.Lat && old.Lon == set.Lon && old.RadiusNM == set.RadiusNM
+	areaSame := old.Lat == set.Lat && old.Lon == set.Lon // each feed's radius is in its own settings
 	adsbOn := set.ADSB.Enabled && validArea(set)
 	if s.stopADSB == nil || !adsbOn || !areaSame || !reflect.DeepEqual(old.ADSB, set.ADSB) {
 		if s.stopADSB != nil {
@@ -251,9 +251,9 @@ const (
 	foot = 0.3048
 )
 
-// bbox is the square around the area, as aisstream.io wants it.
+// bbox is the square around the ships' area, as aisstream.io wants it.
 func bbox(set store.FeedSettings) [2][2]float64 {
-	dLat := float64(set.RadiusNM) / 60
+	dLat := float64(set.AIS.RadiusNM) / 60
 	dLon := dLat / math.Max(math.Cos(set.Lat*math.Pi/180), 0.01)
 	return [2][2]float64{{set.Lat - dLat, set.Lon - dLon}, {set.Lat + dLat, set.Lon + dLon}}
 }

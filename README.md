@@ -504,8 +504,9 @@ helicopters, and ships by kind: cargo, tanker, passenger, fishing, pleasure
 and so on), with callsign or name, course, speed, altitude and details in
 the remarks. Markers go stale when a craft stops reporting.
 
-- **Area:** a center (or **Use the map's center**) and a radius up to 250
-  nautical miles.
+- **Area:** a center (or **Use the map's center**), and for each feed its own
+  radius, up to 250 nautical miles (by default 100 for aircraft, 25 for
+  ships).
 - **Aircraft** come from a free community ADS-B API, adsb.lol or adsb.fi
   (no account), polled every 10 seconds by default.
 - **Ships** come from [aisstream.io](https://aisstream.io)'s live feed, with

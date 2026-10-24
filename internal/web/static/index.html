@@ -364,17 +364,17 @@
         <div class="card-head"><h2>Aircraft and ships</h2><span id="feeds-state"></span></div>
         <p class="muted">Live aircraft (ADS-B) and ships (AIS) around an area, sent to devices as map markers that disappear when they stop reporting. The server needs internet access. They also show on the console map (Aircraft and Ships layers).</p>
         <form id="feeds-form" class="stack">
-          <h3>Area</h3>
+          <h3>Center</h3>
           <div class="inline-form">
             <label>Latitude <input name="lat" type="number" step="any" min="-90" max="90"></label>
             <label>Longitude <input name="lon" type="number" step="any" min="-180" max="180"></label>
-            <label>Radius (nautical miles) <input name="radius" type="number" min="1" max="250"></label>
             <button type="button" class="small" id="feeds-center">Use the map's center</button>
           </div>
           <h3>Aircraft (ADS-B)</h3>
           <label class="check"><input type="checkbox" name="adsb"> Send aircraft to devices</label>
           <div class="inline-form">
             <label>Source <select name="source"><option value="adsb.lol">adsb.lol</option><option value="adsb.fi">adsb.fi</option></select></label>
+            <label>Radius (nautical miles) <input name="adsb_radius" type="number" min="1" max="250"></label>
             <label>Update every (seconds) <input name="interval" type="number" min="5" max="300"></label>
           </div>
           <div class="muted">Groups that get them (none = every device)</div>
@@ -382,7 +382,10 @@
           <p class="muted" id="feeds-adsb-status"></p>
           <h3>Ships (AIS)</h3>
           <label class="check"><input type="checkbox" name="ais"> Send ships to devices</label>
-          <label>aisstream.io API key <input name="key" type="password" autocomplete="off"></label>
+          <div class="inline-form">
+            <label>aisstream.io API key <input name="key" type="password" autocomplete="off"></label>
+            <label>Radius (nautical miles) <input name="ais_radius" type="number" min="1" max="250"></label>
+          </div>
           <p class="muted">Free: sign up at <a href="https://aisstream.io" target="_blank" rel="noopener">aisstream.io</a> and create an API key there.</p>
           <div class="muted">Groups that get them (none = every device)</div>
           <div id="feeds-ais-groups" class="group-picker"></div>

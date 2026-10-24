@@ -5,6 +5,7 @@
 package store
 
 import (
+	"cmp"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -243,31 +244,39 @@ type db struct {
 }
 
 // FeedSettings are the aircraft (ADS-B) and ship (AIS) feeds EdgeTAK turns
-// into map markers for devices, around one area.
+// into map markers for devices, around one center, each within its own
+// radius.
 type FeedSettings struct {
-	Lat      float64 `json:"lat"`
-	Lon      float64 `json:"lon"`
-	RadiusNM int     `json:"radius_nm"` // nautical miles around Lat/Lon
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
+	// RadiusNM was one radius for both (v1.7.0 candidates); now only the
+	// default for a feed without its own.
+	RadiusNM int `json:"radius_nm,omitempty"`
 
 	ADSB struct {
 		Enabled     bool     `json:"enabled"`
 		Source      string   `json:"source"`       // adsb.lol or adsb.fi
+		RadiusNM    int      `json:"radius_nm"`    // nautical miles around Lat/Lon
 		IntervalSec int      `json:"interval_sec"` // between polls
 		Groups      []string `json:"groups"`       // none = every device
 	} `json:"adsb"`
 	AIS struct {
-		Enabled bool     `json:"enabled"`
-		APIKey  string   `json:"api_key"` // aisstream.io
-		Groups  []string `json:"groups"`
+		Enabled  bool     `json:"enabled"`
+		APIKey   string   `json:"api_key"` // aisstream.io
+		RadiusNM int      `json:"radius_nm"`
+		Groups   []string `json:"groups"`
 	} `json:"ais"`
 }
 
 // WithDefaults fills in unset values.
 func (f FeedSettings) WithDefaults() FeedSettings {
-	if f.RadiusNM <= 0 {
-		f.RadiusNM = 50
+	if f.ADSB.RadiusNM <= 0 {
+		f.ADSB.RadiusNM = cmp.Or(f.RadiusNM, 100)
 	}
-	f.RadiusNM = min(f.RadiusNM, 250)
+	if f.AIS.RadiusNM <= 0 {
+		f.AIS.RadiusNM = cmp.Or(f.RadiusNM, 25)
+	}
+	f.ADSB.RadiusNM, f.AIS.RadiusNM, f.RadiusNM = min(f.ADSB.RadiusNM, 250), min(f.AIS.RadiusNM, 250), 0
 	if f.ADSB.Source == "" {
 		f.ADSB.Source = "adsb.lol"
 	}

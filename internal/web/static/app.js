@@ -3767,7 +3767,8 @@ function renderFeeds(v) {
   const f = $('#feeds-form'), s = v.settings;
   f.lat.value = s.lat || '';
   f.lon.value = s.lon || '';
-  f.radius.value = s.radius_nm;
+  f.adsb_radius.value = s.adsb.radius_nm;
+  f.ais_radius.value = s.ais.radius_nm;
   f.adsb.checked = s.adsb.enabled;
   f.source.value = s.adsb.source;
   f.interval.value = s.adsb.interval_sec;
@@ -3800,9 +3801,9 @@ $('#feeds-form').addEventListener('submit', guard(async (e) => {
   e.preventDefault();
   const f = e.target;
   const v = await api('PUT', 'api/feeds', {
-    lat: Number(f.lat.value), lon: Number(f.lon.value), radius_nm: Number(f.radius.value),
-    adsb: { enabled: f.adsb.checked, source: f.source.value, interval_sec: Number(f.interval.value), groups: checkedIn('#feeds-adsb-groups') },
-    ais: { enabled: f.ais.checked, api_key: f.key.value, groups: checkedIn('#feeds-ais-groups') },
+    lat: Number(f.lat.value), lon: Number(f.lon.value),
+    adsb: { enabled: f.adsb.checked, source: f.source.value, radius_nm: Number(f.adsb_radius.value), interval_sec: Number(f.interval.value), groups: checkedIn('#feeds-adsb-groups') },
+    ais: { enabled: f.ais.checked, api_key: f.key.value, radius_nm: Number(f.ais_radius.value), groups: checkedIn('#feeds-ais-groups') },
   });
   renderFeeds(v);
   toast('Saved');

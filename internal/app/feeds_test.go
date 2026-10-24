@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -49,15 +50,17 @@ func TestFeeds(t *testing.T) {
 	dev.send(sa("ANDROID-pilot", "PILOT", "Cyan"))
 
 	// Ships need a key; the area needs a center.
-	if code, _ := call("PUT", "/admin/api/feeds", map[string]any{"lat": 0, "lon": 0, "radius_nm": 50, "adsb": map[string]any{"enabled": true}}); code != 400 {
+	if code, _ := call("PUT", "/admin/api/feeds", map[string]any{"lat": 0, "lon": 0, "adsb": map[string]any{"enabled": true, "radius_nm": 50}, "ais": map[string]any{"radius_nm": 20}}); code != 400 {
 		t.Errorf("no center = %d", code)
 	}
-	if code, _ := call("PUT", "/admin/api/feeds", map[string]any{"lat": 40.6, "lon": -73.9, "radius_nm": 50, "ais": map[string]any{"enabled": true}}); code != 400 {
+	if code, _ := call("PUT", "/admin/api/feeds", map[string]any{"lat": 40.6, "lon": -73.9, "adsb": map[string]any{"radius_nm": 50}, "ais": map[string]any{"enabled": true, "radius_nm": 20}}); code != 400 {
 		t.Errorf("no key = %d", code)
 	}
-	code, v := call("PUT", "/admin/api/feeds", map[string]any{"lat": 40.6, "lon": -73.9, "radius_nm": 50,
-		"adsb": map[string]any{"enabled": true, "source": "adsb.lol", "interval_sec": 5, "groups": []string{"Cyan"}},
-		"ais":  map[string]any{"enabled": true, "api_key": "ais-key-1", "groups": []string{"Cyan"}}})
+	var adsbRadius string
+	a.Web.Feeds.ADSBURL = func(_ string, _, _ float64, r int) string { adsbRadius = fmt.Sprint(r); return adsb.URL }
+	code, v := call("PUT", "/admin/api/feeds", map[string]any{"lat": 40.6, "lon": -73.9,
+		"adsb": map[string]any{"enabled": true, "source": "adsb.lol", "radius_nm": 120, "interval_sec": 5, "groups": []string{"Cyan"}},
+		"ais":  map[string]any{"enabled": true, "api_key": "ais-key-1", "radius_nm": 50, "groups": []string{"Cyan"}}})
 	if code != 200 || v["has_api_key"] != true || strings.Contains(mustJSON(v), "ais-key-1") {
 		t.Fatalf("save = %d %v", code, v)
 	}
@@ -72,9 +75,14 @@ func TestFeeds(t *testing.T) {
 	if ship.Type != "a-n-S-X-M-C" || ship.Callsign() != "EVER GIVEN" || !strings.Contains(string(ship.XML()), "Cargo") {
 		t.Errorf("ship event = %s", ship.XML())
 	}
+	// Each feed has its own radius: 120 nm for aircraft, 50 nm (0.83 degrees
+	// of latitude) for ships.
 	<-gotSub
 	if bb, _ := json.Marshal(sub["BoundingBoxes"]); !strings.HasPrefix(string(bb), "[[[39.76") {
-		t.Errorf("bounding box = %s", bb)
+		t.Errorf("ships' bounding box = %s", bb)
+	}
+	if adsbRadius != "120" {
+		t.Errorf("aircraft radius = %s", adsbRadius)
 	}
 
 	// The console map lists both.

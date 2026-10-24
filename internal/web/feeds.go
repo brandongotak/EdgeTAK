@@ -46,10 +46,13 @@ func (s *Server) feedRoutes(mux *http.ServeMux) {
 			jsonError(w, http.StatusBadRequest, "set the area's center first (pick it on the map, or enter its latitude and longitude)")
 			return
 		}
-		if req.RadiusNM < 1 || req.RadiusNM > 250 {
-			jsonError(w, http.StatusBadRequest, "the radius is 1 to 250 nautical miles")
-			return
+		for _, r := range []int{req.ADSB.RadiusNM, req.AIS.RadiusNM} {
+			if r < 1 || r > 250 {
+				jsonError(w, http.StatusBadRequest, "each radius is 1 to 250 nautical miles")
+				return
+			}
 		}
+		req.RadiusNM = 0 // the old shared radius
 		if req.ADSB.Source != "" && !slices.Contains([]string{"adsb.lol", "adsb.fi"}, req.ADSB.Source) {
 			jsonError(w, http.StatusBadRequest, "the ADS-B source is adsb.lol or adsb.fi")
 			return
@@ -72,7 +75,7 @@ func (s *Server) feedRoutes(mux *http.ServeMux) {
 			s.Feeds.Apply(s.Store.Feeds())
 		}
 		s.Log.Info("aircraft and ship feeds changed", "admin", id.Username, "adsb", req.ADSB.Enabled, "ais", req.AIS.Enabled,
-			"lat", req.Lat, "lon", req.Lon, "radius_nm", req.RadiusNM)
+			"lat", req.Lat, "lon", req.Lon, "adsb_radius_nm", req.ADSB.RadiusNM, "ais_radius_nm", req.AIS.RadiusNM)
 		writeJSON(w, http.StatusOK, s.feedsView())
 	}))
 	// The current aircraft and ships, for the console map.

@@ -37,12 +37,12 @@ type aircraft struct {
 
 func (s *Service) adsbURL(set store.FeedSettings) string {
 	if s.ADSBURL != nil {
-		return s.ADSBURL(set.ADSB.Source, set.Lat, set.Lon, set.RadiusNM)
+		return s.ADSBURL(set.ADSB.Source, set.Lat, set.Lon, set.ADSB.RadiusNM)
 	}
 	if set.ADSB.Source == "adsb.fi" {
-		return fmt.Sprintf("https://opendata.adsb.fi/api/v2/lat/%.4f/lon/%.4f/dist/%d", set.Lat, set.Lon, set.RadiusNM)
+		return fmt.Sprintf("https://opendata.adsb.fi/api/v2/lat/%.4f/lon/%.4f/dist/%d", set.Lat, set.Lon, set.ADSB.RadiusNM)
 	}
-	return fmt.Sprintf("https://api.adsb.lol/v2/point/%.4f/%.4f/%d", set.Lat, set.Lon, set.RadiusNM)
+	return fmt.Sprintf("https://api.adsb.lol/v2/point/%.4f/%.4f/%d", set.Lat, set.Lon, set.ADSB.RadiusNM)
 }
 
 func (s *Service) runADSB(ctx context.Context, set store.FeedSettings) {

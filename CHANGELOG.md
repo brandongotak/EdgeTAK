@@ -13,9 +13,9 @@ number.
 ## v1.7.0 (2026-10-23)
 
 **Aircraft and ships on devices' maps.** A new **Aircraft and ships** card
-on the Settings page sends live ADS-B aircraft and AIS ships around an area
-(up to 250 nautical miles) to devices as map markers, to the groups you
-choose:
+on the Settings page sends live ADS-B aircraft and AIS ships around a
+center, each feed within its own radius (up to 250 nautical miles), to
+devices as map markers, to the groups you choose:
 
 - **Aircraft** from a free community ADS-B API (adsb.lol or adsb.fi, no
   account), as civil or military aircraft and helicopters, with callsign,
@@ -25,6 +25,12 @@ choose:
   heading, destination and status.
 - Both show on the console map as the **Aircraft** and **Ships** layers.
   They aren't federated or kept in position history.
+
+## v1.7.0-rc.3 (2026-10-23)
+
+The third release candidate for v1.7.0: rc.2 with a separate radius for
+aircraft and for ships. See v1.7.0 above. A pre-release: servers only get
+it with **Include pre-releases** ticked.
 
 ## v1.7.0-rc.2 (2026-10-23)
 
