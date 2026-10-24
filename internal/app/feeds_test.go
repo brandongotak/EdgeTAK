@@ -62,11 +62,13 @@ func TestFeeds(t *testing.T) {
 		t.Fatalf("save = %d %v", code, v)
 	}
 
-	plane := dev.expect(func(e *cot.Event) bool { return e.UID == "ICAO-a3a8ef" }, "the aircraft")
+	// Either may arrive first.
+	got := dev.expectAll("the aircraft and the ship",
+		func(e *cot.Event) bool { return e.UID == "ICAO-a3a8ef" }, func(e *cot.Event) bool { return e.UID == "MMSI-366999712" })
+	plane, ship := got[0], got[1]
 	if plane.Type != "a-n-A-C-F" || plane.Callsign() != "FFT3134" || plane.Lat != 40.65 {
 		t.Errorf("aircraft event = %s", plane.XML())
 	}
-	ship := dev.expect(func(e *cot.Event) bool { return e.UID == "MMSI-366999712" }, "the ship")
 	if ship.Type != "a-n-S-X-M-C" || ship.Callsign() != "EVER GIVEN" || !strings.Contains(string(ship.XML()), "Cargo") {
 		t.Errorf("ship event = %s", ship.XML())
 	}

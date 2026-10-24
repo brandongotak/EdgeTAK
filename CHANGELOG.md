@@ -26,11 +26,12 @@ choose:
 - Both show on the console map as the **Aircraft** and **Ships** layers.
   They aren't federated or kept in position history.
 
-## v1.7.0-rc.1 (2026-10-23)
+## v1.7.0-rc.2 (2026-10-23)
 
 A release candidate for v1.7.0 (above), to try the aircraft and ship feeds
-on real devices, with a real aisstream.io key. A pre-release: servers only
-get it with **Include pre-releases** ticked on the update card.
+on real devices, with a real aisstream.io key. (rc.1 wasn't published: a
+test failed on the build server.) A pre-release: servers only get it with
+**Include pre-releases** ticked on the update card.
 
 ## v1.6.0 (2026-10-23)
 
