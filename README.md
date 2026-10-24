@@ -512,8 +512,10 @@ the remarks. Markers go stale when a craft stops reporting.
   URL: your own receiver (readsb, tar1090, dump1090-fa or piaware's
   `aircraft.json`, e.g. `http://192.168.1.20/tar1090/data/aircraft.json`) or
   another API in the readsb/dump1090 format, with `{lat}`, `{lon}` and
-  `{radius}` filled in and an optional header for its API key. Aircraft
-  outside the radius are left out either way.
+  `{radius}` filled in. Its **API key** goes in a header (`x-api-key`
+  unless you name another, such as `api-auth`), or in the URL where you put
+  `{key}`; it's never shown again or written to logs. Aircraft outside the
+  radius are left out either way.
 - **Ships** come from [aisstream.io](https://aisstream.io)'s live feed, with
   a free API key you create there.
 - Each goes to chosen groups (none = every device), and both show on the

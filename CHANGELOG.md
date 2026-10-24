@@ -17,9 +17,11 @@ any URL answering ADS-B JSON in the readsb/dump1090 format, such as your
 own receiver (readsb, tar1090, dump1090-fa or piaware's `aircraft.json`,
 older dump1090 field names included) or another API in that format.
 `{lat}`, `{lon}` and `{radius}` in the URL are filled in from the feed's
-area, an optional header carries an API key (kept like the AIS key, never
-shown again), and aircraft outside the radius are left out whatever the
-source sends. A source's refusal or error shows under the feed.
+area. An **API key** field sends the source's key in a header (`x-api-key`
+unless you name another) or in the URL where it says `{key}`; the key is
+kept like the AIS key, never shown again, and kept out of error messages
+and logs. Aircraft outside the radius are left out whatever the source
+sends. A source's refusal or error shows under the feed.
 
 **Dark mode toggle.** A theme button in the top bar switches the console
 between **Auto** (the device's light or dark setting, as before),
@@ -31,6 +33,12 @@ sign-in and sign-up pages follow it.
 Referer, which the console doesn't send since the security review. Streets
 is now Esri's World Street Map, and **Dark** Esri's Dark Gray map (CARTO's,
 used before, now wants an API key).
+
+## v1.8.0-rc.2 (2026-10-24)
+
+The second release candidate for v1.8.0: rc.1 with an **API key** field for
+the custom ADS-B source (in a header or the URL). See v1.8.0 above. A
+pre-release: servers only get it with **Include pre-releases** ticked.
 
 ## v1.8.0-rc.1 (2026-10-24)
 

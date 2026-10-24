@@ -19,8 +19,8 @@ var httpHeaderName = regexp.MustCompile(`^[A-Za-z0-9!#$%&'*+.^_|~-]{1,64}$`)
 
 func (s *Server) feedsView() map[string]any {
 	set := s.Store.Feeds()
-	hasKey, hasHeader := set.AIS.APIKey != "", set.ADSB.HeaderValue != ""
-	set.AIS.APIKey, set.ADSB.HeaderValue = "", "" // never sent back
+	hasKey, hasHeader := set.AIS.APIKey != "", set.ADSB.HeaderValue != "" // has_header_value: the ADS-B API key
+	set.AIS.APIKey, set.ADSB.HeaderValue = "", ""                         // never sent back
 	v := map[string]any{"settings": set, "has_api_key": hasKey, "has_header_value": hasHeader, "sources": []string{"adsb.lol", "adsb.fi", "custom"}}
 	if s.Feeds != nil {
 		v["status"] = s.Feeds.Status()
@@ -44,8 +44,8 @@ func (s *Server) feedRoutes(mux *http.ServeMux) {
 			req.AIS.APIKey = saved.AIS.APIKey // blank keeps the saved key
 		}
 		req.ADSB.CustomURL, req.ADSB.HeaderName = strings.TrimSpace(req.ADSB.CustomURL), strings.TrimSpace(req.ADSB.HeaderName)
-		if req.ADSB.HeaderValue == "" && req.ADSB.HeaderName == saved.ADSB.HeaderName {
-			req.ADSB.HeaderValue = saved.ADSB.HeaderValue // blank keeps the saved value
+		if req.ADSB.HeaderValue = strings.TrimSpace(req.ADSB.HeaderValue); req.ADSB.HeaderValue == "" {
+			req.ADSB.HeaderValue = saved.ADSB.HeaderValue // blank keeps the saved key
 		}
 		if req.Lat < -90 || req.Lat > 90 || req.Lon < -180 || req.Lon > 180 {
 			jsonError(w, http.StatusBadRequest, "the area's latitude or longitude is out of range")
@@ -67,7 +67,7 @@ func (s *Server) feedRoutes(mux *http.ServeMux) {
 			return
 		}
 		if req.ADSB.Source == "custom" {
-			u, err := url.Parse(strings.NewReplacer("{lat}", "0", "{lon}", "0", "{radius}", "1").Replace(req.ADSB.CustomURL))
+			u, err := url.Parse(strings.NewReplacer("{lat}", "0", "{lon}", "0", "{radius}", "1", "{key}", "k").Replace(req.ADSB.CustomURL))
 			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 				jsonError(w, http.StatusBadRequest, "the custom ADS-B source needs an http:// or https:// URL")
 				return

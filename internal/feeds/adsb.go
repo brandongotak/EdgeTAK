@@ -46,7 +46,7 @@ func (s *Service) adsbURL(set store.FeedSettings) string {
 	}
 	if set.ADSB.Source == "custom" {
 		return strings.NewReplacer("{lat}", fmt.Sprintf("%.4f", set.Lat), "{lon}", fmt.Sprintf("%.4f", set.Lon),
-			"{radius}", fmt.Sprint(set.ADSB.RadiusNM)).Replace(set.ADSB.CustomURL)
+			"{radius}", fmt.Sprint(set.ADSB.RadiusNM), "{key}", url.QueryEscape(set.ADSB.HeaderValue)).Replace(set.ADSB.CustomURL)
 	}
 	if set.ADSB.Source == "adsb.fi" {
 		return fmt.Sprintf("https://opendata.adsb.fi/api/v2/lat/%.4f/lon/%.4f/dist/%d", set.Lat, set.Lon, set.ADSB.RadiusNM)
@@ -98,18 +98,18 @@ func (s *Service) fetchAircraft(ctx context.Context, set store.FeedSettings) ([]
 	}
 	req.Header.Set("User-Agent", s.userAgent())
 	req.Header.Set("Accept", "application/json")
-	if set.ADSB.Source == "custom" && set.ADSB.HeaderName != "" {
-		req.Header.Set(set.ADSB.HeaderName, set.ADSB.HeaderValue)
+	if set.ADSB.Source == "custom" && set.ADSB.HeaderValue != "" && !strings.Contains(set.ADSB.CustomURL, "{key}") {
+		req.Header.Set(firstNonEmpty(set.ADSB.HeaderName, "x-api-key"), set.ADSB.HeaderValue)
 	}
 	name := sourceName(set)
 	resp, err := s.client().Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("can't reach %s: %v", name, err)
+		return nil, fmt.Errorf("can't reach %s: %v", name, redactKey(err.Error(), set.ADSB.HeaderValue))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
-		return nil, fmt.Errorf("%s answered %d %s", name, resp.StatusCode, strings.TrimSpace(string(b)))
+		return nil, fmt.Errorf("%s answered %d %s", name, resp.StatusCode, redactKey(strings.TrimSpace(string(b)), set.ADSB.HeaderValue))
 	}
 	var body struct {
 		AC       []aircraft `json:"ac"`
@@ -119,6 +119,15 @@ func (s *Service) fetchAircraft(ctx context.Context, set store.FeedSettings) ([]
 		return nil, fmt.Errorf("%s: not ADS-B JSON in the readsb/dump1090 format: %v", name, err)
 	}
 	return append(body.AC, body.Aircraft...), nil
+}
+
+// redactKey keeps an API key out of error messages and logs (a URL with
+// the key in it appears in network errors).
+func redactKey(s, key string) string {
+	if len(key) < 4 {
+		return s
+	}
+	return strings.NewReplacer(key, "[API key]", url.QueryEscape(key), "[API key]").Replace(s)
 }
 
 // sourceName names the ADS-B source in remarks and errors: a custom URL by

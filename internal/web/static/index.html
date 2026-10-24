@@ -382,9 +382,10 @@
             <label>URL <input name="custom_url" placeholder="http://192.168.1.20/tar1090/data/aircraft.json"></label>
             <p class="muted">Anything answering ADS-B JSON in the readsb/dump1090 format: your own receiver (readsb, tar1090, dump1090-fa or piaware's <code>aircraft.json</code>), or another API using that format (for example <code>https://example.com/v2/point/{lat}/{lon}/{radius}</code>). <code>{lat}</code>, <code>{lon}</code> and <code>{radius}</code> (nautical miles) are filled in; aircraft outside the radius are left out either way. If the source refuses, its answer shows below.</p>
             <div class="inline-form">
-              <label>Header (optional) <input name="header_name" placeholder="e.g. x-api-key" autocomplete="off"></label>
-              <label>Header value <input name="header_value" type="password" autocomplete="off"></label>
+              <label>API key <input name="header_value" type="password" autocomplete="off" placeholder="if the API needs one"></label>
+              <label>Sent in header <input name="header_name" placeholder="x-api-key" autocomplete="off"></label>
             </div>
+            <p class="muted">The key goes in that header (check the API's documentation for its name). For an API that wants it in the URL instead, put <code>{key}</code> there, e.g. <code>…?apikey={key}</code>.</p>
           </div>
           <div class="muted">Groups that get them (none = every device)</div>
           <div id="feeds-adsb-groups" class="group-picker"></div>

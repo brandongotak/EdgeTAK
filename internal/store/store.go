@@ -256,14 +256,15 @@ type FeedSettings struct {
 	ADSB struct {
 		Enabled bool   `json:"enabled"`
 		Source  string `json:"source"` // adsb.lol, adsb.fi or custom
-		// custom: a URL answering readsb/dump1090 JSON ({lat}, {lon} and
-		// {radius} filled in), and an optional header for its API key.
+		// custom: a URL answering readsb/dump1090 JSON ({lat}, {lon},
+		// {radius} and {key} filled in), and its API key, sent in the
+		// HeaderName header (x-api-key by default) unless the URL has {key}.
 		CustomURL   string   `json:"custom_url,omitempty"`
 		HeaderName  string   `json:"header_name,omitempty"`
-		HeaderValue string   `json:"header_value,omitempty"`
-		RadiusNM    int      `json:"radius_nm"`    // nautical miles around Lat/Lon
-		IntervalSec int      `json:"interval_sec"` // between polls
-		Groups      []string `json:"groups"`       // none = every device
+		HeaderValue string   `json:"header_value,omitempty"` // the API key
+		RadiusNM    int      `json:"radius_nm"`              // nautical miles around Lat/Lon
+		IntervalSec int      `json:"interval_sec"`           // between polls
+		Groups      []string `json:"groups"`                 // none = every device
 	} `json:"adsb"`
 	AIS struct {
 		Enabled  bool     `json:"enabled"`

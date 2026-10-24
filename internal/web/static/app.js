@@ -3779,7 +3779,7 @@ function renderFeeds(v) {
   f.custom_url.value = s.adsb.custom_url || '';
   f.header_name.value = s.adsb.header_name || '';
   f.header_value.value = '';
-  f.header_value.placeholder = v.has_header_value ? 'saved (leave blank to keep)' : '';
+  f.header_value.placeholder = v.has_header_value ? 'saved (leave blank to keep)' : 'if the API needs one';
   $('#feeds-custom').hidden = s.adsb.source !== 'custom';
   f.interval.value = s.adsb.interval_sec;
   f.ais.checked = s.ais.enabled;

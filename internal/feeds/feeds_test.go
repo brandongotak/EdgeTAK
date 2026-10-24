@@ -1,9 +1,16 @@
 package feeds
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
 func f(v float64) *float64 { return &v }
@@ -63,5 +70,39 @@ func TestAISMessages(t *testing.T) {
 		"Message":{"StandardClassBPositionReport":{"Cog":90,"Sog":102.3,"TrueHeading":511,"Latitude":41,"Longitude":-71}}}`), ships)
 	if tr.Callsign != "MMSI 338123456" || tr.Type != "a-n-S-X" || tr.Course != 90 || tr.SpeedMS != 0 {
 		t.Errorf("class B = %+v", tr)
+	}
+}
+
+// TestCustomADSBKey covers sending a custom source's API key: in x-api-key
+// by default, in a named header, or in the URL with {key}; and keeping it
+// out of error messages.
+func TestCustomADSBKey(t *testing.T) {
+	var gotHeader, gotNamed, gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHeader, gotNamed, gotQuery = r.Header.Get("X-Api-Key"), r.Header.Get("Api-Auth"), r.URL.Query().Get("apikey")
+		w.Write([]byte(`{"ac":[]}`))
+	}))
+	defer srv.Close()
+	s := &Service{Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	set := store.FeedSettings{Lat: 1, Lon: 2}
+	set.ADSB.Source, set.ADSB.RadiusNM, set.ADSB.HeaderValue = "custom", 10, "k3y/+secret"
+
+	set.ADSB.CustomURL = srv.URL + "/a"
+	if _, err := s.fetchAircraft(context.Background(), set); err != nil || gotHeader != "k3y/+secret" {
+		t.Errorf("default header: %v %q", err, gotHeader)
+	}
+	set.ADSB.HeaderName = "api-auth"
+	if _, err := s.fetchAircraft(context.Background(), set); err != nil || gotNamed != "k3y/+secret" || gotHeader != "" {
+		t.Errorf("named header: %v %q %q", err, gotNamed, gotHeader)
+	}
+	set.ADSB.CustomURL = srv.URL + "/a?apikey={key}"
+	if _, err := s.fetchAircraft(context.Background(), set); err != nil || gotQuery != "k3y/+secret" || gotNamed != "" {
+		t.Errorf("key in the URL: %v %q %q", err, gotQuery, gotNamed)
+	}
+	// A failed request names the URL, but not the key.
+	set.ADSB.CustomURL = "http://127.0.0.1:1/a?apikey={key}"
+	_, err := s.fetchAircraft(context.Background(), set)
+	if err == nil || strings.Contains(err.Error(), "k3y") || !strings.Contains(err.Error(), "[API key]") {
+		t.Errorf("error = %v", err)
 	}
 }
