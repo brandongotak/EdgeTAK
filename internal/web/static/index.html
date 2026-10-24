@@ -380,7 +380,7 @@
           </div>
           <div id="feeds-custom" class="stack" hidden>
             <label>URL <input name="custom_url" placeholder="http://192.168.1.20/tar1090/data/aircraft.json"></label>
-            <p class="muted">Anything answering ADS-B JSON in the readsb/dump1090 format: your own receiver (readsb, tar1090, dump1090-fa or piaware's <code>aircraft.json</code>), or another API using that format (for example <code>https://example.com/v2/point/{lat}/{lon}/{radius}</code>). <code>{lat}</code>, <code>{lon}</code> and <code>{radius}</code> (nautical miles) are filled in; aircraft outside the radius are left out either way. If the source refuses, its answer shows below.</p>
+            <p class="muted">Anything answering ADS-B JSON in the readsb/dump1090 format: your own receiver (readsb, tar1090, dump1090-fa or piaware's <code>aircraft.json</code>), or another API using that format. Put the area where the API wants it: <code>{lat}</code>, <code>{lon}</code> and <code>{radius}</code> (nautical miles) are filled in, in the path (<code>https://example.com/v2/point/{lat}/{lon}/{radius}</code>) or as parameters (<code>https://example.com/api/aircraft?lat={lat}&amp;lon={lon}&amp;dist={radius}</code>); aircraft outside the radius are left out either way. If the source refuses, its answer shows below.</p>
             <div class="inline-form">
               <label>API key <input name="header_value" type="password" autocomplete="off" placeholder="if the API needs one"></label>
               <label>Sent in header <input name="header_name" placeholder="x-api-key" autocomplete="off"></label>
