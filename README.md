@@ -496,6 +496,26 @@ contact.
   devices. EdgeTAK's copy is the reference: changes made on a device are
   replaced the next time it connects.
 
+### Aircraft and ships (ADS-B and AIS)
+
+**Settings → Aircraft and ships** sends live aircraft and ships around an
+area to devices as map markers (neutral civil or military aircraft and
+helicopters, and ships by kind: cargo, tanker, passenger, fishing, pleasure
+and so on), with callsign or name, course, speed, altitude and details in
+the remarks. Markers go stale when a craft stops reporting.
+
+- **Area:** a center (or **Use the map's center**) and a radius up to 250
+  nautical miles.
+- **Aircraft** come from a free community ADS-B API, adsb.lol or adsb.fi
+  (no account), polled every 10 seconds by default.
+- **Ships** come from [aisstream.io](https://aisstream.io)'s live feed, with
+  a free API key you create there.
+- Each goes to chosen groups (none = every device), and both show on the
+  console map as the **Aircraft** and **Ships** layers.
+
+The server needs internet access. Neither feed is federated or recorded in
+position history.
+
 ### Position history
 
 Off by default: turn on recording under the map's **History** button and

@@ -22,6 +22,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/chatlog"
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/federation"
+	"github.com/brandongotak/EdgeTAK/internal/feeds"
 	"github.com/brandongotak/EdgeTAK/internal/health"
 	"github.com/brandongotak/EdgeTAK/internal/history"
 	"github.com/brandongotak/EdgeTAK/internal/maps"
@@ -53,6 +54,8 @@ type Server struct {
 		Set(on bool) error
 		Addr() string
 	}
+	// Feeds turns ADS-B and AIS data into markers (set by the app).
+	Feeds *feeds.Service
 	// ZeroTierAPI is the local ZeroTier service's API ("" =
 	// http://127.0.0.1:9993; tests use a fake).
 	ZeroTierAPI string
@@ -171,6 +174,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.enrollCodeRoutes(mux)
 	s.plainTCPRoutes(mux)
 	s.zerotierRoutes(mux)
+	s.feedRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)

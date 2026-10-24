@@ -75,6 +75,7 @@ var auditActions = map[string]string{
 	"POST /admin/api/zerotier/networks":                  "Joined a ZeroTier network",
 	"DELETE /admin/api/zerotier/networks/{id}":           "Left a ZeroTier network",
 	"POST /admin/api/server/restart":                     "Restarted EdgeTAK",
+	"PUT /admin/api/feeds":                               "Changed aircraft and ship feeds",
 	"POST /admin/api/enroll-codes/batch":                 "Made a QR code sheet",
 	"POST /admin/api/events":                             "Created event",
 	"POST /admin/api/events/{id}/end":                    "Ended event",

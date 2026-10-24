@@ -157,7 +157,7 @@ const loaders = {
   simulator: loadSim,
   webhooks: loadWebhooks,
   audit: () => loadAudit(),
-  settings: () => Promise.all([loadPlainTCP(), loadZeroTier(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
+  settings: () => Promise.all([loadPlainTCP(), loadZeroTier(), loadFeeds(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
 };
 
 let currentTab = '';
@@ -937,6 +937,7 @@ let trailsLayer = null;
 let trailsTimer = null;
 let videoLayer = null;
 let fenceLayer = null; // geofences on the console map
+let aircraftLayer = null, shipLayer = null; // ADS-B and AIS feeds
 let drawingLayer = null; // drawings (markers, routes, areas, circles) on the console map
 let drawings = [];
 let geofences = [];
@@ -998,6 +999,15 @@ function initMap() {
   api('GET', 'api/geofences').then((r) => { geofences = r; drawFences(); }).catch(() => {});
   drawingLayer = L.layerGroup();
   api('GET', 'api/drawings').then((r) => { drawings = r; drawDrawings(); }).catch(() => {});
+  aircraftLayer = L.layerGroup();
+  shipLayer = L.layerGroup();
+  for (const l of [aircraftLayer, shipLayer]) {
+    l.on('add', () => {
+      refreshFeedTracks().catch(() => {});
+      clearInterval(feedTimer);
+      feedTimer = setInterval(() => refreshFeedTracks().catch(() => {}), 10000);
+    });
+  }
   trailsLayer = L.layerGroup();
   trailsLayer.on('add', () => {
     $('#trails-show').checked = true;
@@ -1103,7 +1113,7 @@ function initWeather() {
 function buildLayers() {
   if (!map) return;
   const activeBase = prefs.get('map.base', 'Streets');
-  const activeOverlays = new Set(prefs.get('map.overlays', ['Devices', 'Callsigns', 'Server contact', 'Video', 'Geofences', 'Drawings']));
+  const activeOverlays = new Set(prefs.get('map.overlays', ['Devices', 'Callsigns', 'Server contact', 'Video', 'Geofences', 'Drawings', 'Aircraft', 'Ships']));
   // Detach the switcher first, or removing the old layers would be saved as
   // the viewer turning them off.
   rebuildingLayers = true;
@@ -1113,7 +1123,7 @@ function buildLayers() {
   baseLayers = {};
   for (const [name, def] of BASEMAPS) baseLayers[name] = buildBase(def);
   overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer, Geofences: fenceLayer, Drawings: drawingLayer,
-    'Weather radar': weather.radar, 'Weather radar (US, detailed)': weather.nexrad, Hillshade: weather.hillshade };
+    Aircraft: aircraftLayer, Ships: shipLayer, 'Weather radar': weather.radar, 'Weather radar (US, detailed)': weather.nexrad, Hillshade: weather.hillshade };
   for (const p of packageLayers.values()) overlayLayers[p.name] = p.layer;
   for (const m of offlineMaps) {
     if (m.error) continue;
@@ -3743,6 +3753,92 @@ $('#tcp-on').addEventListener('change', guard(async (e) => {
     throw ex;
   }
 }));
+
+// ---- aircraft and ship feeds ----
+
+function feedStatusText(st, what) {
+  if (!st || !st.running) return '';
+  if (st.error) return `Problem: ${st.error}`;
+  if (!st.last) return 'Starting…';
+  return `${st.tracks} ${what} now · last data ${ago(st.last)}`;
+}
+
+function renderFeeds(v) {
+  const f = $('#feeds-form'), s = v.settings;
+  f.lat.value = s.lat || '';
+  f.lon.value = s.lon || '';
+  f.radius.value = s.radius_nm;
+  f.adsb.checked = s.adsb.enabled;
+  f.source.value = s.adsb.source;
+  f.interval.value = s.adsb.interval_sec;
+  f.ais.checked = s.ais.enabled;
+  f.key.value = '';
+  f.key.placeholder = v.has_api_key ? 'saved (leave blank to keep)' : 'API key';
+  renderChips('#feeds-adsb-groups', s.adsb.groups || []);
+  renderChips('#feeds-ais-groups', s.ais.groups || []);
+  const st = v.status || {};
+  $('#feeds-adsb-status').textContent = feedStatusText(st.adsb, 'aircraft');
+  $('#feeds-ais-status').textContent = feedStatusText(st.ais, 'ships');
+  const on = s.adsb.enabled || s.ais.enabled, bad = (st.adsb && st.adsb.error) || (st.ais && st.ais.error);
+  $('#feeds-state').innerHTML = !on ? '<span class="pill">off</span>' : bad ? '<span class="pill warn">problem</span>' : '<span class="pill ok">on</span>';
+}
+
+async function loadFeeds() {
+  if (!allGroups.length) allGroups = await api('GET', 'api/groups');
+  renderFeeds(await api('GET', 'api/feeds'));
+}
+
+$('#feeds-center').addEventListener('click', () => {
+  if (!map) return toast('Open the map first (Map, top right)', true);
+  const c = map.getCenter();
+  const f = $('#feeds-form');
+  f.lat.value = c.lat.toFixed(4);
+  f.lon.value = c.lng.toFixed(4);
+});
+
+$('#feeds-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const v = await api('PUT', 'api/feeds', {
+    lat: Number(f.lat.value), lon: Number(f.lon.value), radius_nm: Number(f.radius.value),
+    adsb: { enabled: f.adsb.checked, source: f.source.value, interval_sec: Number(f.interval.value), groups: checkedIn('#feeds-adsb-groups') },
+    ais: { enabled: f.ais.checked, api_key: f.key.value, groups: checkedIn('#feeds-ais-groups') },
+  });
+  renderFeeds(v);
+  toast('Saved');
+  setTimeout(() => { if (currentTab === 'settings') loadFeeds().catch(() => {}); }, 4000);
+}));
+
+// The aircraft and ships on the console map.
+const feedMarkers = new Map();
+let feedTimer = null;
+
+async function refreshFeedTracks() {
+  if (!map || !mapVisible() || !(map.hasLayer(aircraftLayer) || map.hasLayer(shipLayer))) return;
+  const tracks = await api('GET', 'api/feeds/tracks');
+  const seen = new Set();
+  for (const t of tracks) {
+    seen.add(t.uid);
+    const layer = t.kind === 'ship' ? shipLayer : aircraftLayer;
+    let m = feedMarkers.get(t.uid);
+    if (!m) {
+      m = L.circleMarker([t.lat, t.lon], { radius: t.kind === 'ship' ? 5 : 4, weight: 1, color: '#000', fillOpacity: 0.9,
+        fillColor: t.kind === 'ship' ? '#2bb3a8' : '#4d8dff' }).addTo(layer);
+      m.bindTooltip('', { direction: 'right', offset: [6, 0] });
+      m.bindPopup('');
+      feedMarkers.set(t.uid, m);
+    }
+    m.setLatLng([t.lat, t.lon]);
+    m.setTooltipContent(esc(t.callsign));
+    m.setPopupContent(`<strong>${esc(t.callsign)}</strong><br>${esc(t.remarks)}<br><span class="muted">${esc(ago(t.seen))}</span>`);
+  }
+  for (const [uid, m] of feedMarkers) {
+    if (!seen.has(uid)) {
+      m.remove();
+      feedMarkers.delete(uid);
+    }
+  }
+}
 
 // ---- ZeroTier ----
 

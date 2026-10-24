@@ -22,6 +22,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/cot"
 	"github.com/brandongotak/EdgeTAK/internal/federation"
+	"github.com/brandongotak/EdgeTAK/internal/feeds"
 	"github.com/brandongotak/EdgeTAK/internal/health"
 	"github.com/brandongotak/EdgeTAK/internal/history"
 	"github.com/brandongotak/EdgeTAK/internal/maps"
@@ -357,6 +358,8 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	if a.Dial != nil {
 		ws.SimDial = func(_ context.Context, _, addr string) (net.Conn, error) { return a.Dial(addr) }
 	}
+	ws.Feeds = &feeds.Service{Router: a.Router, Log: a.Log.With("component", "feeds"), Version: a.Version}
+	ws.Feeds.Start(ctx, a.Store.Feeds())
 	ws.Start(ctx) // server contact, Inbox and video (writes mediamtx.yml)
 	a.Federation.Start(ctx.Done())
 

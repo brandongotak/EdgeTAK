@@ -238,6 +238,44 @@ type db struct {
 	// tcp_addr (installed with --no-plaintext).
 	PlainTCPOff bool `json:"plain_tcp_off,omitempty"`
 	PlainTCPOn  bool `json:"plain_tcp_on,omitempty"`
+
+	Feeds FeedSettings `json:"feeds"`
+}
+
+// FeedSettings are the aircraft (ADS-B) and ship (AIS) feeds EdgeTAK turns
+// into map markers for devices, around one area.
+type FeedSettings struct {
+	Lat      float64 `json:"lat"`
+	Lon      float64 `json:"lon"`
+	RadiusNM int     `json:"radius_nm"` // nautical miles around Lat/Lon
+
+	ADSB struct {
+		Enabled     bool     `json:"enabled"`
+		Source      string   `json:"source"`       // adsb.lol or adsb.fi
+		IntervalSec int      `json:"interval_sec"` // between polls
+		Groups      []string `json:"groups"`       // none = every device
+	} `json:"adsb"`
+	AIS struct {
+		Enabled bool     `json:"enabled"`
+		APIKey  string   `json:"api_key"` // aisstream.io
+		Groups  []string `json:"groups"`
+	} `json:"ais"`
+}
+
+// WithDefaults fills in unset values.
+func (f FeedSettings) WithDefaults() FeedSettings {
+	if f.RadiusNM <= 0 {
+		f.RadiusNM = 50
+	}
+	f.RadiusNM = min(f.RadiusNM, 250)
+	if f.ADSB.Source == "" {
+		f.ADSB.Source = "adsb.lol"
+	}
+	if f.ADSB.IntervalSec <= 0 {
+		f.ADSB.IntervalSec = 10
+	}
+	f.ADSB.IntervalSec = max(f.ADSB.IntervalSec, 5)
+	return f
 }
 
 // RetentionSettings are how long kinds of data are kept, in days (0 = keep
@@ -2619,5 +2657,22 @@ func (s *Store) SetPlainTCP(on bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.PlainTCPOn, s.db.PlainTCPOff = on, !on
+	return s.save()
+}
+
+// ---- aircraft and ship feeds ----
+
+func (s *Store) Feeds() FeedSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	f := s.db.Feeds
+	f.ADSB.Groups, f.AIS.Groups = slices.Clone(f.ADSB.Groups), slices.Clone(f.AIS.Groups)
+	return f.WithDefaults()
+}
+
+func (s *Store) SetFeeds(f FeedSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Feeds = f
 	return s.save()
 }

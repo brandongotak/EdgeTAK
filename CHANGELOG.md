@@ -10,6 +10,28 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.7.0 (2026-10-23)
+
+**Aircraft and ships on devices' maps.** A new **Aircraft and ships** card
+on the Settings page sends live ADS-B aircraft and AIS ships around an area
+(up to 250 nautical miles) to devices as map markers, to the groups you
+choose:
+
+- **Aircraft** from a free community ADS-B API (adsb.lol or adsb.fi, no
+  account), as civil or military aircraft and helicopters, with callsign,
+  type, registration, altitude, speed, squawk and emergencies.
+- **Ships** from aisstream.io's live feed (free API key), by kind (cargo,
+  tanker, passenger, fishing, pleasure craft...), with name, speed,
+  heading, destination and status.
+- Both show on the console map as the **Aircraft** and **Ships** layers.
+  They aren't federated or kept in position history.
+
+## v1.7.0-rc.1 (2026-10-23)
+
+A release candidate for v1.7.0 (above), to try the aircraft and ship feeds
+on real devices, with a real aisstream.io key. A pre-release: servers only
+get it with **Include pre-releases** ticked on the update card.
+
 ## v1.6.0 (2026-10-23)
 
 **ZeroTier from the console.** A **ZeroTier** card on the Settings page puts
