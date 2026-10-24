@@ -914,8 +914,12 @@ const esri = (svc) => `https://server.arcgisonline.com/ArcGIS/rest/services/${sv
 const usgs = (svc) => `https://basemap.nationalmap.gov/arcgis/rest/services/${svc}/MapServer/tile/{z}/{y}/{x}`;
 const OSM_ATTR = '&copy; OpenStreetMap contributors';
 // [name, layers: [url, options]...]
+// Streets and Dark are Esri's: OpenStreetMap's own tile servers block
+// requests without a Referer, which the console doesn't send
+// (Referrer-Policy: same-origin), and CARTO's now need an API key.
+const ESRI_ATTR = 'Tiles &copy; Esri, HERE, Garmin, USGS, &copy; OpenStreetMap contributors';
 const BASEMAPS = [
-  ['Streets', [['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, attribution: OSM_ATTR }]]],
+  ['Streets', [[esri('World_Street_Map'), { maxNativeZoom: 19, attribution: ESRI_ATTR }]]],
   ['Satellite', [[esri('World_Imagery'), { maxNativeZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' }]]],
   ['Hybrid', [[esri('World_Imagery'), { maxNativeZoom: 19, attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics' }],
     [esri('Reference/World_Boundaries_and_Places'), { maxNativeZoom: 19 }]]],
@@ -923,7 +927,8 @@ const BASEMAPS = [
   ['Topo', [['https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxNativeZoom: 17, attribution: 'Map data ' + OSM_ATTR + ', SRTM | style &copy; OpenTopoMap (CC-BY-SA)' }]]],
   ['USGS Topo', [[usgs('USGSTopo'), { maxNativeZoom: 16, attribution: 'USGS The National Map' }]]],
   ['USGS Imagery Topo', [[usgs('USGSImageryTopo'), { maxNativeZoom: 16, attribution: 'USGS The National Map' }]]],
-  ['Dark', [['https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxNativeZoom: 20, subdomains: 'abcd', attribution: OSM_ATTR + ' &copy; CARTO' }]]],
+  ['Dark', [[esri('Canvas/World_Dark_Gray_Base'), { maxNativeZoom: 16, attribution: ESRI_ATTR }],
+    [esri('Canvas/World_Dark_Gray_Reference'), { maxNativeZoom: 16 }]]],
 ];
 
 let baseLayers = {};   // name -> layer
@@ -3771,6 +3776,11 @@ function renderFeeds(v) {
   f.ais_radius.value = s.ais.radius_nm;
   f.adsb.checked = s.adsb.enabled;
   f.source.value = s.adsb.source;
+  f.custom_url.value = s.adsb.custom_url || '';
+  f.header_name.value = s.adsb.header_name || '';
+  f.header_value.value = '';
+  f.header_value.placeholder = v.has_header_value ? 'saved (leave blank to keep)' : '';
+  $('#feeds-custom').hidden = s.adsb.source !== 'custom';
   f.interval.value = s.adsb.interval_sec;
   f.ais.checked = s.ais.enabled;
   f.key.value = '';
@@ -3789,6 +3799,8 @@ async function loadFeeds() {
   renderFeeds(await api('GET', 'api/feeds'));
 }
 
+$('#feeds-form').source.addEventListener('change', (e) => { $('#feeds-custom').hidden = e.target.value !== 'custom'; });
+
 $('#feeds-center').addEventListener('click', () => {
   if (!map) return toast('Open the map first (Map, top right)', true);
   const c = map.getCenter();
@@ -3802,7 +3814,8 @@ $('#feeds-form').addEventListener('submit', guard(async (e) => {
   const f = e.target;
   const v = await api('PUT', 'api/feeds', {
     lat: Number(f.lat.value), lon: Number(f.lon.value),
-    adsb: { enabled: f.adsb.checked, source: f.source.value, radius_nm: Number(f.adsb_radius.value), interval_sec: Number(f.interval.value), groups: checkedIn('#feeds-adsb-groups') },
+    adsb: { enabled: f.adsb.checked, source: f.source.value, custom_url: f.custom_url.value, header_name: f.header_name.value, header_value: f.header_value.value,
+      radius_nm: Number(f.adsb_radius.value), interval_sec: Number(f.interval.value), groups: checkedIn('#feeds-adsb-groups') },
     ais: { enabled: f.ais.checked, api_key: f.key.value, radius_nm: Number(f.ais_radius.value), groups: checkedIn('#feeds-ais-groups') },
   });
   renderFeeds(v);
@@ -3934,6 +3947,35 @@ $('#zt-body').addEventListener('submit', guard(async (e) => {
   renderZeroTier(await api('POST', 'api/zerotier/networks', { network_id: e.target.nwid.value }));
   toast('Joining the network…');
 }));
+
+// ---- theme ----
+
+// Auto (the device's setting) → Light → Dark; theme.js applies it on load.
+const THEMES = { auto: '◐ Auto', light: '☀ Light', dark: '☾ Dark' };
+
+function currentTheme() {
+  const t = document.documentElement.dataset.theme;
+  return t === 'light' || t === 'dark' ? t : 'auto';
+}
+
+function showTheme() {
+  const t = currentTheme();
+  $('#theme-toggle').textContent = THEMES[t];
+  $('#theme-toggle').title = t === 'auto' ? "Theme: following this device's setting (click for light)"
+    : `Theme: ${t} (click for ${t === 'light' ? 'dark' : "this device's setting"})`;
+}
+
+$('#theme-toggle').addEventListener('click', () => {
+  const next = { auto: 'light', light: 'dark', dark: 'auto' }[currentTheme()];
+  if (next === 'auto') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = next;
+  try {
+    if (next === 'auto') localStorage.removeItem('edgetak.theme');
+    else localStorage.setItem('edgetak.theme', next);
+  } catch { /* storage blocked: this page only */ }
+  showTheme();
+});
+showTheme();
 
 // ---- help ----
 

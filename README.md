@@ -508,7 +508,12 @@ the remarks. Markers go stale when a craft stops reporting.
   radius, up to 250 nautical miles (by default 100 for aircraft, 25 for
   ships).
 - **Aircraft** come from a free community ADS-B API, adsb.lol or adsb.fi
-  (no account), polled every 10 seconds by default.
+  (no account), polled every 10 seconds by default, or from a **Custom**
+  URL: your own receiver (readsb, tar1090, dump1090-fa or piaware's
+  `aircraft.json`, e.g. `http://192.168.1.20/tar1090/data/aircraft.json`) or
+  another API in the readsb/dump1090 format, with `{lat}`, `{lon}` and
+  `{radius}` filled in and an optional header for its API key. Aircraft
+  outside the radius are left out either way.
 - **Ships** come from [aisstream.io](https://aisstream.io)'s live feed, with
   a free API key you create there.
 - Each goes to chosen groups (none = every device), and both show on the

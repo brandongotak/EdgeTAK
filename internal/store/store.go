@@ -254,8 +254,13 @@ type FeedSettings struct {
 	RadiusNM int `json:"radius_nm,omitempty"`
 
 	ADSB struct {
-		Enabled     bool     `json:"enabled"`
-		Source      string   `json:"source"`       // adsb.lol or adsb.fi
+		Enabled bool   `json:"enabled"`
+		Source  string `json:"source"` // adsb.lol, adsb.fi or custom
+		// custom: a URL answering readsb/dump1090 JSON ({lat}, {lon} and
+		// {radius} filled in), and an optional header for its API key.
+		CustomURL   string   `json:"custom_url,omitempty"`
+		HeaderName  string   `json:"header_name,omitempty"`
+		HeaderValue string   `json:"header_value,omitempty"`
 		RadiusNM    int      `json:"radius_nm"`    // nautical miles around Lat/Lon
 		IntervalSec int      `json:"interval_sec"` // between polls
 		Groups      []string `json:"groups"`       // none = every device

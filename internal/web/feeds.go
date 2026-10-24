@@ -3,6 +3,8 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -13,11 +15,13 @@ import (
 // public ADS-B and AIS data for an area into markers for devices; see
 // internal/feeds.
 
+var httpHeaderName = regexp.MustCompile(`^[A-Za-z0-9!#$%&'*+.^_|~-]{1,64}$`)
+
 func (s *Server) feedsView() map[string]any {
 	set := s.Store.Feeds()
-	hasKey := set.AIS.APIKey != ""
-	set.AIS.APIKey = "" // never sent back
-	v := map[string]any{"settings": set, "has_api_key": hasKey, "sources": []string{"adsb.lol", "adsb.fi"}}
+	hasKey, hasHeader := set.AIS.APIKey != "", set.ADSB.HeaderValue != ""
+	set.AIS.APIKey, set.ADSB.HeaderValue = "", "" // never sent back
+	v := map[string]any{"settings": set, "has_api_key": hasKey, "has_header_value": hasHeader, "sources": []string{"adsb.lol", "adsb.fi", "custom"}}
 	if s.Feeds != nil {
 		v["status"] = s.Feeds.Status()
 	}
@@ -34,9 +38,14 @@ func (s *Server) feedRoutes(mux *http.ServeMux) {
 			jsonError(w, http.StatusBadRequest, "invalid request")
 			return
 		}
+		saved := s.Store.Feeds()
 		req.AIS.APIKey = strings.TrimSpace(req.AIS.APIKey)
 		if req.AIS.APIKey == "" {
-			req.AIS.APIKey = s.Store.Feeds().AIS.APIKey // blank keeps the saved key
+			req.AIS.APIKey = saved.AIS.APIKey // blank keeps the saved key
+		}
+		req.ADSB.CustomURL, req.ADSB.HeaderName = strings.TrimSpace(req.ADSB.CustomURL), strings.TrimSpace(req.ADSB.HeaderName)
+		if req.ADSB.HeaderValue == "" && req.ADSB.HeaderName == saved.ADSB.HeaderName {
+			req.ADSB.HeaderValue = saved.ADSB.HeaderValue // blank keeps the saved value
 		}
 		if req.Lat < -90 || req.Lat > 90 || req.Lon < -180 || req.Lon > 180 {
 			jsonError(w, http.StatusBadRequest, "the area's latitude or longitude is out of range")
@@ -53,9 +62,20 @@ func (s *Server) feedRoutes(mux *http.ServeMux) {
 			}
 		}
 		req.RadiusNM = 0 // the old shared radius
-		if req.ADSB.Source != "" && !slices.Contains([]string{"adsb.lol", "adsb.fi"}, req.ADSB.Source) {
-			jsonError(w, http.StatusBadRequest, "the ADS-B source is adsb.lol or adsb.fi")
+		if req.ADSB.Source != "" && !slices.Contains([]string{"adsb.lol", "adsb.fi", "custom"}, req.ADSB.Source) {
+			jsonError(w, http.StatusBadRequest, "the ADS-B source is adsb.lol, adsb.fi or custom")
 			return
+		}
+		if req.ADSB.Source == "custom" {
+			u, err := url.Parse(strings.NewReplacer("{lat}", "0", "{lon}", "0", "{radius}", "1").Replace(req.ADSB.CustomURL))
+			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				jsonError(w, http.StatusBadRequest, "the custom ADS-B source needs an http:// or https:// URL")
+				return
+			}
+			if req.ADSB.HeaderName != "" && !httpHeaderName.MatchString(req.ADSB.HeaderName) {
+				jsonError(w, http.StatusBadRequest, "invalid header name")
+				return
+			}
 		}
 		if req.AIS.Enabled && req.AIS.APIKey == "" {
 			jsonError(w, http.StatusBadRequest, "ships need an aisstream.io API key")

@@ -14,13 +14,23 @@
   /* Chart series (validated for colour-vision deficiency on these surfaces). */
   --series-1: #3987e5;
   --series-2: #d95926;
+  color-scheme: dark;
 }
-@media (prefers-color-scheme: light) {
-  :root {
+/* Light: chosen with the theme button, or the device's setting on Auto. */
+:root[data-theme="light"] {
     --bg: #f3f5f6; --panel: #ffffff; --panel-2: #f0f3f4; --line: #d9e0e3;
     --text: #172024; --muted: #5d6c72; --accent: #1f8f5c; --accent-ink: #ffffff;
     --warn: #a86f00; --danger: #c43c3c;
     --series-1: #2a78d6; --series-2: #eb6834;
+    color-scheme: light;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f3f5f6; --panel: #ffffff; --panel-2: #f0f3f4; --line: #d9e0e3;
+    --text: #172024; --muted: #5d6c72; --accent: #1f8f5c; --accent-ink: #ffffff;
+    --warn: #a86f00; --danger: #c43c3c;
+    --series-1: #2a78d6; --series-2: #eb6834;
+    color-scheme: light;
   }
 }
 * { box-sizing: border-box; }

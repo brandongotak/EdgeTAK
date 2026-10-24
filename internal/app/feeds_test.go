@@ -103,3 +103,56 @@ func mustJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
+
+// TestFeedsCustomADSB covers a custom ADS-B source: an older dump1090
+// aircraft.json behind an API-key header, with the area filled into the URL
+// and aircraft outside the radius left out.
+func TestFeedsCustomADSB(t *testing.T) {
+	a := startApp(t)
+	call, _ := adminJSON(t, a)
+	a.Store.CreateUser("pilot", "pilots-password-1", []string{"Cyan"}, false)
+	var gotPath, gotKey string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotKey = r.URL.Path, r.Header.Get("X-Api-Key")
+		if gotKey != "secret-1" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Write([]byte(`{"now":1,"aircraft":[
+			{"hex":"abc123","flight":"N12AB","lat":40.70,"lon":-73.95,"altitude":4500,"speed":120,"track":90,"seen_pos":1},
+			{"hex":"def456","flight":"FARAWAY","lat":51.5,"lon":-0.1,"altitude":30000,"speed":450}]}`))
+	}))
+	defer srv.Close()
+
+	cert := enroll(t, a, "pilot", "pilots-password-1")
+	dev := mustDial(t, a, &cert)
+	dev.send(sa("ANDROID-pilot", "PILOT", "Cyan"))
+
+	if code, _ := call("PUT", "/admin/api/feeds", map[string]any{"lat": 40.6, "lon": -73.9,
+		"adsb": map[string]any{"enabled": true, "source": "custom", "custom_url": "ftp://x", "radius_nm": 50}, "ais": map[string]any{"radius_nm": 20}}); code != 400 {
+		t.Errorf("ftp URL = %d", code)
+	}
+	code, v := call("PUT", "/admin/api/feeds", map[string]any{"lat": 40.6, "lon": -73.9,
+		"adsb": map[string]any{"enabled": true, "source": "custom", "custom_url": srv.URL + "/v2/point/{lat}/{lon}/{radius}",
+			"header_name": "X-Api-Key", "header_value": "secret-1", "radius_nm": 50, "interval_sec": 5},
+		"ais": map[string]any{"radius_nm": 20}})
+	if code != 200 || v["has_header_value"] != true || strings.Contains(mustJSON(v), "secret-1") {
+		t.Fatalf("save = %d %v", code, v)
+	}
+	plane := dev.expect(func(e *cot.Event) bool { return strings.HasPrefix(e.UID, "ICAO-") }, "the aircraft")
+	if plane.UID != "ICAO-abc123" || plane.Callsign() != "N12AB" || !strings.Contains(string(plane.XML()), "4500 ft") {
+		t.Errorf("aircraft = %s", plane.XML())
+	}
+	if gotPath != "/v2/point/40.6000/-73.9000/50" {
+		t.Errorf("URL path = %q", gotPath)
+	}
+	dev.expectNone(func(e *cot.Event) bool { return e.UID == "ICAO-def456" }, "the aircraft outside the radius")
+
+	// Saving again without the value keeps it.
+	call("PUT", "/admin/api/feeds", map[string]any{"lat": 40.6, "lon": -73.9,
+		"adsb": map[string]any{"enabled": true, "source": "custom", "custom_url": srv.URL + "/x", "header_name": "X-Api-Key", "radius_nm": 50},
+		"ais":  map[string]any{"radius_nm": 20}})
+	if a.Store.Feeds().ADSB.HeaderValue != "secret-1" {
+		t.Error("the header value was lost")
+	}
+}

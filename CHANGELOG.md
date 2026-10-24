@@ -10,6 +10,35 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.8.0 (2026-10-24)
+
+**Custom ADS-B source.** The aircraft feed's **Source** now has **Custom**:
+any URL answering ADS-B JSON in the readsb/dump1090 format, such as your
+own receiver (readsb, tar1090, dump1090-fa or piaware's `aircraft.json`,
+older dump1090 field names included) or another API in that format.
+`{lat}`, `{lon}` and `{radius}` in the URL are filled in from the feed's
+area, an optional header carries an API key (kept like the AIS key, never
+shown again), and aircraft outside the radius are left out whatever the
+source sends. A source's refusal or error shows under the feed.
+
+**Dark mode toggle.** A theme button in the top bar switches the console
+between **Auto** (the device's light or dark setting, as before),
+**Light** and **Dark**. The choice is kept in the browser, and the account,
+sign-in and sign-up pages follow it.
+
+**Fix: the Streets and Dark maps.** The console's **Streets** map showed
+"Access blocked": OpenStreetMap's tile servers refuse requests without a
+Referer, which the console doesn't send since the security review. Streets
+is now Esri's World Street Map, and **Dark** Esri's Dark Gray map (CARTO's,
+used before, now wants an API key).
+
+## v1.8.0-rc.1 (2026-10-24)
+
+A release candidate for v1.8.0 (above), to try a custom ADS-B source (your
+own receiver or another API), the theme button and the new Streets and Dark
+maps. A pre-release: servers only get it with **Include pre-releases**
+ticked on the update card.
+
 ## v1.7.0 (2026-10-23)
 
 **Aircraft and ships on devices' maps.** A new **Aircraft and ships** card

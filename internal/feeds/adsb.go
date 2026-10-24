@@ -5,16 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
-// Aircraft come from a free community ADS-B API in the readsb format
-// (adsb.lol answers with "ac", adsb.fi with "aircraft"), polled around the
-// area.
+// Aircraft come from an ADS-B API in the readsb format (adsb.lol answers
+// with "ac", adsb.fi and readsb's own aircraft.json with "aircraft"), polled
+// around the area: a free community one, or a custom URL (a receiver of
+// your own, or another API in that format).
 
 type aircraft struct {
 	Hex       string   `json:"hex"`
@@ -25,6 +28,8 @@ type aircraft struct {
 	AltBaro   any      `json:"alt_baro"` // feet, or "ground"
 	AltGeom   *float64 `json:"alt_geom"` // feet
 	GS        *float64 `json:"gs"`       // knots
+	Altitude  any      `json:"altitude"` // older dump1090: feet, or "ground"
+	Speed     *float64 `json:"speed"`    // older dump1090: knots
 	Track     *float64 `json:"track"`
 	Squawk    string   `json:"squawk"`
 	Emergency string   `json:"emergency"`
@@ -38,6 +43,10 @@ type aircraft struct {
 func (s *Service) adsbURL(set store.FeedSettings) string {
 	if s.ADSBURL != nil {
 		return s.ADSBURL(set.ADSB.Source, set.Lat, set.Lon, set.ADSB.RadiusNM)
+	}
+	if set.ADSB.Source == "custom" {
+		return strings.NewReplacer("{lat}", fmt.Sprintf("%.4f", set.Lat), "{lon}", fmt.Sprintf("%.4f", set.Lon),
+			"{radius}", fmt.Sprint(set.ADSB.RadiusNM)).Replace(set.ADSB.CustomURL)
 	}
 	if set.ADSB.Source == "adsb.fi" {
 		return fmt.Sprintf("https://opendata.adsb.fi/api/v2/lat/%.4f/lon/%.4f/dist/%d", set.Lat, set.Lon, set.ADSB.RadiusNM)
@@ -62,7 +71,11 @@ func (s *Service) runADSB(ctx context.Context, set store.FeedSettings) {
 			}
 		} else {
 			for _, a := range list {
-				if t, ok := aircraftTrack(a, set.ADSB.Source); ok {
+				// A receiver or API that ignores the area sends everything it has.
+				if a.Lat == nil || a.Lon == nil || distanceNM(set.Lat, set.Lon, *a.Lat, *a.Lon) > float64(set.ADSB.RadiusNM) {
+					continue
+				}
+				if t, ok := aircraftTrack(a, sourceName(set)); ok {
 					s.send(t, stale, set.ADSB.Groups)
 				}
 			}
@@ -85,23 +98,47 @@ func (s *Service) fetchAircraft(ctx context.Context, set store.FeedSettings) ([]
 	}
 	req.Header.Set("User-Agent", s.userAgent())
 	req.Header.Set("Accept", "application/json")
+	if set.ADSB.Source == "custom" && set.ADSB.HeaderName != "" {
+		req.Header.Set(set.ADSB.HeaderName, set.ADSB.HeaderValue)
+	}
+	name := sourceName(set)
 	resp, err := s.client().Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("can't reach %s: %v", set.ADSB.Source, err)
+		return nil, fmt.Errorf("can't reach %s: %v", name, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
-		return nil, fmt.Errorf("%s answered %d %s", set.ADSB.Source, resp.StatusCode, strings.TrimSpace(string(b)))
+		return nil, fmt.Errorf("%s answered %d %s", name, resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 	var body struct {
 		AC       []aircraft `json:"ac"`
 		Aircraft []aircraft `json:"aircraft"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&body); err != nil {
-		return nil, fmt.Errorf("%s: unreadable answer: %v", set.ADSB.Source, err)
+		return nil, fmt.Errorf("%s: not ADS-B JSON in the readsb/dump1090 format: %v", name, err)
 	}
 	return append(body.AC, body.Aircraft...), nil
+}
+
+// sourceName names the ADS-B source in remarks and errors: a custom URL by
+// its host.
+func sourceName(set store.FeedSettings) string {
+	if set.ADSB.Source != "custom" {
+		return set.ADSB.Source
+	}
+	if u, err := url.Parse(set.ADSB.CustomURL); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return "custom source"
+}
+
+// distanceNM is the great-circle distance in nautical miles.
+func distanceNM(lat1, lon1, lat2, lon2 float64) float64 {
+	const rad = math.Pi / 180
+	dLat, dLon := (lat2-lat1)*rad, (lon2-lon1)*rad
+	h := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(lat1*rad)*math.Cos(lat2*rad)*math.Sin(dLon/2)*math.Sin(dLon/2)
+	return 2 * 3440.065 * math.Asin(math.Sqrt(h))
 }
 
 // aircraftTrack makes a marker from an aircraft with a recent position.
@@ -133,6 +170,12 @@ func aircraftTrack(a aircraft, source string) (Track, bool) {
 		parts = append(parts, "Reg "+a.Reg)
 	}
 	onGround := false
+	if a.AltBaro == nil {
+		a.AltBaro = a.Altitude
+	}
+	if a.GS == nil {
+		a.GS = a.Speed
+	}
 	switch v := a.AltBaro.(type) {
 	case string:
 		onGround = v == "ground"

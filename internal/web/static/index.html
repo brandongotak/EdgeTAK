@@ -12,6 +12,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="EdgeTAK">
+<script src="theme.js"></script>
 <link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -31,7 +32,7 @@
     <div class="who" id="who">
       <button id="map-toggle" class="ghost" aria-pressed="false" title="Show or hide the map">Map</button>
       <button id="who-menu" class="ghost" aria-expanded="false" aria-controls="who-items" title="Account and app">☰</button>
-      <div class="who-items" id="who-items"><button id="install-app" class="ghost" hidden title="Install the console as an app">Install app</button> <a class="button ghost" href="/account" title="Your own devices, certificates and password">My account</a> <span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
+      <div class="who-items" id="who-items"><button id="install-app" class="ghost" hidden title="Install the console as an app">Install app</button> <button id="theme-toggle" class="ghost" title="Theme: follow this device, or always light or dark">Auto</button> <a class="button ghost" href="/account" title="Your own devices, certificates and password">My account</a> <span id="me"></span> <button id="logout" class="ghost">Sign out</button></div>
     </div>
     <nav id="tabs" class="subtabs" role="tablist" aria-label="Pages">
       <button data-tab="dashboard" data-section="overview" class="active">Dashboard</button>
@@ -373,9 +374,17 @@
           <h3>Aircraft (ADS-B)</h3>
           <label class="check"><input type="checkbox" name="adsb"> Send aircraft to devices</label>
           <div class="inline-form">
-            <label>Source <select name="source"><option value="adsb.lol">adsb.lol</option><option value="adsb.fi">adsb.fi</option></select></label>
+            <label>Source <select name="source"><option value="adsb.lol">adsb.lol</option><option value="adsb.fi">adsb.fi</option><option value="custom">Custom (your receiver or another API)</option></select></label>
             <label>Radius (nautical miles) <input name="adsb_radius" type="number" min="1" max="250"></label>
             <label>Update every (seconds) <input name="interval" type="number" min="5" max="300"></label>
+          </div>
+          <div id="feeds-custom" class="stack" hidden>
+            <label>URL <input name="custom_url" placeholder="http://192.168.1.20/tar1090/data/aircraft.json"></label>
+            <p class="muted">Anything answering ADS-B JSON in the readsb/dump1090 format: your own receiver (readsb, tar1090, dump1090-fa or piaware's <code>aircraft.json</code>), or another API using that format (for example <code>https://example.com/v2/point/{lat}/{lon}/{radius}</code>). <code>{lat}</code>, <code>{lon}</code> and <code>{radius}</code> (nautical miles) are filled in; aircraft outside the radius are left out either way. If the source refuses, its answer shows below.</p>
+            <div class="inline-form">
+              <label>Header (optional) <input name="header_name" placeholder="e.g. x-api-key" autocomplete="off"></label>
+              <label>Header value <input name="header_value" type="password" autocomplete="off"></label>
+            </div>
           </div>
           <div class="muted">Groups that get them (none = every device)</div>
           <div id="feeds-adsb-groups" class="group-picker"></div>
