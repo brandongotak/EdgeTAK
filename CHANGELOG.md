@@ -10,6 +10,33 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.9.0 (2026-10-24)
+
+**Remote access through FRP.** A **Remote access (FRP)** card on the
+Settings page makes a server behind a router or a mobile connection
+reachable from anywhere, without opening ports: EdgeTAK runs the FRP client
+(frpc), which connects out to an FRP server (frps) on a VPS or a relay
+service that forwards its ports back. Devices connect to the FRP server's
+address and need nothing extra.
+
+- Paste or load an `frpc.toml`, or start from a template forwarding
+  EdgeTAK's device ports; frpc checks it before it's saved. It's never shown
+  again (it holds the FRP server's token).
+- **Connect** downloads frpc v0.71.1 from FRP's GitHub release, checked
+  against SHA-256 checksums pinned in EdgeTAK, and keeps it running, across
+  restarts too.
+- The card shows the connection to the FRP server, each forwarded port as
+  open or failed with the reason, and frpc's log. **Use for devices** points
+  packages and QR codes at the FRP server, and **Restart EdgeTAK** adds its
+  address to the server certificate.
+- Backups keep the config, not frpc (downloaded again).
+
+## v1.9.0-rc.1 (2026-10-24)
+
+A release candidate for v1.9.0 (above), to try remote access through a
+real FRP server. A pre-release: servers only get it with **Include
+pre-releases** ticked on the update card.
+
 ## v1.8.0 (2026-10-24)
 
 **Custom ADS-B source.** The aircraft feed's **Source** now has **Custom**:

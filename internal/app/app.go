@@ -23,6 +23,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/cot"
 	"github.com/brandongotak/EdgeTAK/internal/federation"
 	"github.com/brandongotak/EdgeTAK/internal/feeds"
+	"github.com/brandongotak/EdgeTAK/internal/frp"
 	"github.com/brandongotak/EdgeTAK/internal/health"
 	"github.com/brandongotak/EdgeTAK/internal/history"
 	"github.com/brandongotak/EdgeTAK/internal/maps"
@@ -60,6 +61,7 @@ type App struct {
 	Dial func(address string) (net.Conn, error)
 	// Federation runs TAK Server federation (set by Start).
 	Federation *federation.Manager
+	frp        *frp.Manager // remote access
 	// Web is the HTTP side (set by Start).
 	Web *web.Server
 	// Audit is the audit log.
@@ -96,6 +98,11 @@ func New(cfg config.Config, dataDir, version string, log *slog.Logger) (*App, er
 		}
 	}
 	hosts := append(pki.DetectHosts(), cfg.Hostnames...)
+	// Devices on remote access connect through the FRP server's address.
+	a.frp = &frp.Manager{Dir: filepath.Join(dataDir, "frp"), BinDir: filepath.Join(dataDir, "frpc-bin")}
+	if addr := a.frp.ServerAddr(); addr != "" {
+		hosts = append(hosts, addr)
+	}
 	if a.Cfg.PublicHost != "" {
 		hosts = append([]string{a.Cfg.PublicHost}, hosts...)
 	}
@@ -358,6 +365,9 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	if a.Dial != nil {
 		ws.SimDial = func(_ context.Context, _, addr string) (net.Conn, error) { return a.Dial(addr) }
 	}
+	a.frp.Log = a.Log.With("component", "frpc")
+	ws.FRP = a.frp
+	go a.frp.Run(ctx, a.Store.FRPEnabled())
 	ws.Feeds = &feeds.Service{Router: a.Router, Log: a.Log.With("component", "feeds"), Version: a.Version}
 	ws.Feeds.Start(ctx, a.Store.Feeds())
 	ws.Start(ctx) // server contact, Inbox and video (writes mediamtx.yml)

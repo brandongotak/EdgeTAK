@@ -23,6 +23,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/federation"
 	"github.com/brandongotak/EdgeTAK/internal/feeds"
+	"github.com/brandongotak/EdgeTAK/internal/frp"
 	"github.com/brandongotak/EdgeTAK/internal/health"
 	"github.com/brandongotak/EdgeTAK/internal/history"
 	"github.com/brandongotak/EdgeTAK/internal/maps"
@@ -56,6 +57,8 @@ type Server struct {
 	}
 	// Feeds turns ADS-B and AIS data into markers (set by the app).
 	Feeds *feeds.Service
+	// FRP runs the FRP client for remote access (set by the app).
+	FRP *frp.Manager
 	// ZeroTierAPI is the local ZeroTier service's API ("" =
 	// http://127.0.0.1:9993; tests use a fake).
 	ZeroTierAPI string
@@ -175,6 +178,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.plainTCPRoutes(mux)
 	s.zerotierRoutes(mux)
 	s.feedRoutes(mux)
+	s.frpRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)

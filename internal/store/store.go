@@ -241,6 +241,9 @@ type db struct {
 	PlainTCPOn  bool `json:"plain_tcp_on,omitempty"`
 
 	Feeds FeedSettings `json:"feeds"`
+
+	// FRPEnabled: remote access through an FRP server is on.
+	FRPEnabled bool `json:"frp_enabled,omitempty"`
 }
 
 // FeedSettings are the aircraft (ADS-B) and ship (AIS) feeds EdgeTAK turns
@@ -2689,5 +2692,20 @@ func (s *Store) SetFeeds(f FeedSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.Feeds = f
+	return s.save()
+}
+
+// ---- remote access (FRP) ----
+
+func (s *Store) FRPEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.FRPEnabled
+}
+
+func (s *Store) SetFRPEnabled(on bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.FRPEnabled = on
 	return s.save()
 }

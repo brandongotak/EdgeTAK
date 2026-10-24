@@ -77,7 +77,7 @@ type Options struct {
 // files, and backups and restores themselves.
 func skipped(name string, opt Options) bool {
 	switch name {
-	case "db.json", "mediamtx", "mediamtx.yml", "update", "initial-admin-password.txt", BackupsDir, stagingDir, previousDir, pendingFile:
+	case "db.json", "mediamtx", "mediamtx.yml", "frpc-bin", "update", "initial-admin-password.txt", BackupsDir, stagingDir, previousDir, pendingFile:
 		return true
 	case "history":
 		return !opt.History
@@ -311,7 +311,7 @@ func safeName(name string) bool {
 		return false
 	}
 	top := strings.SplitN(strings.TrimPrefix(name, "data/"), "/", 2)[0]
-	return top != "" && !slices.Contains([]string{BackupsDir, stagingDir, previousDir, pendingFile, "update", "mediamtx"}, top)
+	return top != "" && !slices.Contains([]string{BackupsDir, stagingDir, previousDir, pendingFile, "update", "mediamtx", "frpc-bin"}, top)
 }
 
 func writeFile(p string, r io.Reader, mode fs.FileMode) error {
@@ -369,7 +369,7 @@ func ApplyPending(dataDir, configPath string) (bool, error) {
 	for _, e := range current {
 		name := e.Name()
 		switch name {
-		case stagingDir, previousDir, pendingFile, BackupsDir, "mediamtx", "update":
+		case stagingDir, previousDir, pendingFile, BackupsDir, "mediamtx", "frpc-bin", "update":
 			continue // never replaced
 		case "history", "recordings", "maps":
 			if !incoming[name] {

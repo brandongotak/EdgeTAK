@@ -157,7 +157,7 @@ const loaders = {
   simulator: loadSim,
   webhooks: loadWebhooks,
   audit: () => loadAudit(),
-  settings: () => Promise.all([loadPlainTCP(), loadZeroTier(), loadFeeds(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
+  settings: () => Promise.all([loadPlainTCP(), loadZeroTier(), loadFRP(), loadFeeds(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
 };
 
 let currentTab = '';
@@ -3757,6 +3757,114 @@ $('#tcp-on').addEventListener('change', guard(async (e) => {
     e.target.checked = !on;
     throw ex;
   }
+}));
+
+// ---- remote access (FRP) ----
+
+let frpTimer = null;
+let frpInfo = null;
+
+function frpTemplate(v) {
+  const name = (v.server_name || 'edgetak').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'edgetak';
+  const proxy = (what, port) => `
+[[proxies]]
+name = "${name}-${what}"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = ${port}
+remotePort = ${port}
+`;
+  return `# EdgeTAK through an FRP server (frps). Fill in your FRP server's
+# address, port and token; the ports below must be allowed on it.
+serverAddr = "frp.example.com"
+serverPort = 7000
+auth.method = "token"
+auth.token = "CHANGE-ME"
+${proxy('streaming', v.ports.tls || 8089)}${proxy('api', v.ports.https || 8443)}${proxy('enroll', v.ports.enroll || 8446)}`;
+}
+
+function renderFRP(v) {
+  frpInfo = v;
+  const st = v.status, box = $('#frp-body');
+  let state = '<span class="pill">off</span>';
+  if (st.installing) state = '<span class="pill warn">downloading frpc…</span>';
+  else if (st.enabled && st.connected) state = '<span class="pill ok">connected</span>';
+  else if (st.enabled && (st.login_error || st.install_error)) state = '<span class="pill bad">problem</span>';
+  else if (st.enabled) state = '<span class="pill warn">connecting…</span>';
+  $('#frp-state').innerHTML = state;
+  const proxies = Object.entries(st.proxies || {});
+  box.innerHTML = !st.has_config
+    ? `<p class="muted">No config yet.</p><button type="button" class="primary" id="frp-new">Set up remote access</button>`
+    : `<dl class="kv">
+        <dt>FRP server</dt><dd class="mono">${esc(v.server_addr)}</dd>
+        <dt>Forwarded ports</dt><dd class="mono">${esc((v.remote_ports || []).join(', ') || '—')}</dd>
+        <dt>frpc</dt><dd>${st.installed ? 'v' + esc(st.version) : 'downloaded when you connect'}${st.running ? ` · running since ${esc(ago(st.since))}` : ''}</dd>
+      </dl>
+      ${st.install_error ? `<p class="error">${esc(st.install_error)}</p>` : ''}
+      ${st.login_error ? `<p class="error">Can't log in to the FRP server: ${esc(st.login_error)}</p>` : ''}
+      ${proxies.length ? `<div class="stack">${proxies.map(([n, r]) => `<div>${r === 'ok' ? '<span class="pill ok">open</span>' : '<span class="pill bad">failed</span>'} <span class="mono">${esc(n)}</span>${r === 'ok' ? '' : ` <span class="muted">${esc(r)}</span>`}</div>`).join('')}</div>` : ''}
+      ${st.last_exit && st.enabled ? `<p class="muted">frpc stopped: ${esc(st.last_exit)} (restarting)</p>` : ''}
+      ${v.cert_missing ? `<p class="muted">EdgeTAK's certificate doesn't name ${esc(v.server_addr)} yet; it adds it when it starts. <button type="button" class="small" id="frp-restart">Restart EdgeTAK</button></p>` : ''}
+      <div class="inline-form">
+        <button type="button" class="${st.enabled ? 'danger' : 'primary'}" id="frp-toggle">${st.enabled ? 'Disconnect' : 'Connect'}</button>
+        <button type="button" id="frp-use" title="Packages and QR codes on the Connect page point devices at the FRP server">Use for devices</button>
+        <button type="button" id="frp-replace">Replace config</button>
+        <button type="button" class="danger" id="frp-remove">Remove config</button>
+      </div>
+      ${st.log && st.log.length ? `<details><summary>frpc log</summary><pre class="notes">${esc(st.log.slice(-60).join('\n'))}</pre></details>` : ''}`;
+  clearTimeout(frpTimer);
+  if (st.installing || (st.enabled && !st.connected)) {
+    frpTimer = setTimeout(() => { if (currentTab === 'settings') loadFRP().catch(() => {}); }, 3000);
+  }
+}
+
+async function loadFRP() {
+  renderFRP(await api('GET', 'api/frp'));
+}
+
+function showFRPForm(on) {
+  $('#frp-form').hidden = !on;
+  if (on) $('#frp-form').config.focus();
+}
+
+$('#frp-body').addEventListener('click', guard(async (e) => {
+  const id = e.target.id;
+  if (id === 'frp-new' || id === 'frp-replace') showFRPForm(true);
+  else if (id === 'frp-toggle') {
+    const on = !frpInfo.status.enabled;
+    renderFRP(await api('PUT', 'api/frp/enabled', { on }));
+    toast(on ? 'Connecting…' : 'Disconnected');
+  } else if (id === 'frp-use') {
+    $('#connect-host').value = frpInfo.server_addr;
+    toast(`Packages and QR codes on the Connect page now point devices at ${frpInfo.server_addr}`);
+    selectTab('connect');
+  } else if (id === 'frp-remove') {
+    if (!confirm('Remove the remote access config? EdgeTAK disconnects from the FRP server.')) return;
+    renderFRP(await api('DELETE', 'api/frp/config'));
+  } else if (id === 'frp-restart') {
+    if (!confirm('Restart EdgeTAK? Devices reconnect by themselves within a few seconds.')) return;
+    await api('POST', 'api/server/restart');
+    toast('Restarting EdgeTAK…');
+    setTimeout(() => location.reload(), 8000);
+  }
+}));
+$('#frp-template').addEventListener('click', () => {
+  const f = $('#frp-form');
+  if (f.config.value.trim() && !confirm('Replace what you typed with the template?')) return;
+  f.config.value = frpTemplate(frpInfo);
+});
+$('#frp-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (file) $('#frp-form').config.value = await file.text();
+  e.target.value = '';
+});
+$('#frp-cancel').addEventListener('click', () => { $('#frp-form').config.value = ''; showFRPForm(false); });
+$('#frp-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  renderFRP(await api('PUT', 'api/frp/config', { config: e.target.config.value }));
+  e.target.config.value = '';
+  showFRPForm(false);
+  toast('Config saved');
 }));
 
 // ---- aircraft and ship feeds ----

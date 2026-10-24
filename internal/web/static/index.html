@@ -361,6 +361,22 @@
         <p class="muted">ZeroTier puts this server and your devices on one private network over the internet, so phones anywhere reach EdgeTAK without opening ports on your router. Devices need the ZeroTier app, joined to the same network.</p>
         <div id="zt-body"><p class="muted">Loading…</p></div>
       </div>
+      <div class="card" id="frp-card">
+        <div class="card-head"><h2>Remote access (FRP)</h2><span id="frp-state"></span></div>
+        <p class="muted">Reach this server from anywhere, even behind a router or a mobile connection, without opening ports: EdgeTAK runs the FRP client (frpc), which connects out to an FRP server (frps) on a VPS or a relay service, and that server forwards its ports back here. Devices connect to the FRP server's address and need nothing extra.</p>
+        <div id="frp-body"><p class="muted">Loading…</p></div>
+        <form id="frp-form" class="stack" hidden>
+          <label>frpc.toml <textarea name="config" rows="16" class="mono" spellcheck="false" placeholder="serverAddr = &quot;frp.example.com&quot;&#10;serverPort = 7000&#10;…"></textarea></label>
+          <div class="inline-form">
+            <button type="button" class="small" id="frp-template">Start from a template</button>
+            <label>Or load a file <input type="file" id="frp-file" accept=".toml,text/plain"></label>
+            <span class="spacer"></span>
+            <button type="button" id="frp-cancel">Cancel</button>
+            <button type="submit" class="primary">Save config</button>
+          </div>
+          <p class="muted">The config holds the FRP server's token, so it isn't shown again once saved. The template forwards EdgeTAK's device ports to the same numbers on the FRP server, so packages and QR codes need no other ports; the FRP server must allow them (allowPorts) and its firewall must open them.</p>
+        </form>
+      </div>
       <div class="card" id="feeds-card">
         <div class="card-head"><h2>Aircraft and ships</h2><span id="feeds-state"></span></div>
         <p class="muted">Live aircraft (ADS-B) and ships (AIS) around an area, sent to devices as map markers that disappear when they stop reporting. The server needs internet access. They also show on the console map (Aircraft and Ships layers).</p>

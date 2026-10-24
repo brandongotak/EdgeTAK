@@ -932,6 +932,33 @@ network.
 Managing the network itself (its members, rules) stays in ZeroTier Central
 or your own controller. With Docker, install ZeroTier on the host.
 
+### Remote access (FRP)
+
+**Server → Settings → Remote access (FRP)** makes a server behind a router
+or a mobile connection reachable from anywhere without opening ports:
+EdgeTAK runs the [FRP](https://github.com/fatedier/frp) client (frpc), which
+connects out to an FRP server (frps) you run on a VPS, or a relay service,
+and that server forwards its ports back to EdgeTAK. Devices connect to the
+FRP server's address and need nothing extra (unlike ZeroTier).
+
+1. **Set up remote access:** paste or load an `frpc.toml`, or **Start from
+   a template** (EdgeTAK's streaming, API and enrollment ports, forwarded to
+   the same numbers) and fill in your FRP server's address, port and token.
+   EdgeTAK checks it with frpc before saving. The config isn't shown again,
+   since it holds the token.
+2. **Connect.** EdgeTAK downloads frpc v0.71.1 from FRP's GitHub release,
+   checks it against the SHA-256 checksums pinned in EdgeTAK, and keeps it
+   running (and running after restarts). The card shows whether frpc is
+   logged in to the FRP server, each forwarded port as open or failed (with
+   the FRP server's reason), and frpc's log.
+3. **Use for devices** points the Connect page's packages and QR codes at
+   the FRP server. EdgeTAK adds the FRP server's address to its certificate
+   when it starts; the card offers **Restart EdgeTAK** until it has.
+
+The FRP server must allow the forwarded ports (`allowPorts`) and open them
+in its firewall. Backups keep the config but not frpc, which is downloaded
+again.
+
 ### Login protection
 
 **Server → Settings → Login protection** (on by default): an address that
