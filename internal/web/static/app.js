@@ -502,7 +502,7 @@ async function loadHealth() {
     for (const o of document.querySelectorAll('.segmented button[data-minutes]')) o.classList.toggle('active', Number(o.dataset.minutes) === healthMinutes);
   }
   const [h, devices] = await Promise.all([api('GET', `api/health?minutes=${healthMinutes}`), api('GET', 'api/health/devices')]);
-  const S = h.samples;
+  const S = h.samples || []; // none yet just after a restart
   const last = h.latest || S[S.length - 1] || {};
   const times = S.map((s) => s.t);
   const col = (k) => S.map((s) => known(s[k]));
@@ -4091,7 +4091,9 @@ let helpLoaded = false;
 
 async function loadHelp() {
   if (!helpLoaded) {
-    const r = await fetch('help.html');
+    const lang = window.EDGETAK_LANG || 'en';
+    let r = lang === 'en' ? null : await fetch(`help.${lang}.html`);
+    if (!r || !r.ok) r = await fetch('help.html');
     if (!r.ok) throw new Error(`Help could not be loaded (${r.status})`);
     $('#help-body').innerHTML = await r.text();
     helpLoaded = true;
@@ -4228,6 +4230,7 @@ $('#qr-sheet-form').addEventListener('submit', async (e) => {
     img{width:200px;height:200px;margin:10px auto;display:block}.muted{color:#555;font-size:12px;margin-top:6px}</style></head>
     <body><h1>${esc(name)}: ATAK QR codes</h1><div class="grid">${cards}</div><script>onload=()=>print()<\/script></body></html>`);
   w.document.close();
+  window.translateDOM?.(w.document.body);
   $('#qr-sheet-dialog').close();
   renderQRCodes(r.codes);
   toast(`Made ${r.cards.length} QR code(s)` + (r.skipped.length ? `; skipped ${r.skipped.join(', ')}` : ''));
@@ -5773,6 +5776,7 @@ $('#event-print').addEventListener('click', () => {
     <body><h1>${esc(e.name)}</h1><div class="muted">Join the team map</div><img src="${img}" alt="QR code"><ol>${steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
     <p class="muted">Access ends ${esc(date(e.expires))}.</p><script>onload=()=>print()<\/script></body></html>`);
   w.document.close();
+  window.translateDOM?.(w.document.body);
 });
 
 $('#event-list').addEventListener('click', guard(async (ev) => {

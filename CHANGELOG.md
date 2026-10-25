@@ -10,7 +10,7 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
-## v1.9.0 (2026-10-24)
+## v1.9.0 (2026-10-25)
 
 **Remote access through FRP.** A **Remote access (FRP)** card on the
 Settings page makes a server behind a router or a mobile connection
@@ -30,6 +30,22 @@ address and need nothing extra.
   packages and QR codes at the FRP server, and **Restart EdgeTAK** adds its
   address to the server certificate.
 - Backups keep the config, not frpc (downloaded again).
+
+**Spanish and French.** The console, the account, sign-in and sign-up pages
+and Help are translated into Spanish and French, including the server's
+messages they show (audit actions, certificate and health notices, errors).
+The language follows the browser; a language menu in the top bar (and at
+the foot of the sign-in pages) changes it. Untranslated text stays in
+English.
+
+**Fixed:** the Health page showed an error for the first few seconds after
+EdgeTAK started, before its first sample.
+
+## v1.9.0-rc.2 (2026-10-25)
+
+A second release candidate for v1.9.0 (above), adding Spanish and French.
+A pre-release: servers only get it with **Include pre-releases** ticked on
+the update card.
 
 ## v1.9.0-rc.1 (2026-10-24)
 

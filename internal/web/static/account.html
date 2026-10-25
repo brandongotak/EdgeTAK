@@ -6,6 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <title>EdgeTAK Account</title>
 <script src="/admin/theme.js"></script>
+<script src="/admin/i18n.js"></script>
 <link rel="stylesheet" href="/admin/style.css">
 <link rel="icon" href="/admin/icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/admin/icons/apple-touch-icon.png">
@@ -16,6 +17,7 @@
   <header class="account-head">
     <div class="brand"><span class="logo">◆</span> <span class="server-name">EdgeTAK</span></div>
     <span class="spacer"></span>
+    <select class="lang-pick" data-lang-pick data-no-i18n aria-label="Language" title="Language"><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option></select>
     <a class="button small" id="admin-link" href="/admin/" hidden>Admin console</a>
     <span class="muted" id="me"></span>
     <button type="button" class="small ghost" id="signout">Sign out</button>

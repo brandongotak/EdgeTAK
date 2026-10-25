@@ -480,3 +480,7 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .help-layout { grid-template-columns: 1fr; }
   .help-toc { position: static; max-height: none; }
 }
+
+/* Language picker */
+select.lang-pick { width: auto; padding: 4px 8px; font-size: 13px; }
+.lang-foot { text-align: center; margin: 16px; }

@@ -189,6 +189,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.federationRoutes(mux)
 	s.accountRoutes(mux)
 
+	mux.HandleFunc("GET /admin/i18n.js", s.i18nScript)
 	files := http.StripPrefix("/admin/", http.FileServerFS(staticSub()))
 	mux.HandleFunc("GET /admin/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")

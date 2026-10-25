@@ -12,7 +12,9 @@ func TestConsoleScriptParses(t *testing.T) {
 	if err != nil {
 		t.Skip("node not installed")
 	}
-	if out, err := exec.Command(node, "--check", "static/app.js").CombinedOutput(); err != nil {
-		t.Fatalf("static/app.js does not parse:\n%s", out)
+	for _, f := range []string{"static/app.js", "static/i18n/runtime.js"} {
+		if out, err := exec.Command(node, "--check", f).CombinedOutput(); err != nil {
+			t.Fatalf("%s does not parse:\n%s", f, out)
+		}
 	}
 }
