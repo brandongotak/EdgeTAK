@@ -33,6 +33,10 @@ radio teams and server users see each other.
 - **Status:** the card shows the interfaces, traffic each way, and the
   devices heard lately.
 
+**Fixed:** on the Plugins page, the buttons for each plugin (Treat as
+app or plugin, Change icon, Download, Delete) are under its name, so the
+list fits beside the map without scrolling sideways.
+
 ## v1.12.0-rc.1 (2026-10-26)
 
 A release candidate for v1.12.0 (above), to try the mesh bridge with ATAK

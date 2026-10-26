@@ -2679,19 +2679,18 @@ function renderApps(r) {
     const flavor = a.plugin_api ? a.plugin_api.split('.').pop() : '';
     return `<tr>
     <td><img class="app-icon" src="api/apps/${esc(a.sha256)}/icon" alt=""></td>
-    <td><div><strong>${esc(a.name)}</strong><div class="muted mono">${esc(a.package)}</div>${a.description && a.description !== a.name ? `<div class="muted">${esc(a.description.length > 120 ? a.description.slice(0, 120) + "…" : a.description)}</div>` : ''}</div></td>
+    <td><div><strong>${esc(a.name)}</strong><div class="muted mono">${esc(a.package)}</div>${a.description && a.description !== a.name ? `<div class="muted">${esc(a.description.length > 120 ? a.description.slice(0, 120) + "…" : a.description)}</div>` : ''}<div class="row-actions"><button class="small" data-kind-app="${esc(a.sha256)}" data-kind="${a.is_plugin ? 'app' : 'plugin'}" title="${a.is_plugin ? 'ATAK lists and installs it as a separate app, not a plugin' : 'ATAK lists it as a plugin'}">${a.is_plugin ? 'Treat as app' : 'Treat as plugin'}</button>
+      <button class="small" data-icon-app="${esc(a.sha256)}" title="Use your own icon (PNG, JPEG or WebP)">Change icon</button>
+      <a class="button small" href="api/apps/${esc(a.sha256)}/apk">Download</a>
+      <button class="small danger" data-del-app="${esc(a.sha256)}" data-name="${esc(a.name)} ${esc(a.version)}">Delete</button></div></div></td>
     <td>${esc(a.version || String(a.version_code))}</td>
     <td>${a.is_plugin
       ? (a.plugin_api ? `<span class="pill" title="A plugin built for ATAK ${esc(a.atak_version)}; runs on it and later versions">Plugin · ATAK ${esc(a.atak_version)}+${flavor && flavor !== a.atak_version ? ' ' + esc(flavor) : ''}</span>` : '<span class="pill">Plugin</span>')
       : '<span class="pill">App</span>'}${a.kind ? '<div class="muted">set by you</div>' : ''}</td>
     <td>${a.min_sdk ? esc(ANDROID[a.min_sdk] ? ANDROID[a.min_sdk] + '+' : 'API ' + a.min_sdk) : ''}</td>
     <td>${bytes(a.size)}</td>
-    <td>${esc(date(a.uploaded))}<div class="muted">${esc(a.uploader)}</div></td>
-    <td class="actions"><button class="small" data-kind-app="${esc(a.sha256)}" data-kind="${a.is_plugin ? 'app' : 'plugin'}" title="${a.is_plugin ? 'ATAK lists and installs it as a separate app, not a plugin' : 'ATAK lists it as a plugin'}">${a.is_plugin ? 'Treat as app' : 'Treat as plugin'}</button>
-      <button class="small" data-icon-app="${esc(a.sha256)}" title="Use your own icon (PNG, JPEG or WebP)">Change icon</button>
-      <a class="button small" href="api/apps/${esc(a.sha256)}/apk">Download</a>
-      <button class="small danger" data-del-app="${esc(a.sha256)}" data-name="${esc(a.name)} ${esc(a.version)}">Delete</button></td></tr>`;
-  }).join('') || emptyRow(8, 'No plugins or apps yet');
+    <td>${esc(date(a.uploaded))}<div class="muted">${esc(a.uploader)}</div></td></tr>`;
+  }).join('') || emptyRow(7, 'No plugins or apps yet');
 }
 
 async function loadApps() {
