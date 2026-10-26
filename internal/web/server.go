@@ -179,6 +179,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.zerotierRoutes(mux)
 	s.feedRoutes(mux)
 	s.frpRoutes(mux)
+	s.brandingRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)

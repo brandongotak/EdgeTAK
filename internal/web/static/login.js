@@ -44,6 +44,7 @@ form.addEventListener('submit', async (e) => {
 (async () => {
   try {
     const info = await (await fetch('/account/api/info')).json();
+    showLogo(info.logo);
     if (info.server_name) {
       $('#server-name').textContent = info.server_name;
       document.title = `${info.server_name} sign in`;

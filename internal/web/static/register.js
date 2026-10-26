@@ -12,6 +12,7 @@ function show(id) {
 async function load() {
   const r = await fetch('/api/register/info' + (invite ? `?invite=${encodeURIComponent(invite)}` : ''));
   info = await r.json();
+  showLogo(info.logo);
   if (info.server_name) {
     $('#server-name').textContent = info.server_name;
     document.title = `${info.server_name} sign-up`;

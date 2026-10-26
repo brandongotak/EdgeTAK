@@ -157,7 +157,7 @@ const loaders = {
   simulator: loadSim,
   webhooks: loadWebhooks,
   audit: () => loadAudit(),
-  settings: () => Promise.all([loadPlainTCP(), loadZeroTier(), loadFRP(), loadFeeds(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
+  settings: () => Promise.all([loadLogo(), loadPlainTCP(), loadZeroTier(), loadFRP(), loadFeeds(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
 };
 
 let currentTab = '';
@@ -248,6 +248,7 @@ async function refreshStatus() {
   status = await api('GET', 'api/status');
   $('#server-name').textContent = status.server_name;
   $('#server-version').textContent = status.version;
+  showLogo(status.logo);
   document.title = `${status.server_name} Console`;
 }
 
@@ -2720,6 +2721,41 @@ $('#apk-configure').addEventListener('change', guard(async (e) => {
   toast(e.target.checked ? 'Devices get the update server when they next connect' : 'Devices are no longer pointed at the update server');
 }));
 
+// ---- logo ----
+
+// printLogo is the logo for a printed sheet (opened in a new window).
+const printLogo = () => (status?.logo ? `<img class="print-logo" src="${location.origin}/admin/logo.png?v=${encodeURIComponent(status.logo)}" alt="">` : '');
+
+function renderLogo(v) {
+  if (status) status.logo = v;
+  showLogo(v);
+  $('#logo-state').innerHTML = v ? '<span class="pill ok">custom</span>' : '<span class="pill">default</span>';
+  $('#logo-preview').replaceChildren(v ? Object.assign(document.createElement('img'), { src: `/admin/logo.png?v=${encodeURIComponent(v)}`, alt: 'Current logo' }) : '');
+  $('#logo-remove').hidden = !v;
+}
+
+async function loadLogo() {
+  renderLogo((await api('GET', 'api/logo')).logo);
+}
+
+const logoPicker = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/png,image/jpeg,image/webp' });
+$('#logo-upload').addEventListener('click', () => logoPicker.click());
+logoPicker.addEventListener('change', guard(async () => {
+  const file = logoPicker.files[0];
+  logoPicker.value = '';
+  if (!file) return;
+  const r = await fetch('api/logo', { method: 'PUT', headers: { 'X-EdgeTAK': '1', 'Content-Type': file.type }, body: file });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+  renderLogo(body.logo);
+  toast('Logo changed');
+}));
+$('#logo-remove').addEventListener('click', guard(async () => {
+  if (!confirm('Remove the logo? The pages go back to the ◆ mark and the EdgeTAK icon.')) return;
+  renderLogo((await api('DELETE', 'api/logo')).logo);
+  toast('Logo removed');
+}));
+
 // Change icon: pick an image and send it as the request body.
 let iconTarget = '';
 const iconPicker = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/png,image/jpeg,image/webp' });
@@ -4227,8 +4263,8 @@ $('#qr-sheet-form').addEventListener('submit', async (e) => {
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(name)} QR codes</title>
     <style>body{font:14px system-ui,sans-serif;color:#111;margin:24px}h1{font-size:20px;margin:0 0 16px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
     .card{border:1px dashed #999;border-radius:8px;padding:16px;text-align:center;break-inside:avoid;page-break-inside:avoid}.name{font-size:20px;font-weight:700}
-    img{width:200px;height:200px;margin:10px auto;display:block}.muted{color:#555;font-size:12px;margin-top:6px}</style></head>
-    <body><h1>${esc(name)}: ATAK QR codes</h1><div class="grid">${cards}</div><script>onload=()=>print()<\/script></body></html>`);
+    img{width:200px;height:200px;margin:10px auto;display:block}.muted{color:#555;font-size:12px;margin-top:6px}img.print-logo{width:auto;height:56px;max-width:240px;margin:0 0 12px}</style></head>
+    <body>${printLogo()}<h1>${esc(name)}: ATAK QR codes</h1><div class="grid">${cards}</div><script>onload=()=>print()<\/script></body></html>`);
   w.document.close();
   window.translateDOM?.(w.document.body);
   $('#qr-sheet-dialog').close();
@@ -5772,8 +5808,8 @@ $('#event-print').addEventListener('click', () => {
     : ['Install ATAK (or iTAK) on your phone.', 'Scan this code with the phone\'s camera.', 'Pick a username and password on the page that opens.', 'Scan the ATAK code it shows: ATAK connects you.'];
   const w = window.open('', '_blank');
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(e.name)}</title>
-    <style>body{font:16px system-ui,sans-serif;text-align:center;padding:32px;color:#111}h1{margin:0 0 6px}img{width:320px;height:320px;margin:20px}ol{display:inline-block;text-align:left;font-size:18px}.muted{color:#555}</style></head>
-    <body><h1>${esc(e.name)}</h1><div class="muted">Join the team map</div><img src="${img}" alt="QR code"><ol>${steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
+    <style>body{font:16px system-ui,sans-serif;text-align:center;padding:32px;color:#111}h1{margin:0 0 6px}img{width:320px;height:320px;margin:20px}ol{display:inline-block;text-align:left;font-size:18px}.muted{color:#555}img.print-logo{display:block;width:auto;height:72px;max-width:280px;margin:0 auto 16px}</style></head>
+    <body>${printLogo()}<h1>${esc(e.name)}</h1><div class="muted">Join the team map</div><img src="${img}" alt="QR code"><ol>${steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
     <p class="muted">Access ends ${esc(date(e.expires))}.</p><script>onload=()=>print()<\/script></body></html>`);
   w.document.close();
   window.translateDOM?.(w.document.body);

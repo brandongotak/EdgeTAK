@@ -293,6 +293,7 @@ for (const b of document.querySelectorAll('[data-pkg]')) {
   try {
     info = await (await fetch('/account/api/info')).json();
     for (const el of document.querySelectorAll('.server-name')) el.textContent = info.server_name || 'EdgeTAK';
+    showLogo(info.logo);
     document.title = `${info.server_name || 'EdgeTAK'} account`;
   } catch { /* keep defaults */ }
   await start();

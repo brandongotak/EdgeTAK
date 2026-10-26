@@ -106,7 +106,7 @@ func (s *Server) signedUp(r *http.Request, username string) map[string]any {
 func (s *Server) registerInfo(w http.ResponseWriter, r *http.Request) {
 	reg := s.Store.Registration()
 	info := map[string]any{
-		"server_name": s.Cfg.ServerName, "host": s.deviceHost(r), "mode": reg.Mode,
+		"server_name": s.Cfg.ServerName, "host": s.deviceHost(r), "mode": reg.Mode, "logo": s.logoVersion(),
 		"quick_connect": s.Public.Info()["mode"] != "off", "streaming_port": port(s.Addrs["tls"]),
 	}
 	if code := r.URL.Query().Get("invite"); code != "" {

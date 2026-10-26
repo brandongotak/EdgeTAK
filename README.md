@@ -1045,6 +1045,17 @@ The console installs on phones and desktops (**Install app** in the top bar
 on Chrome/Edge; Share → Add to Home Screen on iPhone). It needs a trusted
 certificate, so use port 8446 with Let's Encrypt.
 
+### Logo
+
+**Logo** on the Settings page puts your organization's logo in place of
+the ◆ mark: in the console, on the sign-in, sign-up and account pages and
+on printed QR sheets. EdgeTAK also makes the browser tab icon and the
+installed app's icons from it. Upload a PNG, JPEG or WebP image (up to
+5 MB); EdgeTAK stores it as a PNG up to 512 pixels. A square logo, or a wide
+one with a transparent background, works best; on the square app icons a
+wide logo comes out small. **Remove** brings back the default. Backups keep
+the logo.
+
 ### Languages
 
 The console, the account, sign-in and sign-up pages and Help come in

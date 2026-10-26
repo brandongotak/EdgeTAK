@@ -110,6 +110,12 @@ func IconPNG(data []byte) ([]byte, error) {
 
 const iconMax = 192
 
+// Scale scales img, up or down, to fit in size x size.
+func Scale(img image.Image, size int) image.Image { return shrink(img, size) }
+
+// EncodePNG encodes img as a PNG, or returns nil if it can't.
+func EncodePNG(img image.Image) []byte { return encodePNG(img) }
+
 // shrink scales img to fit in size x size, averaging the pixels each output
 // pixel covers.
 func shrink(img image.Image, size int) image.Image {

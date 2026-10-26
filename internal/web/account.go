@@ -56,7 +56,7 @@ func (s *Server) accountRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /account/api/info", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"server_name": s.Cfg.ServerName, "host": s.deviceHost(r),
 			"quick_connect": s.Public.Info()["mode"] != "off", "streaming_port": port(s.Addrs["tls"]),
-			"signup": s.Store.Registration().Mode != "off"})
+			"signup": s.Store.Registration().Mode != "off", "logo": s.logoVersion()})
 	})
 	mux.HandleFunc("POST /account/api/login", s.signIn)
 	mux.HandleFunc("POST /account/api/logout", s.signOut)

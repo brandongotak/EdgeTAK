@@ -10,6 +10,27 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.10.0 (2026-10-25)
+
+**Your own logo.** A **Logo** card on the Settings page puts your
+organization's logo in place of the ◆ mark in the console, on the sign-in,
+sign-up and account pages and on printed QR sheets, and makes the browser
+tab and installed-app icons from it.
+
+- Upload a PNG, JPEG or WebP image up to 5 MB. EdgeTAK stores it as a PNG
+  (scaled to 512 pixels at most), so the file it serves is always a plain
+  image.
+- The square icons put a dark logo on white and a light one on dark where
+  iOS and Android need a solid background.
+- **Remove** brings back the default. Backups keep the logo, and changes are
+  in the audit log.
+
+## v1.10.0-rc.1 (2026-10-25)
+
+A release candidate for v1.10.0 (above), to try a custom logo. A
+pre-release: servers only get it with **Include pre-releases** ticked on
+the update card.
+
 ## v1.9.0 (2026-10-25)
 
 **Remote access through FRP.** A **Remote access (FRP)** card on the
