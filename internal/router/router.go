@@ -5,6 +5,7 @@ package router
 import (
 	"log/slog"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -149,7 +150,7 @@ func (r *Router) replayTo(c *Client) {
 		}
 	}
 	for _, p := range r.tapSA {
-		if p.tap != c && sharesGroup(p.tap.OutGroups(), c.InGroups()) && !p.ev.IsStale(now) {
+		if p.tap != c && sharesGroup(p.groupsNow(), c.InGroups()) && !p.ev.IsStale(now) {
 			replay = append(replay, p.ev)
 		}
 	}
@@ -208,8 +209,17 @@ func (r *Router) Client(id uint64) (*Client, bool) {
 // with it, or only to the addressed clients when the event carries
 // <marti><dest uid|callsign|mission/></marti> entries.
 func (r *Router) Route(src *Client, ev *cot.Event) {
-	r.rememberTapPos(src, ev)
+	r.rememberTapPos(src, nil, ev)
 	r.deliver(src, src.OutGroups(), ev)
+}
+
+// RouteTo is Route to some of src's out groups (a tap choosing where each
+// event goes); groups outside them are ignored.
+func (r *Router) RouteTo(src *Client, groups []string, ev *cot.Event) {
+	out := src.OutGroups()
+	groups = slices.DeleteFunc(slices.Clone(groups), func(g string) bool { return !slices.Contains(out, g) })
+	r.rememberTapPos(src, groups, ev)
+	r.deliver(src, groups, ev)
 }
 
 // Inject delivers a server-originated event to clients in any of groups.
@@ -282,9 +292,23 @@ func (r *Router) deliver(src *Client, groups []string, ev *cot.Event) {
 // replayed to devices that connect later, as their own positions are.
 
 type tapPos struct {
-	tap *Client
-	ev  *cot.Event
+	tap    *Client
+	ev     *cot.Event
+	groups []string // where it was sent (RouteTo); nil: all the tap's out groups
 }
+
+// groupsNow are the groups a remembered position is replayed in: where it
+// was sent, as far as the tap may still send.
+func (p tapPos) groupsNow() []string {
+	out := p.tap.OutGroups()
+	if p.groups == nil {
+		return out
+	}
+	return slices.DeleteFunc(slices.Clone(p.groups), func(g string) bool { return !slices.Contains(out, g) })
+}
+
+// reLinkUID finds the item a delete event (t-x-d-d) removes.
+var reLinkUID = regexp.MustCompile(`<link\b[^>]*\buid="([^"]+)"`)
 
 const maxTapPositions = 20000
 
@@ -319,13 +343,40 @@ func (r *Router) Taps() []*Client {
 	return slices.Collect(maps.Values(r.taps))
 }
 
-func (r *Router) rememberTapPos(src *Client, ev *cot.Event) {
-	if src == nil || ev.UID == "" || !strings.HasPrefix(ev.Type, "a-") {
+func (r *Router) rememberTapPos(src *Client, groups []string, ev *cot.Event) {
+	if src == nil {
+		return
+	}
+	isDelete := ev.Type == "t-x-d-d"
+	if !isDelete && (ev.UID == "" || !strings.HasPrefix(ev.Type, "a-")) {
 		return
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.taps[src.ID] != src {
+		return
+	}
+	// A delete takes the item off the map in the groups it is sent to; it
+	// is no longer replayed there.
+	if isDelete {
+		m := reLinkUID.FindStringSubmatch(ev.Detail.XML)
+		if m == nil {
+			return
+		}
+		p, ok := r.tapSA[m[1]]
+		if !ok || p.tap != src {
+			return
+		}
+		if groups == nil {
+			delete(r.tapSA, m[1])
+			return
+		}
+		p.groups = slices.DeleteFunc(slices.Clone(p.groupsNow()), func(g string) bool { return slices.Contains(groups, g) })
+		if len(p.groups) == 0 {
+			delete(r.tapSA, m[1])
+		} else {
+			r.tapSA[m[1]] = p
+		}
 		return
 	}
 	if _, ok := r.tapSA[ev.UID]; !ok && len(r.tapSA) >= maxTapPositions {
@@ -339,7 +390,7 @@ func (r *Router) rememberTapPos(src *Client, ev *cot.Event) {
 			return
 		}
 	}
-	r.tapSA[ev.UID] = tapPos{src, ev}
+	r.tapSA[ev.UID] = tapPos{src, ev, groups}
 }
 
 func sharesGroup(a, b []string) bool {

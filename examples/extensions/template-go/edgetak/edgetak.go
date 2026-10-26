@@ -111,11 +111,31 @@ func (c *Client) Info(ctx context.Context) (Info, error) {
 
 // Send sends CoT events (XML, e.g. from Marker) to the extension's out groups.
 func (c *Client) Send(ctx context.Context, events ...string) error {
-	resp, err := c.do(ctx, "POST", "/api/v1/cot", strings.NewReader(strings.Join(events, "")), "application/xml")
+	return c.SendTo(ctx, nil, events...)
+}
+
+// SendTo sends CoT events to some of the extension's out groups (all of
+// them if groups is empty).
+func (c *Client) SendTo(ctx context.Context, groups []string, events ...string) error {
+	path := "/api/v1/cot"
+	if len(groups) > 0 {
+		path += "?groups=" + url.QueryEscape(strings.Join(groups, ","))
+	}
+	resp, err := c.do(ctx, "POST", path, strings.NewReader(strings.Join(events, "")), "application/xml")
 	if err != nil {
 		return err
 	}
 	return resp.Body.Close()
+}
+
+// Delete is a CoT delete event: it removes the item uid from devices' maps
+// (in the groups it is sent to).
+func Delete(uid, cotType string) string {
+	now := time.Now().UTC()
+	ts := func(t time.Time) string { return t.Format("2006-01-02T15:04:05.000Z") }
+	return fmt.Sprintf(`<event version="2.0" uid="delete-%s-%d" type="t-x-d-d" how="h-g-i-g-o" time="%s" start="%s" stale="%s">`+
+		`<point lat="0" lon="0" hae="0" ce="9999999" le="9999999"/><detail><link relation="p-p" uid="%s" type="%s"/></detail></event>`,
+		escape(uid), now.UnixNano(), ts(now), ts(now), ts(now.Add(20*time.Second)), escape(uid), escape(cotType))
 }
 
 // Event is one CoT event from the stream.

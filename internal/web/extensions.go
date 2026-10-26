@@ -485,16 +485,31 @@ func (s *Server) extStream(w http.ResponseWriter, r *http.Request, sess *extSess
 }
 
 // extSend routes the CoT events in the body (one or more <event>
-// elements) to the extension's out groups.
+// elements) to the extension's out groups, or with ?groups=A,B to some of
+// them.
 func (s *Server) extSend(w http.ResponseWriter, r *http.Request, sess *extSession) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxExtCoT))
 	if err != nil {
 		jsonError(w, http.StatusRequestEntityTooLarge, "send up to 1 MB of CoT at a time")
 		return
 	}
-	if len(sess.tap.OutGroups()) == 0 {
+	out := sess.tap.OutGroups()
+	if len(out) == 0 {
 		jsonError(w, http.StatusConflict, "this extension has no groups to send to; choose its out groups on the Extensions page")
 		return
+	}
+	var groups []string
+	if q := r.URL.Query().Get("groups"); q != "" {
+		for _, g := range strings.Split(q, ",") {
+			if g = strings.TrimSpace(g); g == "" {
+				continue
+			}
+			if !slices.Contains(out, g) {
+				jsonError(w, http.StatusBadRequest, fmt.Sprintf("%q is not one of this extension's out groups (%s)", g, strings.Join(out, ", ")))
+				return
+			}
+			groups = append(groups, g)
+		}
 	}
 	var events []*cot.Event
 	for i, raw := range splitEvents(body) {
@@ -514,7 +529,11 @@ func (s *Server) extSend(w http.ResponseWriter, r *http.Request, sess *extSessio
 		return
 	}
 	for _, ev := range events {
-		s.Router.Route(sess.tap, ev)
+		if groups != nil {
+			s.Router.RouteTo(sess.tap, groups, ev)
+		} else {
+			s.Router.Route(sess.tap, ev)
+		}
 		sess.tap.In.Add(1)
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"sent": len(events)})

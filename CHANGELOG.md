@@ -29,6 +29,9 @@ is a program in any language, uploaded as a zip with a `plugin.json`.
   extension is started.
 - Positions an extension sends (trackers, aircraft, radios) are replayed to
   devices that connect later.
+- An extension can send each event to some of its groups (each tracker to
+  its team, say). A delete event takes an item off the map, and out of the
+  replay, in the groups it is sent to.
 - An extension can serve a page, which the console shows behind the admin
   login, for its settings.
 - The guide is [docs/extensions.md](docs/extensions.md).
@@ -38,6 +41,11 @@ is a program in any language, uploaded as a zip with a `plugin.json`.
   settings page, and a script that packages the extension and installs it
   on a server in one command.
 - The [Hello example](examples/extensions/hello) is in Python.
+
+## v1.11.0-rc.2 (2026-10-26)
+
+The second release candidate for v1.11.0. Extensions can send to some of
+their groups, and delete events update the replay. A pre-release.
 
 ## v1.11.0-rc.1 (2026-10-26)
 

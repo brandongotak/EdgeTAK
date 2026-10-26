@@ -59,10 +59,14 @@ class EdgeTAK:
         """The extension's id, version, permissions and groups, and the server's name and version."""
         return self.get("/api/v1/info")
 
-    def send(self, *events):
-        """Sends CoT events (XML strings, e.g. from marker()) to the extension's out groups."""
+    def send(self, *events, groups=None):
+        """Sends CoT events (XML strings, e.g. from marker()) to the extension's out groups,
+        or to some of them: groups=["Blue", "Red"]."""
+        path = "/api/v1/cot"
+        if groups:
+            path += "?" + urllib.parse.urlencode({"groups": ",".join(groups)})
         body = "".join(events).encode("utf-8")
-        with self._request("POST", "/api/v1/cot", body, "application/xml") as r:
+        with self._request("POST", path, body, "application/xml") as r:
             return json.load(r)["sent"]
 
     def stream(self, on_event, types=None, on_error=None):
@@ -111,6 +115,17 @@ def marker(uid, lat, lon, callsign, cot_type="a-f-G-U-C", stale_seconds=120, hae
         '<point lat="%.7f" lon="%.7f" hae="%.1f" ce="10" le="10"/><detail>%s</detail></event>'
     ) % (quoteattr(uid), quoteattr(cot_type), quoteattr(how), iso(now), iso(now),
          iso(now + datetime.timedelta(seconds=stale_seconds)), lat, lon, hae, detail)
+
+
+def delete(uid, cot_type="a-f-G-U-C"):
+    """A CoT delete event: removes the item uid from devices' maps (in the groups it is sent to)."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    return (
+        '<event version="2.0" uid="delete-%s-%d" type="t-x-d-d" how="h-g-i-g-o" time="%s" start="%s" stale="%s">'
+        '<point lat="0" lon="0" hae="0" ce="9999999" le="9999999"/>'
+        '<detail><link relation="p-p" uid=%s type=%s/></detail></event>'
+    ) % (uid, time.time_ns(), iso(now), iso(now), iso(now + datetime.timedelta(seconds=20)),
+         quoteattr(uid), quoteattr(cot_type))
 
 
 class Settings:

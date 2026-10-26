@@ -155,6 +155,15 @@ is `{"sent": 2}`.
 - **Where it goes:** events reach devices and federated servers like
   events from a device. They are not in the position history, which
   records devices' own positions.
+- **Some groups only:** `?groups=Blue,Red` sends the events to only those
+  groups, which must be among the extension's out groups (otherwise the
+  answer is 400). Use it to route items, for example each tracker to its
+  team. The replay remembers where each position went.
+- **Removing an item:** send a delete event (type `t-x-d-d` with
+  `<link uid="…"/>` in its detail, as ATAK does). It takes the item off the
+  map and out of the replay in the groups it is sent to, so moving an item
+  between groups is a position to the new groups and a delete to the old
+  ones.
 - **No out groups:** if the admin hasn't chosen out groups, the answer is
   409.
 
