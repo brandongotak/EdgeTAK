@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Extension</title>
+<style>
+  :root { color-scheme: light dark; --line: #8884; --muted: #888; --accent: #1f8f5c; --bad: #c43c3c; }
+  body { font: 14px system-ui, sans-serif; margin: 16px; max-width: 900px; }
+  h2 { font-size: 16px; margin: 20px 0 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+  .tile { border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+  .tile b { display: block; font-size: 20px; }
+  .muted { color: var(--muted); }
+  .error { color: var(--bad); }
+  form { display: grid; gap: 8px; max-width: 420px; }
+  label { display: grid; gap: 2px; }
+  label.check { display: flex; gap: 6px; align-items: center; }
+  input { padding: 6px; font: inherit; }
+  button { padding: 6px 12px; font: inherit; justify-self: start; background: var(--accent); color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<p class="muted">Signed in as <b id="user"></b> · <span id="uptime"></span></p>
+<div class="grid">
+  <div class="tile"><b id="received">–</b>CoT received</div>
+  <div class="tile"><b id="sent">–</b>markers sent</div>
+  <div class="tile"><b id="devices">–</b>devices connected</div>
+</div>
+<p id="error" class="error"></p>
+
+<h2>Settings</h2>
+<form id="settings">
+  <label class="check"><input type="checkbox" name="marker_on"> Keep a marker on the map</label>
+  <label>Callsign <input name="callsign" maxlength="40"></label>
+  <label>Latitude <input name="lat" inputmode="decimal"></label>
+  <label>Longitude <input name="lon" inputmode="decimal"></label>
+  <label>Send every (seconds) <input name="interval" type="number" min="5" max="3600"></label>
+  <button>Save</button>
+  <span id="saved" class="muted"></span>
+</form>
+
+<h2>Latest CoT</h2>
+<table>
+  <thead><tr><th>Time</th><th>Type</th><th>Callsign or uid</th><th>Position</th></tr></thead>
+  <tbody id="recent"></tbody>
+</table>
+
+<script>
+// Paths are relative: the console serves this page at /admin/ext/<id>/.
+const $ = (id) => document.getElementById(id);
+const form = $('settings');
+
+async function call(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  // Changes need the X-EdgeTAK header, as in the console.
+  if (method !== 'GET') opts.headers['X-EdgeTAK'] = '1';
+  const r = await fetch(path, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+
+function showSettings(s) {
+  form.marker_on.checked = s.marker_on;
+  form.callsign.value = s.callsign;
+  form.lat.value = s.lat ?? '';
+  form.lon.value = s.lon ?? '';
+  form.interval.value = s.interval;
+}
+
+async function refresh(first) {
+  try {
+    const st = await call('GET', 'api/status');
+    $('user').textContent = st.user;
+    $('uptime').textContent = `running ${Math.round((Date.now() / 1000 - st.started) / 60)} min`;
+    $('received').textContent = st.received;
+    $('sent').textContent = st.sent;
+    $('devices').textContent = st.devices ?? '?';
+    $('error').textContent = st.error;
+    $('recent').replaceChildren(...st.recent.map((e) => {
+      const tr = document.createElement('tr');
+      for (const v of [new Date(e.time).toLocaleTimeString(), e.type, e.callsign || e.uid, `${e.lat.toFixed(5)}, ${e.lon.toFixed(5)}`]) {
+        const td = document.createElement('td');
+        td.textContent = v;
+        tr.append(td);
+      }
+      return tr;
+    }));
+    if (first) showSettings(st.settings);
+  } catch (e) {
+    $('error').textContent = e.message;
+  }
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('saved').textContent = '';
+  try {
+    showSettings(await call('PUT', 'api/settings', {
+      marker_on: form.marker_on.checked, callsign: form.callsign.value,
+      lat: form.lat.value, lon: form.lon.value, interval: form.interval.value,
+    }));
+    $('saved').textContent = 'Saved';
+    $('error').textContent = '';
+  } catch (err) {
+    $('error').textContent = err.message;
+  }
+});
+
+refresh(true);
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

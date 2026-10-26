@@ -156,6 +156,7 @@ const loaders = {
   federation: loadFederation,
   simulator: loadSim,
   webhooks: loadWebhooks,
+  extensions: loadExtensions,
   audit: () => loadAudit(),
   settings: () => Promise.all([loadLogo(), loadPlainTCP(), loadZeroTier(), loadFRP(), loadFeeds(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
 };
@@ -2720,6 +2721,146 @@ $('#apk-configure').addEventListener('change', guard(async (e) => {
   renderApps(await api('PUT', 'api/apps/settings', { configure_devices: e.target.checked }));
   toast(e.target.checked ? 'Devices get the update server when they next connect' : 'Devices are no longer pointed at the update server');
 }));
+
+// ---- extensions ----
+
+const EXT_PERMS = {
+  'cot:read': 'Receive CoT from its groups',
+  'cot:write': 'Send CoT to its groups',
+  'data:read': 'Read groups, connected devices, missions and position history',
+};
+let extTimer = null;
+let extensions = [];
+
+async function loadExtensions() {
+  clearTimeout(extTimer);
+  const [r, groups] = await Promise.all([api('GET', 'api/extensions'), api('GET', 'api/groups')]);
+  allGroups = groups;
+  // Don't redraw under a pointer choosing groups.
+  if (!$('#ext-list').matches(':hover') || !extensions.length) renderExtensions(r.extensions);
+  extTimer = setTimeout(() => { if (currentTab === 'extensions') loadExtensions().catch(() => {}); }, 5000);
+}
+
+function extState(x) {
+  if (x.problem) return '<span class="pill bad">can’t run here</span>';
+  if (x.running) return '<span class="pill ok">running</span>';
+  if (x.enabled) return '<span class="pill warn">restarting</span>';
+  return '<span class="pill">stopped</span>';
+}
+
+function extGroups(x, dir) {
+  const chosen = dir === 'in' ? x.groups_in : x.groups_out;
+  const label = dir === 'in' ? 'Receives CoT from these groups' : 'Sends CoT to these groups';
+  return `<div class="muted picker-label">${label}${chosen.length ? '' : ' <span class="pill warn">none chosen</span>'}</div>
+    <div class="group-picker" data-ext-dir="${dir}">${allGroups.map((g) => `<label class="chip"><input type="checkbox" value="${esc(g.name)}"${chosen.includes(g.name) ? ' checked' : ''}>${esc(g.name)}</label>`).join('') || '<span class="muted">No groups yet</span>'}</div>`;
+}
+
+function renderExtensions(list) {
+  extensions = list;
+  $('#ext-list').innerHTML = list.map((x) => {
+    const perms = x.permissions || [];
+    const facts = [];
+    if (x.running) facts.push(`running since ${esc(ago(x.started))}`);
+    if (perms.includes('cot:read')) facts.push(`${x.received} received${x.running && !x.streaming ? ' (not reading)' : ''}`);
+    if (perms.includes('cot:write')) facts.push(`${x.sent} sent`);
+    if (x.dropped) facts.push(`${x.dropped} dropped`);
+    if (x.restarts) facts.push(`${x.restarts} restarts`);
+    return `<div class="ext-item" data-ext="${esc(x.id)}">
+      <div class="ext-head"><strong>${esc(x.name)}</strong> <span class="muted">${esc(x.version)} · ${esc(x.id)}</span> ${extState(x)}</div>
+      ${x.description ? `<p class="muted">${esc(x.description)}</p>` : ''}
+      ${x.author || x.homepage ? `<p class="muted">${x.author ? `By ${esc(x.author)}` : ''}${x.author && x.homepage ? ' · ' : ''}${x.homepage && /^https?:\/\//.test(x.homepage) ? `<a href="${esc(x.homepage)}" target="_blank" rel="noopener">${esc(x.homepage)}</a>` : ''}</p>` : ''}
+      <div class="ext-perms">${perms.map((p) => `<span class="pill">${esc(EXT_PERMS[p] || p)}</span>`).join(' ')}${x.page ? ' <span class="pill">A page in the console</span>' : ''}${!perms.length && !x.page ? '<span class="muted">Asks for no permissions</span>' : ''}</div>
+      ${perms.includes('cot:read') ? extGroups(x, 'in') : ''}
+      ${perms.includes('cot:write') ? extGroups(x, 'out') : ''}
+      ${x.problem ? `<p class="error">${esc(x.problem)}</p>` : ''}
+      ${facts.length ? `<p class="muted">${facts.join(' · ')}</p>` : ''}
+      ${x.last_exit && (!x.running || x.restarts) ? `<p class="muted">Last stopped: ${esc(x.last_exit)}</p>` : ''}
+      <div class="inline-form">
+        ${x.enabled ? '<button type="button" class="small" data-ext-stop>Stop</button>' : `<button type="button" class="small primary" data-ext-start${x.problem ? ' disabled' : ''}>Start</button>`}
+        ${x.running ? '<button type="button" class="small" data-ext-restart>Restart</button>' : ''}
+        ${x.page_path ? '<button type="button" class="small" data-ext-open>Open page</button>' : ''}
+        <button type="button" class="small" data-ext-log>Log</button>
+        <button type="button" class="small" data-ext-update>Update…</button>
+        <button type="button" class="small danger" data-ext-remove>Remove</button>
+        ${x.installed_by ? `<span class="muted">installed ${esc(ago(x.installed_at))} by ${esc(x.installed_by)}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('') || '<p class="muted">No extensions installed.</p>';
+}
+
+async function extSet(id, body) {
+  renderExtensions((await api('PUT', `api/extensions/${encodeURIComponent(id)}`, body)).extensions);
+}
+
+const extPicker = Object.assign(document.createElement('input'), { type: 'file', accept: '.zip,application/zip' });
+$('#ext-install').addEventListener('click', () => extPicker.click());
+extPicker.addEventListener('change', guard(async () => {
+  const file = extPicker.files[0];
+  extPicker.value = '';
+  if (!file) return;
+  toast(`Uploading ${file.name}…`);
+  const r = await fetch('api/extensions', { method: 'POST', headers: { 'X-EdgeTAK': '1', 'Content-Type': 'application/zip' }, body: file });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+  const x = body.extension;
+  toast(body.updated ? `${x.name} updated to ${x.version}` : `${x.name} installed: check what it may do, choose its groups, then start it`);
+  await loadExtensions();
+}));
+
+$('#ext-list').addEventListener('change', guard(async (e) => {
+  const picker = e.target.closest('[data-ext-dir]');
+  if (!picker) return;
+  const id = e.target.closest('.ext-item').dataset.ext;
+  const groups = [...picker.querySelectorAll('input:checked')].map((i) => i.value);
+  await extSet(id, { [picker.dataset.extDir === 'in' ? 'groups_in' : 'groups_out']: groups });
+  toast('Groups saved');
+}));
+
+$('#ext-list').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('button');
+  const item = e.target.closest('.ext-item');
+  if (!b || !item) return;
+  const id = item.dataset.ext;
+  const x = extensions.find((v) => v.id === id);
+  if (b.hasAttribute('data-ext-start')) {
+    // Translated one by one: the dialog's text is translated as a whole.
+    const perms = (x.permissions || []).map((p) => (window.t || String)(EXT_PERMS[p] || p));
+    if (!confirm(`Start ${x.name}? It runs on this server as a program${perms.length ? ', and may: ' + perms.join('; ') : ''}.`)) return;
+    await extSet(id, { enabled: true });
+    toast(`${x.name} started`);
+  } else if (b.hasAttribute('data-ext-stop')) {
+    await extSet(id, { enabled: false });
+    toast(`${x.name} stopped`);
+  } else if (b.hasAttribute('data-ext-restart')) {
+    renderExtensions((await api('POST', `api/extensions/${encodeURIComponent(id)}/restart`)).extensions);
+    toast(`${x.name} restarting`);
+  } else if (b.hasAttribute('data-ext-open')) {
+    $('#ext-page-title').textContent = x.name;
+    $('#ext-page').src = x.page_path;
+    $('#ext-page-new').href = x.page_path;
+    $('#ext-page-card').hidden = false;
+    $('#ext-page-card').scrollIntoView({ behavior: 'smooth' });
+  } else if (b.hasAttribute('data-ext-log')) {
+    const r = await api('GET', `api/extensions/${encodeURIComponent(id)}/log`);
+    $('#ext-log-title').textContent = `${x.name}: log`;
+    $('#ext-log').textContent = r.lines.join('\n') || 'Nothing printed yet.';
+    $('#ext-log-dialog').showModal();
+    $('#ext-log').scrollTop = $('#ext-log').scrollHeight;
+  } else if (b.hasAttribute('data-ext-update')) {
+    extPicker.click();
+  } else if (b.hasAttribute('data-ext-remove')) {
+    if (!confirm(`Remove ${x.name}? It stops and its files are deleted.`)) return;
+    const data = confirm(`Also delete the data ${x.name} saved (its settings and files)? Cancel keeps it, for installing it again later.`);
+    renderExtensions((await api('DELETE', `api/extensions/${encodeURIComponent(id)}${data ? '?data=1' : ''}`)).extensions);
+    if ($('#ext-page').getAttribute('src') === x.page_path) $('#ext-page-close').click();
+    toast(`${x.name} removed`);
+  }
+}));
+$('#ext-page-close').addEventListener('click', () => {
+  $('#ext-page-card').hidden = true;
+  $('#ext-page').removeAttribute('src');
+});
+$('#ext-log-close').addEventListener('click', () => $('#ext-log-dialog').close());
 
 // ---- logo ----
 

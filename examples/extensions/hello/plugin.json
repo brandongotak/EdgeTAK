@@ -1,0 +1,14 @@
+{
+  "id": "hello",
+  "name": "Hello",
+  "version": "1.0.0",
+  "description": "An example extension: shows the CoT it receives and puts a marker on the map where you choose.",
+  "author": "EdgeTAK",
+  "homepage": "https://github.com/brandongotak/EdgeTAK/blob/master/docs/extensions.md",
+  "run": {
+    "windows": ["python", "main.py"],
+    "*": ["python3", "main.py"]
+  },
+  "permissions": ["cot:read", "cot:write", "data:read"],
+  "page": true
+}

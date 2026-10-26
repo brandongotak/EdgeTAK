@@ -21,6 +21,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/audit"
 	"github.com/brandongotak/EdgeTAK/internal/chatlog"
 	"github.com/brandongotak/EdgeTAK/internal/config"
+	"github.com/brandongotak/EdgeTAK/internal/extension"
 	"github.com/brandongotak/EdgeTAK/internal/federation"
 	"github.com/brandongotak/EdgeTAK/internal/feeds"
 	"github.com/brandongotak/EdgeTAK/internal/frp"
@@ -59,6 +60,8 @@ type Server struct {
 	Feeds *feeds.Service
 	// FRP runs the FRP client for remote access (set by the app).
 	FRP *frp.Manager
+	// Extensions runs the installed extensions (set by the app).
+	Extensions *extension.Manager
 	// ZeroTierAPI is the local ZeroTier service's API ("" =
 	// http://127.0.0.1:9993; tests use a fake).
 	ZeroTierAPI string
@@ -107,6 +110,7 @@ type Server struct {
 	hooks         webhookState
 	healthWatch   healthWatch
 	guard         loginGuard
+	ext           extState
 
 	sessMu   sync.Mutex
 	sessions map[string]session
@@ -180,6 +184,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.feedRoutes(mux)
 	s.frpRoutes(mux)
 	s.brandingRoutes(mux)
+	s.extensionRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)
@@ -428,25 +433,33 @@ func (s *Server) named(h handlerFunc) http.HandlerFunc {
 // admin requires an administrator.
 func (s *Server) admin(h handlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := s.identify(r)
-		if id == nil || id.Anonymous {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "login required"})
-			return
+		if id := s.adminIdentity(w, r); id != nil {
+			s.auditRequest(h, w, r, id)
 		}
-		if !id.Admin {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "administrator required"})
-			return
-		}
-		// A password alone (basic auth, OAuth token, device certificate) must
-		// not get around an account's two-factor login.
-		if !id.Session {
-			if u, ok := s.Store.User(id.Username); ok && u.TwoFactor() {
-				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "this account uses two-factor login; sign in to the admin console"})
-				return
-			}
-		}
-		s.auditRequest(h, w, r, id)
 	}
+}
+
+// adminIdentity returns the signed-in administrator, or answers the
+// request with why not and returns nil.
+func (s *Server) adminIdentity(w http.ResponseWriter, r *http.Request) *identity {
+	id := s.identify(r)
+	if id == nil || id.Anonymous {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "login required"})
+		return nil
+	}
+	if !id.Admin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "administrator required"})
+		return nil
+	}
+	// A password alone (basic auth, OAuth token, device certificate) must
+	// not get around an account's two-factor login.
+	if !id.Session {
+		if u, ok := s.Store.User(id.Username); ok && u.TwoFactor() {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "this account uses two-factor login; sign in to the admin console"})
+			return nil
+		}
+	}
+	return id
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

@@ -55,6 +55,7 @@
       <button data-tab="federation" data-section="server">Federation</button>
       <button data-tab="settings" data-section="server">Settings</button>
       <button data-tab="webhooks" data-section="server">Webhooks</button>
+      <button data-tab="extensions" data-section="server">Extensions</button>
       <button data-tab="audit" data-section="server">Audit log</button>
       <button data-tab="simulator" data-section="server">Simulator</button>
       <button data-tab="help" data-section="help">Help</button>
@@ -194,6 +195,22 @@
           <p class="error" id="fed-error" role="alert"></p>
           <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
         </form>
+      </dialog>
+    </section>
+
+    <section id="tab-extensions" class="tab" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Extensions</h2><button class="primary small" id="ext-install">Install extension…</button></div>
+        <p class="muted">Server plugins that add features to EdgeTAK: tracker and radio bridges, exports, integrations. An extension is a program, uploaded as a .zip with a plugin.json, that EdgeTAK runs and keeps running. It receives and sends CoT in the groups you give it, can read server data if it asks to, and may add a page here. It runs on this server like any other program, so only install extensions you trust. To write one, see the <a href="https://github.com/brandongotak/EdgeTAK/blob/master/docs/extensions.md" target="_blank" rel="noopener">extension guide</a>.</p>
+        <div id="ext-list"></div>
+      </div>
+      <div class="card" id="ext-page-card" hidden>
+        <div class="card-head"><h2 id="ext-page-title"></h2><span class="inline-form"><a id="ext-page-new" class="button small ghost" target="_blank" rel="noopener">Open in a new tab</a><button type="button" class="small" id="ext-page-close">Close</button></span></div>
+        <iframe id="ext-page" class="ext-page" title="Extension page"></iframe>
+      </div>
+      <dialog id="ext-log-dialog" class="card dialog">
+        <div class="card-head"><h2 id="ext-log-title">Log</h2><button type="button" class="small" id="ext-log-close">Close</button></div>
+        <pre id="ext-log" class="ext-log"></pre>
       </dialog>
     </section>
 

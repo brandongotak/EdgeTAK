@@ -272,6 +272,22 @@
   <p>Limit a webhook to groups to hear only about those users' devices.</p>
 </article>
 
+<article class="help-topic" id="help-extensions" data-group="Server" data-tab="extensions" data-title="Extensions">
+  <h2>Extensions</h2>
+  <p>Server plugins that add features to EdgeTAK, such as tracker or radio bridges, exports and integrations. An extension is a program (a .zip with a <code>plugin.json</code>) that EdgeTAK runs and keeps running.</p>
+  <ol>
+    <li><strong>Install extension…</strong> and choose the .zip. Installing a newer version of an installed extension updates it and keeps its data.</li>
+    <li>Check what it may do: receive CoT, send CoT, read server data (groups, devices, missions, position history), or show a page here.</li>
+    <li>Choose the groups it <em>receives CoT from</em> and <em>sends CoT to</em>. They work like a user's groups.</li>
+    <li><strong>Start</strong> it. EdgeTAK starts it again if it stops, and when EdgeTAK starts.</li>
+  </ol>
+  <ul>
+    <li><strong>Open page</strong> shows its page, for its settings. <strong>Log</strong> shows what it printed, the first place to look when it misbehaves.</li>
+    <li>It runs on the server like any other program, so only install extensions you trust.</li>
+    <li>To write one, see the <a href="https://github.com/brandongotak/EdgeTAK/blob/master/docs/extensions.md" target="_blank" rel="noopener">extension guide</a>.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-audit" data-group="Server" data-tab="audit" data-title="Audit log">
   <h2>Audit log</h2>
   <p>Every change an administrator makes, with who, from where, what and whether it worked; also sign-ins, failed sign-ins, blocked addresses, device enrollments and QR codes used. Passwords and keys are never recorded.</p>

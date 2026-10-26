@@ -44,6 +44,7 @@ func (s *Server) Start(ctx context.Context) {
 	s.simStart(ctx)
 	s.webhooksStart(ctx)
 	s.healthAlertsStart(ctx)
+	s.extensionsStart(ctx)
 	s.schedulesStart(ctx)
 	s.ldapSyncStart(ctx)
 	s.eventsStart(ctx)

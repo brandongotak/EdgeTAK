@@ -244,6 +244,19 @@ type db struct {
 
 	// FRPEnabled: remote access through an FRP server is on.
 	FRPEnabled bool `json:"frp_enabled,omitempty"`
+
+	// Extensions: each installed extension's settings, by id.
+	Extensions map[string]ExtensionSettings `json:"extensions,omitempty"`
+}
+
+// ExtensionSettings are what an admin set for an extension: whether it
+// runs, and its groups, which work like a user's.
+type ExtensionSettings struct {
+	Enabled     bool      `json:"enabled,omitempty"`
+	GroupsIn    []string  `json:"groups_in,omitempty"`
+	GroupsOut   []string  `json:"groups_out,omitempty"`
+	InstalledBy string    `json:"installed_by,omitempty"`
+	InstalledAt time.Time `json:"installed_at,omitzero"`
 }
 
 // FeedSettings are the aircraft (ADS-B) and ship (AIS) feeds EdgeTAK turns
@@ -1217,6 +1230,14 @@ func (s *Store) UpdateGroup(name, newName, description string) ([]string, error)
 				p.Groups[i] = newName
 			}
 		}
+		for id, e := range s.db.Extensions {
+			for _, gs := range [][]string{e.GroupsIn, e.GroupsOut} {
+				if i := slices.Index(gs, name); i >= 0 {
+					gs[i] = newName
+				}
+			}
+			s.db.Extensions[id] = e
+		}
 	}
 	return affected, s.save()
 }
@@ -1237,6 +1258,11 @@ func (s *Store) DeleteGroup(name string) ([]string, error) {
 			u.SetDirection(name, "")
 			affected = append(affected, u.Username)
 		}
+	}
+	for id, e := range s.db.Extensions {
+		e.GroupsIn = slices.DeleteFunc(e.GroupsIn, func(g string) bool { return g == name })
+		e.GroupsOut = slices.DeleteFunc(e.GroupsOut, func(g string) bool { return g == name })
+		s.db.Extensions[id] = e
 	}
 	return affected, s.save()
 }
@@ -2692,6 +2718,33 @@ func (s *Store) SetFeeds(f FeedSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.Feeds = f
+	return s.save()
+}
+
+// ---- extensions ----
+
+func (s *Store) Extension(id string) ExtensionSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	e := s.db.Extensions[id]
+	e.GroupsIn, e.GroupsOut = slices.Clone(e.GroupsIn), slices.Clone(e.GroupsOut)
+	return e
+}
+
+func (s *Store) SetExtension(id string, e ExtensionSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db.Extensions == nil {
+		s.db.Extensions = map[string]ExtensionSettings{}
+	}
+	s.db.Extensions[id] = e
+	return s.save()
+}
+
+func (s *Store) DeleteExtension(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.db.Extensions, id)
 	return s.save()
 }
 

@@ -1,0 +1,14 @@
+{
+  "id": "my-extension",
+  "name": "My Extension",
+  "version": "0.1.0",
+  "description": "Describe what your extension does, in a sentence or two.",
+  "author": "Your name",
+  "homepage": "https://example.com/my-extension",
+  "run": {
+    "windows": ["python", "main.py"],
+    "*": ["python3", "main.py"]
+  },
+  "permissions": ["cot:read", "cot:write", "data:read"],
+  "page": true
+}

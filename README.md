@@ -55,6 +55,8 @@ Guide: [People](#people) · [Data and maps](#data-and-maps) · [Messages](#messa
 
 **Running it**
 - Federation with TAK Servers, OpenTAKServer and other EdgeTAKs.
+- **Extensions:** server plugins in any language that receive and send CoT,
+  read server data and add a page to the console.
 - Health graphs, certificate status, data retention, backup and restore,
   updates from the console, and a load-testing simulator.
 - The admin console installs as an app on phones and desktops; its libraries
@@ -1044,6 +1046,41 @@ position history off first if you don't want the simulated devices recorded.
 The console installs on phones and desktops (**Install app** in the top bar
 on Chrome/Edge; Share → Add to Home Screen on iPhone). It needs a trusted
 certificate, so use port 8446 with Let's Encrypt.
+
+### Extensions (server plugins)
+
+Extensions add features to EdgeTAK without changing it: a bridge from
+trackers or radios, an export, an integration. An extension is a program in
+any language, packaged as a zip with a `plugin.json`, that EdgeTAK runs and
+keeps running.
+
+1. On **Server → Extensions**, choose **Install extension…** and pick the
+   zip. Installing a newer version updates the extension and keeps its data.
+2. Check what it asks to do: receive CoT, send CoT, read server data
+   (groups, devices, missions, position history), or show a page.
+3. Choose the groups it receives CoT from and sends CoT to. They work like
+   a user's groups.
+4. Press **Start**. EdgeTAK restarts the extension if it stops, and starts it
+   again when EdgeTAK starts.
+
+**Open page** shows the extension's own page inside the console, and
+**Log** shows what it printed. Positions an extension sends are replayed to
+devices that connect later, as devices' own positions are. Backups include
+extensions and their data.
+
+An extension runs on the server like any other program, so install only
+extensions you trust. Its permissions limit what EdgeTAK's API lets it do,
+not what the program can do.
+
+To write one, see [docs/extensions.md](docs/extensions.md) and start from
+a template:
+
+- [Python](examples/extensions/template-python);
+- [Go](examples/extensions/template-go), one binary per platform.
+
+Each has an API client, a settings page, and a script that packages the
+extension and installs it on a server in one step. The
+[Hello example](examples/extensions/hello) is a short demo of the whole API.
 
 ### Logo
 

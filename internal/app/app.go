@@ -21,6 +21,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/chatlog"
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/extension"
 	"github.com/brandongotak/EdgeTAK/internal/federation"
 	"github.com/brandongotak/EdgeTAK/internal/feeds"
 	"github.com/brandongotak/EdgeTAK/internal/frp"
@@ -368,6 +369,11 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	a.frp.Log = a.Log.With("component", "frpc")
 	ws.FRP = a.frp
 	go a.frp.Run(ctx, a.Store.FRPEnabled())
+	ws.Extensions = &extension.Manager{Dir: filepath.Join(a.DataDir, "extensions"), DataDir: filepath.Join(a.DataDir, "extension-data"),
+		Log: a.Log.With("component", "extensions")}
+	if err := ws.Extensions.Load(ctx); err != nil {
+		a.Log.Error("extensions", "err", err)
+	}
 	ws.Feeds = &feeds.Service{Router: a.Router, Log: a.Log.With("component", "feeds"), Version: a.Version}
 	ws.Feeds.Start(ctx, a.Store.Feeds())
 	ws.Start(ctx) // server contact, Inbox and video (writes mediamtx.yml)

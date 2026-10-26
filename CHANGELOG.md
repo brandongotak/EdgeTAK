@@ -10,6 +10,41 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.11.0 (2026-10-26)
+
+**Extensions: server plugins.** A new **Extensions** page (Server section)
+installs and runs server plugins. They add features to EdgeTAK without
+changing it: tracker and radio bridges, exports, integrations. An extension
+is a program in any language, uploaded as a zip with a `plugin.json`.
+
+- EdgeTAK runs each extension, restarts it if it stops, and shows its
+  state, CoT counts and log. Updating keeps the extension's data, and
+  backups include extensions.
+- Extensions use a local API with a token made for each run:
+  - receive the CoT of the groups the admin gives them, as a stream;
+  - send CoT to those groups;
+  - read groups, connected devices, missions and position history.
+
+  Each needs its permission in `plugin.json`, shown to the admin before the
+  extension is started.
+- Positions an extension sends (trackers, aircraft, radios) are replayed to
+  devices that connect later.
+- An extension can serve a page, which the console shows behind the admin
+  login, for its settings.
+- The guide is [docs/extensions.md](docs/extensions.md).
+- Templates to start from are in
+  [Python](examples/extensions/template-python) and
+  [Go](examples/extensions/template-go). Each has an API client, a
+  settings page, and a script that packages the extension and installs it
+  on a server in one command.
+- The [Hello example](examples/extensions/hello) is in Python.
+
+## v1.11.0-rc.1 (2026-10-26)
+
+A release candidate for v1.11.0 (above), to try extensions. A
+pre-release: servers only get it with **Include pre-releases** ticked on
+the update card.
+
 ## v1.10.0 (2026-10-25)
 
 **Your own logo.** A **Logo** card on the Settings page puts your

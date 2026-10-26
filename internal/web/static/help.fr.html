@@ -272,6 +272,22 @@
   <p>Limitez un webhook à des groupes pour n'être prévenu que des appareils de ces utilisateurs.</p>
 </article>
 
+<article class="help-topic" id="help-extensions" data-group="Serveur" data-tab="extensions" data-title="Extensions">
+  <h2>Extensions</h2>
+  <p>Des plugins de serveur qui ajoutent des fonctions à EdgeTAK, comme des passerelles de balises ou de radio, des exports et des intégrations. Une extension est un programme (un .zip avec un <code>plugin.json</code>) qu'EdgeTAK exécute et maintient en marche.</p>
+  <ol>
+    <li><strong>Installer une extension…</strong> et choisissez le .zip. Installer une version plus récente d'une extension installée la met à jour et conserve ses données.</li>
+    <li>Vérifiez ce qu'elle peut faire : recevoir des CoT, envoyer des CoT, lire les données du serveur (groupes, appareils, missions, historique des positions) ou afficher une page ici.</li>
+    <li>Choisissez les groupes dont elle <em>reçoit les CoT</em> et auxquels elle <em>envoie des CoT</em>. Ils fonctionnent comme les groupes d'un utilisateur.</li>
+    <li><strong>Démarrer</strong>. EdgeTAK la relance si elle s'arrête, et au démarrage d'EdgeTAK.</li>
+  </ol>
+  <ul>
+    <li><strong>Ouvrir la page</strong> affiche sa page, pour ses paramètres. <strong>Journal</strong> montre ce qu'elle a écrit, le premier endroit où regarder quand elle se comporte mal.</li>
+    <li>Elle s'exécute sur le serveur comme n'importe quel programme : n'installez que des extensions de confiance.</li>
+    <li>Pour en écrire une, consultez le <a href="https://github.com/brandongotak/EdgeTAK/blob/master/docs/extensions.md" target="_blank" rel="noopener">guide des extensions</a> (en anglais).</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-audit" data-group="Serveur" data-tab="audit" data-title="Journal d'audit">
   <h2>Journal d'audit</h2>
   <p>Chaque modification faite par un administrateur, avec qui, d'où, quoi et si elle a réussi ; ainsi que les connexions, les connexions échouées, les adresses bloquées, les enrôlements d'appareils et les codes QR utilisés. Les mots de passe et les clés ne sont jamais enregistrés.</p>

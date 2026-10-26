@@ -65,6 +65,13 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
 .brand { font-weight: 700; font-size: 16px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .logo { color: var(--accent); }
 .logo-img { display: block; height: 28px; max-width: 140px; object-fit: contain; }
+.ext-item { border-top: 1px solid var(--line); padding: 14px 0; }
+.ext-item:first-child { border-top: 0; }
+.ext-item p { margin: 6px 0; }
+.ext-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ext-perms { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.ext-page { width: 100%; height: 70vh; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.ext-log { max-height: 60vh; overflow: auto; white-space: pre-wrap; font-size: 12px; margin: 0; }
 .logo-preview img { display: block; max-height: 64px; max-width: 240px; object-fit: contain; border: 1px solid var(--line); border-radius: 6px; padding: 6px; background: var(--panel-2); }
 
 .topbar {

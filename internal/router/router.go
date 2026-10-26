@@ -4,6 +4,7 @@ package router
 
 import (
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -29,6 +30,8 @@ type Router struct {
 
 	mu       sync.RWMutex
 	clients  map[uint64]*Client
+	taps     map[uint64]*Client // extensions (see AddTap)
+	tapSA    map[string]tapPos  // latest position of each UID a tap sent
 	hooks    []Hook
 	missions MissionResolver
 	presence func() *cot.Event // server-originated event every new client receives
@@ -76,7 +79,7 @@ func (r *Router) Broadcast(ev *cot.Event) {
 }
 
 func New(log *slog.Logger, sendLatestSA bool) *Router {
-	return &Router{log: log, sendLatestSA: sendLatestSA, clients: map[uint64]*Client{}}
+	return &Router{log: log, sendLatestSA: sendLatestSA, clients: map[uint64]*Client{}, taps: map[uint64]*Client{}, tapSA: map[string]tapPos{}}
 }
 
 // AddHook registers a hook; hooks run in registration order.
@@ -145,6 +148,11 @@ func (r *Router) replayTo(c *Client) {
 			replay = append(replay, sa)
 		}
 	}
+	for _, p := range r.tapSA {
+		if p.tap != c && sharesGroup(p.tap.OutGroups(), c.InGroups()) && !p.ev.IsStale(now) {
+			replay = append(replay, p.ev)
+		}
+	}
 	r.mu.RUnlock()
 	for _, sa := range replay {
 		c.Send(sa)
@@ -200,6 +208,7 @@ func (r *Router) Client(id uint64) (*Client, bool) {
 // with it, or only to the addressed clients when the event carries
 // <marti><dest uid|callsign|mission/></marti> entries.
 func (r *Router) Route(src *Client, ev *cot.Event) {
+	r.rememberTapPos(src, ev)
 	r.deliver(src, src.OutGroups(), ev)
 }
 
@@ -256,6 +265,81 @@ func (r *Router) deliver(src *Client, groups []string, ev *cot.Event) {
 			c.Send(ev)
 		}
 	}
+	// Taps see all traffic of their groups, addressed or not.
+	for _, t := range r.taps {
+		if t != src && sharesGroup(groups, t.InGroups()) {
+			t.Send(ev)
+		}
+	}
+}
+
+// ---- taps ----
+
+// A tap is an extension's connection to the router. Like a client it
+// receives the traffic of its in groups and sends to its out groups, but it
+// is not a device: Clients leaves it out. It may send many markers (trackers,
+// aircraft), so the latest position of each UID it sends is remembered and
+// replayed to devices that connect later, as their own positions are.
+
+type tapPos struct {
+	tap *Client
+	ev  *cot.Event
+}
+
+const maxTapPositions = 20000
+
+// AddTap connects t.
+func (r *Router) AddTap(t *Client) {
+	t.ID = r.nextID.Add(1)
+	r.mu.Lock()
+	r.taps[t.ID] = t
+	r.mu.Unlock()
+}
+
+// Replay sends c the latest positions it may see, as a newly connected
+// client gets them (a tap when it starts reading).
+func (r *Router) Replay(c *Client) { r.replayTo(c) }
+
+// RemoveTap disconnects t; the positions it sent are no longer replayed.
+func (r *Router) RemoveTap(t *Client) {
+	r.mu.Lock()
+	delete(r.taps, t.ID)
+	for uid, p := range r.tapSA {
+		if p.tap == t {
+			delete(r.tapSA, uid)
+		}
+	}
+	r.mu.Unlock()
+}
+
+// Taps returns the connected taps.
+func (r *Router) Taps() []*Client {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return slices.Collect(maps.Values(r.taps))
+}
+
+func (r *Router) rememberTapPos(src *Client, ev *cot.Event) {
+	if src == nil || ev.UID == "" || !strings.HasPrefix(ev.Type, "a-") {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.taps[src.ID] != src {
+		return
+	}
+	if _, ok := r.tapSA[ev.UID]; !ok && len(r.tapSA) >= maxTapPositions {
+		now := time.Now()
+		for uid, p := range r.tapSA {
+			if p.ev.IsStale(now) {
+				delete(r.tapSA, uid)
+			}
+		}
+		if len(r.tapSA) >= maxTapPositions {
+			return
+		}
+	}
+	r.tapSA[ev.UID] = tapPos{src, ev}
 }
 
 func sharesGroup(a, b []string) bool {

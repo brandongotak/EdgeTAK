@@ -1,0 +1,16 @@
+{
+  "id": "my-extension",
+  "name": "My Extension",
+  "version": "0.1.0",
+  "description": "Describe what your extension does, in a sentence or two.",
+  "author": "Your name",
+  "homepage": "https://example.com/my-extension",
+  "run": {
+    "linux/amd64": ["bin/my-extension-linux-amd64"],
+    "linux/arm64": ["bin/my-extension-linux-arm64"],
+    "linux/arm": ["bin/my-extension-linux-arm"],
+    "windows/amd64": ["bin/my-extension-windows-amd64.exe"]
+  },
+  "permissions": ["cot:read", "cot:write", "data:read"],
+  "page": true
+}
