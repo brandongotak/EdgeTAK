@@ -37,6 +37,11 @@ radio teams and server users see each other.
 app or plugin, Change icon, Download, Delete) are under its name, so the
 list fits beside the map without scrolling sideways.
 
+## v1.12.0-rc.2 (2026-10-26)
+
+The second release candidate for v1.12.0: the Plugins page fits beside
+the map. A pre-release.
+
 ## v1.12.0-rc.1 (2026-10-26)
 
 A release candidate for v1.12.0 (above), to try the mesh bridge with ATAK
