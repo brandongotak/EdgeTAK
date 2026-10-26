@@ -383,6 +383,38 @@
         <p class="muted">Lets TAK apps connect on port <span id="tcp-port">8087</span> without encryption or a login. They are anonymous and only see the <code>__ANON__</code> group. Useful on a closed local network for apps without a certificate; turn it off on servers others can reach. Turning it off closes the port and disconnects the devices connected that way. If the server has a firewall, the port must be open there too (for example <code>sudo ufw allow 8087/tcp</code>); servers installed with <code>--no-plaintext</code> start with it off and closed in the firewall.</p>
         <label class="check"><input type="checkbox" id="tcp-on"> Allow plain TCP connections</label>
       </div>
+      <div class="card" id="mesh-card">
+        <div class="card-head"><h2>Mesh bridge</h2><span id="mesh-state"></span></div>
+        <p class="muted">Without a server, ATAK and WinTAK devices on one network (Wi-Fi or MANET radios) share positions and chat over multicast: their mesh. The bridge joins that network: what it hears goes into a group here, and the traffic of the groups you choose goes out to it, so radio teams and server users see each other. It sends TAK Protocol, or XML while a device that only reads XML is about, as ATAK does.</p>
+        <form id="mesh-form" class="stack">
+          <label class="check"><input type="checkbox" name="enabled"> Bridge the mesh network</label>
+          <div class="muted picker-label">Network interfaces (none ticked: every one that can multicast)</div>
+          <div id="mesh-ifaces" class="group-picker"></div>
+          <label>What's heard on the mesh goes to group <select name="group" id="mesh-group"></select></label>
+          <div class="muted picker-label">Sent to the mesh: the traffic of these groups</div>
+          <div id="mesh-to" class="group-picker"></div>
+          <div class="muted picker-label">Send to the mesh</div>
+          <div class="group-picker">
+            <label class="chip"><input type="checkbox" name="send_positions"> Positions and markers</label>
+            <label class="chip"><input type="checkbox" name="send_chat"> Chat</label>
+            <label class="chip"><input type="checkbox" name="send_alerts"> Emergencies</label>
+            <label class="chip"><input type="checkbox" name="send_drawings"> Drawings and routes</label>
+            <label class="chip"><input type="checkbox" name="send_other"> Everything else</label>
+          </div>
+          <label class="inline-label">At most one position of each item every <input type="number" name="position_seconds" min="1" max="3600" class="days-input"> seconds <span class="muted">(radios are slow)</span></label>
+          <details>
+            <summary class="muted">Advanced</summary>
+            <div class="stack">
+              <label>Positions address <input name="sa_addr" placeholder="239.2.3.1:6969"></label>
+              <label>Chat address <input name="chat_addr" placeholder="224.10.10.1:17012"></label>
+              <label>Direct message port <input type="number" name="direct_port" min="-1" max="65535" class="days-input"> <span class="muted">(-1: none)</span></label>
+              <label>Multicast TTL <input type="number" name="ttl" min="1" max="255" class="days-input"></label>
+            </div>
+          </details>
+          <div class="inline-form"><button class="primary" type="submit">Save</button></div>
+        </form>
+        <div id="mesh-status"></div>
+      </div>
       <div class="card" id="zt-card">
         <div class="card-head"><h2>ZeroTier</h2><span id="zt-state"></span></div>
         <p class="muted">ZeroTier puts this server and your devices on one private network over the internet, so phones anywhere reach EdgeTAK without opening ports on your router. Devices need the ZeroTier app, joined to the same network.</p>

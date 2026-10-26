@@ -57,6 +57,8 @@ Guide: [People](#people) · [Data and maps](#data-and-maps) · [Messages](#messa
 - Federation with TAK Servers, OpenTAKServer and other EdgeTAKs.
 - **Extensions:** server plugins in any language that receive and send CoT,
   read server data and add a page to the console.
+- A **mesh bridge** between ATAK's multicast network (Wi-Fi or MANET
+  radios) and EdgeTAK's groups.
 - Health graphs, certificate status, data retention, backup and restore,
   updates from the console, and a load-testing simulator.
 - The admin console installs as an app on phones and desktops; its libraries
@@ -908,6 +910,46 @@ would remove before you save, and never remove files a mission uses or
 records of certificates that are still valid.
 
 **Backups** are on the same page; see [Back up and restore](#back-up-and-restore).
+
+### Mesh bridge (ATAK multicast)
+
+Without a server, ATAK and WinTAK devices on one network (Wi-Fi, or MANET
+radios such as goTenna, Silvus, MPU5 or Doodle Labs) share positions over
+multicast (`239.2.3.1:6969`) and chat (`224.10.10.1:17012`): their mesh.
+**Mesh bridge** on the Settings page joins that network from the server,
+so radio teams and server users see each other.
+
+1. Tick the network interface the radios or their Wi-Fi are on. With none
+   ticked, the bridge uses every interface that can multicast.
+2. Choose the group that what's heard on the mesh goes to, and the groups
+   whose traffic is sent back to the mesh. Both default to `__ANON__`.
+3. Choose what to send to the mesh: positions and markers, chat,
+   emergencies, drawings and routes, or everything. Each item's position
+   goes out at most every 10 seconds (adjustable), and the total is
+   capped, because radios are slow.
+
+How it behaves:
+
+- **Formats:** the bridge reads XML and TAK Protocol. It sends TAK
+  Protocol, or XML while a device that only reads XML is about, as ATAK
+  does.
+- **No loops:** nothing it brings in goes back out. Its own datagrams,
+  heard back, are dropped. A device that is on the mesh and connected to
+  EdgeTAK at the same time isn't doubled.
+- **Late joiners:** devices connecting to the server later get the mesh
+  devices' latest positions.
+- **Direct messages:** relayed server users appear on the mesh with the
+  bridge's address. Radios can send them direct chat, which the bridge
+  receives on port 4242 (TCP and UDP).
+- **Who can join:** mesh traffic is neither encrypted nor signed, and
+  anyone on that network can send to it. Give it a group of its own if
+  that matters.
+- **Mesh keys:** encrypted mesh (a mesh key set in ATAK) isn't supported.
+
+The card shows the interfaces, what crossed the bridge in each direction
+and the devices heard in the last two minutes. Open UDP 6969, 17012 and
+4242 and TCP 4242 if the server has a firewall. In Docker, multicast only
+reaches the container with `network_mode: host`.
 
 ### ZeroTier
 

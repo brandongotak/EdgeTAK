@@ -247,6 +247,64 @@ type db struct {
 
 	// Extensions: each installed extension's settings, by id.
 	Extensions map[string]ExtensionSettings `json:"extensions,omitempty"`
+
+	Mesh MeshSettings `json:"mesh"`
+}
+
+// MeshSettings are the mesh bridge's: ATAK's multicast (mesh) network on
+// one side, EdgeTAK's groups on the other (see internal/mesh).
+type MeshSettings struct {
+	Enabled bool `json:"enabled"`
+	// Interfaces are the network interfaces it works on, by name; none:
+	// every interface that can multicast.
+	Interfaces []string `json:"interfaces"`
+	// Group is where what's heard on the mesh goes; ToMesh are the groups
+	// whose traffic is sent to the mesh.
+	Group  string   `json:"group"`
+	ToMesh []string `json:"to_mesh"`
+	// What is sent to the mesh (everything heard on it comes in).
+	SendPositions bool `json:"send_positions"` // a-*: devices and markers
+	SendChat      bool `json:"send_chat"`      // b-t-f
+	SendAlerts    bool `json:"send_alerts"`    // b-a-*: emergencies
+	SendDrawings  bool `json:"send_drawings"`  // u-*, b-m-r: shapes and routes
+	SendOther     bool `json:"send_other"`
+	// PositionSeconds: at most one position of each item this often.
+	PositionSeconds int `json:"position_seconds"`
+	TTL             int `json:"ttl"`
+	// SAAddr and ChatAddr are ATAK's multicast groups (239.2.3.1:6969,
+	// 224.10.10.1:17012); DirectPort receives direct messages (4242; -1 off).
+	SAAddr     string `json:"sa_addr"`
+	ChatAddr   string `json:"chat_addr"`
+	DirectPort int    `json:"direct_port"`
+}
+
+// Normalized fills in the defaults.
+func (m MeshSettings) Normalized(anonGroup string) MeshSettings {
+	if m.Group == "" {
+		m.Group = anonGroup
+	}
+	if m.ToMesh == nil {
+		m.ToMesh = []string{m.Group}
+	}
+	if m.PositionSeconds <= 0 {
+		m.PositionSeconds = 10
+	}
+	if m.TTL <= 0 {
+		m.TTL = 64 // ATAK's
+	}
+	if m.SAAddr == "" {
+		m.SAAddr = "239.2.3.1:6969"
+	}
+	if m.ChatAddr == "" {
+		m.ChatAddr = "224.10.10.1:17012"
+	}
+	if m.DirectPort == 0 {
+		m.DirectPort = 4242
+	}
+	if m.Interfaces == nil {
+		m.Interfaces = []string{}
+	}
+	return m
 }
 
 // ExtensionSettings are what an admin set for an extension: whether it
@@ -1238,6 +1296,12 @@ func (s *Store) UpdateGroup(name, newName, description string) ([]string, error)
 			}
 			s.db.Extensions[id] = e
 		}
+		if s.db.Mesh.Group == name {
+			s.db.Mesh.Group = newName
+		}
+		if i := slices.Index(s.db.Mesh.ToMesh, name); i >= 0 {
+			s.db.Mesh.ToMesh[i] = newName
+		}
 	}
 	return affected, s.save()
 }
@@ -1264,6 +1328,10 @@ func (s *Store) DeleteGroup(name string) ([]string, error) {
 		e.GroupsOut = slices.DeleteFunc(e.GroupsOut, func(g string) bool { return g == name })
 		s.db.Extensions[id] = e
 	}
+	if s.db.Mesh.Group == name {
+		s.db.Mesh.Group = "" // the anonymous group
+	}
+	s.db.Mesh.ToMesh = slices.DeleteFunc(s.db.Mesh.ToMesh, func(g string) bool { return g == name })
 	return affected, s.save()
 }
 
@@ -2718,6 +2786,28 @@ func (s *Store) SetFeeds(f FeedSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.Feeds = f
+	return s.save()
+}
+
+// ---- mesh bridge ----
+
+// Mesh returns the mesh bridge's settings; a server that never saved them
+// sends positions, chat, alerts and drawings.
+func (s *Store) Mesh() MeshSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	m := s.db.Mesh
+	if m.PositionSeconds == 0 && !m.Enabled && m.Group == "" {
+		m.SendPositions, m.SendChat, m.SendAlerts, m.SendDrawings = true, true, true, true
+	}
+	m.Interfaces, m.ToMesh = slices.Clone(m.Interfaces), slices.Clone(m.ToMesh)
+	return m
+}
+
+func (s *Store) SetMesh(m MeshSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Mesh = m
 	return s.save()
 }
 

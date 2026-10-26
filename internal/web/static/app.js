@@ -158,7 +158,7 @@ const loaders = {
   webhooks: loadWebhooks,
   extensions: loadExtensions,
   audit: () => loadAudit(),
-  settings: () => Promise.all([loadLogo(), loadPlainTCP(), loadZeroTier(), loadFRP(), loadFeeds(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
+  settings: () => Promise.all([loadLogo(), loadPlainTCP(), loadMesh(), loadZeroTier(), loadFRP(), loadFeeds(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
 };
 
 let currentTab = '';
@@ -2720,6 +2720,74 @@ $('#apk-form').addEventListener('submit', guard(async (e) => {
 $('#apk-configure').addEventListener('change', guard(async (e) => {
   renderApps(await api('PUT', 'api/apps/settings', { configure_devices: e.target.checked }));
   toast(e.target.checked ? 'Devices get the update server when they next connect' : 'Devices are no longer pointed at the update server');
+}));
+
+// ---- mesh bridge ----
+
+let meshTimer = null;
+
+async function loadMesh() {
+  clearTimeout(meshTimer);
+  const [v, groups] = await Promise.all([api('GET', 'api/mesh'), api('GET', 'api/groups')]);
+  allGroups = groups;
+  // Don't redraw a form being edited.
+  if (!$('#mesh-form').contains(document.activeElement) && !$('#mesh-form').matches(':hover')) renderMeshForm(v);
+  renderMeshStatus(v);
+  meshTimer = setTimeout(() => { if (currentTab === 'settings') loadMesh().catch(() => {}); }, 5000);
+}
+
+function renderMeshForm(v) {
+  const f = $('#mesh-form');
+  const s = v.settings;
+  f.enabled.checked = s.enabled;
+  for (const k of ['send_positions', 'send_chat', 'send_alerts', 'send_drawings', 'send_other']) f[k].checked = s[k];
+  for (const k of ['position_seconds', 'sa_addr', 'chat_addr', 'direct_port', 'ttl']) f[k].value = s[k];
+  const names = new Set([...v.available.map((i) => i.name), ...s.interfaces]);
+  $('#mesh-ifaces').innerHTML = [...names].map((n) => {
+    const a = v.available.find((i) => i.name === n);
+    return `<label class="chip"><input type="checkbox" value="${esc(n)}"${s.interfaces.includes(n) ? ' checked' : ''}>${esc(n)}${a ? ` <span class="muted">${esc(a.addr)}</span>` : ' <span class="muted">(not here)</span>'}</label>`;
+  }).join('') || '<span class="muted">No network interface here can multicast</span>';
+  const names2 = allGroups.map((g) => g.name);
+  if (!names2.includes(s.group)) names2.unshift(s.group);
+  $('#mesh-group').innerHTML = names2.map((g) => `<option${g === s.group ? ' selected' : ''}>${esc(g)}</option>`).join('');
+  $('#mesh-to').innerHTML = names2.map((g) => `<label class="chip"><input type="checkbox" value="${esc(g)}"${s.to_mesh.includes(g) ? ' checked' : ''}>${esc(g)}</label>`).join('');
+}
+
+function renderMeshStatus(v) {
+  const st = v.status || {};
+  const s = v.settings;
+  $('#mesh-state').innerHTML = !s.enabled ? '<span class="pill">off</span>'
+    : st.error ? '<span class="pill bad">not working</span>'
+      : st.running ? '<span class="pill ok">on</span>' : '<span class="pill warn">starting</span>';
+  if (!s.enabled) {
+    $('#mesh-status').innerHTML = '';
+    return;
+  }
+  const ifaces = (st.interfaces || []).map((i) => `${esc(i.name)}${i.addr ? ` (${esc(i.addr)})` : ''}${i.error ? `: <span class="error">${esc(i.error)}</span>` : ''}`).join(', ');
+  const peers = (st.peers || []).map((p) => `<tr><td>${esc(p.callsign || '–')}</td><td class="mono">${esc(p.addr)}</td><td>${esc(p.format)}</td><td>${esc(ago(p.last))}</td></tr>`).join('');
+  $('#mesh-status').innerHTML = `
+    ${st.error ? `<p class="error">${esc(st.error)}</p>` : ''}
+    <p class="muted">Interfaces: ${ifaces || 'none'} · ${st.from_mesh || 0} heard from the mesh · ${st.to_mesh || 0} sent to it${st.limited ? ` · ${st.limited} held back (rate limits)` : ''} · sending ${esc(st.format || '')}${st.xml_peer ? ` because ${esc(st.xml_peer)} only reads XML` : ''}</p>
+    <h3>Heard on the mesh</h3>
+    ${peers ? `<div class="table-wrap"><table><thead><tr><th>Callsign</th><th>Address</th><th>Format</th><th>Last heard</th></tr></thead><tbody>${peers}</tbody></table></div>` : '<p class="muted">Nothing heard yet in the last 2 minutes</p>'}`;
+}
+
+$('#mesh-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const picked = (box) => [...$(box).querySelectorAll('input:checked')].map((i) => i.value);
+  const body = {
+    enabled: f.enabled.checked, interfaces: picked('#mesh-ifaces'), group: f.group.value, to_mesh: picked('#mesh-to'),
+    send_positions: f.send_positions.checked, send_chat: f.send_chat.checked, send_alerts: f.send_alerts.checked,
+    send_drawings: f.send_drawings.checked, send_other: f.send_other.checked,
+    position_seconds: Number(f.position_seconds.value) || 0, sa_addr: f.sa_addr.value, chat_addr: f.chat_addr.value,
+    direct_port: Number(f.direct_port.value) || 0, ttl: Number(f.ttl.value) || 0,
+  };
+  const v = await api('PUT', 'api/mesh', body);
+  document.activeElement?.blur();
+  renderMeshForm(v);
+  renderMeshStatus(v);
+  toast(body.enabled ? 'Mesh bridge on' : 'Mesh bridge off');
 }));
 
 // ---- extensions ----

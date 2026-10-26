@@ -29,6 +29,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/history"
 	"github.com/brandongotak/EdgeTAK/internal/maps"
 	"github.com/brandongotak/EdgeTAK/internal/mediamtx"
+	"github.com/brandongotak/EdgeTAK/internal/mesh"
 	"github.com/brandongotak/EdgeTAK/internal/mission"
 	"github.com/brandongotak/EdgeTAK/internal/pki"
 	"github.com/brandongotak/EdgeTAK/internal/publiccert"
@@ -62,6 +63,8 @@ type Server struct {
 	FRP *frp.Manager
 	// Extensions runs the installed extensions (set by the app).
 	Extensions *extension.Manager
+	// Mesh bridges ATAK's multicast network (set by the app).
+	Mesh *mesh.Bridge
 	// ZeroTierAPI is the local ZeroTier service's API ("" =
 	// http://127.0.0.1:9993; tests use a fake).
 	ZeroTierAPI string
@@ -185,6 +188,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.frpRoutes(mux)
 	s.brandingRoutes(mux)
 	s.extensionRoutes(mux)
+	s.meshRoutes(mux)
 	s.backupRoutes(mux)
 	s.offlineMapRoutes(mux)
 	s.lostContactRoutes(mux)

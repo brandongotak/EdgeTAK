@@ -66,6 +66,7 @@ var auditActions = map[string]string{
 	"PATCH /admin/api/overlays/{id}":                     "Changed overlay",
 	"PATCH /admin/api/users/{name}":                      "Changed user",
 	"POST /admin/api/apps":                               "Uploaded plugins",
+	"PUT /admin/api/mesh":                                "Changed the mesh bridge",
 	"PUT /admin/api/logo":                                "Changed the server logo",
 	"POST /admin/api/backup/restore":                     "Restored a backup (uploaded)",
 	"POST /admin/api/backups":                            "Made a backup",

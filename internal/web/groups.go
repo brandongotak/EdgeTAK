@@ -117,6 +117,7 @@ func (s *Server) updateGroup(w http.ResponseWriter, r *http.Request, id *identit
 			s.applyUserGroups(u)
 		}
 		s.applyExtensionGroups()
+		s.applyMesh()
 		s.Log.Info("group renamed", "admin", id.Username, "from", name, "to", newName)
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -137,6 +138,7 @@ func (s *Server) deleteGroup(w http.ResponseWriter, r *http.Request, id *identit
 		s.applyUserGroups(u)
 	}
 	s.applyExtensionGroups()
+	s.applyMesh()
 	s.Log.Info("group deleted", "admin", id.Username, "group", name, "members_removed", len(affected))
 	w.WriteHeader(http.StatusNoContent)
 }

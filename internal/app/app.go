@@ -29,6 +29,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/history"
 	"github.com/brandongotak/EdgeTAK/internal/maps"
 	"github.com/brandongotak/EdgeTAK/internal/mediamtx"
+	"github.com/brandongotak/EdgeTAK/internal/mesh"
 	"github.com/brandongotak/EdgeTAK/internal/mission"
 	"github.com/brandongotak/EdgeTAK/internal/pki"
 	"github.com/brandongotak/EdgeTAK/internal/publiccert"
@@ -369,6 +370,9 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	a.frp.Log = a.Log.With("component", "frpc")
 	ws.FRP = a.frp
 	go a.frp.Run(ctx, a.Store.FRPEnabled())
+	ws.Mesh = &mesh.Bridge{Router: a.Router, Log: a.Log.With("component", "mesh"), AnonGroup: a.Cfg.AnonymousGroup,
+		Transport: &mesh.UDP{Log: a.Log.With("component", "mesh")}}
+	ws.Mesh.Start(ctx, a.Store.Mesh())
 	ws.Extensions = &extension.Manager{Dir: filepath.Join(a.DataDir, "extensions"), DataDir: filepath.Join(a.DataDir, "extension-data"),
 		Log: a.Log.With("component", "extensions")}
 	if err := ws.Extensions.Load(ctx); err != nil {

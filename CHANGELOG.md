@@ -10,6 +10,35 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.12.0 (2026-10-26)
+
+**Mesh bridge.** A **Mesh bridge** card on the Settings page connects
+ATAK's mesh to EdgeTAK. The mesh is devices sharing positions and chat over
+multicast, on Wi-Fi or MANET radios, without a server. With the bridge on,
+radio teams and server users see each other.
+
+- **Setup:** choose the network interfaces, the group that mesh traffic
+  goes to, the groups sent back, and what to send (positions, chat,
+  emergencies, drawings). Positions are rate-limited, and the total is
+  capped, for slow radios.
+- **Formats:** it reads XML and TAK Protocol. It sends TAK Protocol, or
+  XML while a device that only reads XML is about, as ATAK does.
+- **No loops:** nothing it brings in goes back out, and its own datagrams
+  are dropped when heard back. Devices on both the mesh and the server
+  aren't doubled.
+- **Late joiners:** devices joining the server later get the mesh devices'
+  latest positions.
+- **Direct chat:** radios can send direct chat to server users. The bridge
+  receives it on port 4242 and delivers it to that user only.
+- **Status:** the card shows the interfaces, traffic each way, and the
+  devices heard lately.
+
+## v1.12.0-rc.1 (2026-10-26)
+
+A release candidate for v1.12.0 (above), to try the mesh bridge with ATAK
+devices and radios. A pre-release: servers only get it with **Include
+pre-releases** ticked on the update card.
+
 ## v1.11.0 (2026-10-26)
 
 **Extensions: server plugins.** A new **Extensions** page (Server section)
