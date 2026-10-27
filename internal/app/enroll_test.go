@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
 	"io"
 	"net/http"
 	"strings"
@@ -145,13 +146,31 @@ func TestEnrollmentForms(t *testing.T) {
 		t.Errorf("non-iTAK enrollment changed: %v", m)
 	}
 
-	// TROP tries the API port first and only moves to the enrollment port
-	// when that connection fails, so there it gets the connection dropped.
-	// Clients that identify themselves still enroll on the API port.
-	if _, m, err := enrollAt("https", ""); err == nil {
-		t.Errorf("TROP enrolled on the API port: %v", m)
-	}
-	if _, m, err := enrollAt("https", "TAK/5.5 (Android)"); err != nil || m["signedCert"] == "" {
-		t.Errorf("ATAK enrollment on the API port: %v %v", err, m)
+	// ATAK's enrollment library sends no User-Agent and asks for XML, on
+	// whichever port it is given. It must get XML, on both ports.
+	for _, listener := range []string{"enroll", "https"} {
+		req, _ := http.NewRequest("POST", "https://"+a.Addrs[listener]+"/Marti/api/tls/signClient/v2?clientUid=ANDROID-1&version=5.5",
+			bytes.NewReader([]byte(base64.StdEncoding.EncodeToString(der))))
+		req.SetBasicAuth("ios1", "ios1-password")
+		req.Header.Set("Accept", "application/xml")
+		req.Header.Set("User-Agent", "")
+		resp, err := hc.Do(req)
+		if err != nil {
+			t.Fatalf("ATAK enrollment on %s: %v", listener, err)
+		}
+		var x struct {
+			SignedCert string `xml:"signedCert"`
+			CA         string `xml:"ca"`
+		}
+		err = xml.NewDecoder(resp.Body).Decode(&x)
+		resp.Body.Close()
+		for k, v := range map[string]string{"signedCert": x.SignedCert, "ca": x.CA} {
+			raw, derr := base64.StdEncoding.DecodeString(strings.ReplaceAll(v, "\n", ""))
+			if err != nil || derr != nil {
+				t.Errorf("ATAK enrollment on %s, %s: %v %v", listener, k, err, derr)
+			} else if _, err := x509.ParseCertificate(raw); err != nil {
+				t.Errorf("ATAK enrollment on %s, %s: %v", listener, k, err)
+			}
+		}
 	}
 }

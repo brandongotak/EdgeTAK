@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"mime"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -37,9 +36,9 @@ func (s *Server) martiRoutes(mux *http.ServeMux) {
 	})
 
 	// Certificate enrollment (ATAK/WinTAK/iTAK "enroll for client certificate").
-	mux.HandleFunc("GET /Marti/api/tls/config", s.enrollPort(s.named(s.tlsConfig)))
-	mux.HandleFunc("POST /Marti/api/tls/signClient/v2", s.enrollPort(s.named(s.signClient)))
-	mux.HandleFunc("POST /Marti/api/tls/signClient", s.enrollPort(s.named(s.signClientV1)))
+	mux.HandleFunc("GET /Marti/api/tls/config", s.named(s.tlsConfig))
+	mux.HandleFunc("POST /Marti/api/tls/signClient/v2", s.named(s.signClient))
+	mux.HandleFunc("POST /Marti/api/tls/signClient", s.named(s.signClientV1))
 	// Device profiles pushed at enrollment and on every connect (official
 	// ProfileAPI). They carry the preferences that turn on ATAK's Channels.
 	mux.HandleFunc("GET /Marti/api/tls/profile/enrollment", s.named(s.deviceProfile("Enrollment")))
@@ -77,24 +76,6 @@ func (s *Server) martiRoutes(mux *http.ServeMux) {
 }
 
 // ---- enrollment ----
-
-// enrollPort turns TROP away from enrolling on the HTTPS API port. TROP
-// tries its API port (8443) first and moves to its CSR port (8446) when the
-// connection fails, as it does on servers that require a client certificate
-// there. Enrolled on 8443 it never connects ("check credentials"). Its
-// requests carry no User-Agent and, before enrolling, no certificate; they
-// get the connection dropped, like a certificate-required handshake.
-func (s *Server) enrollPort(h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.UserAgent() == "" && (r.TLS == nil || len(r.TLS.PeerCertificates) == 0) && s.Addrs["enroll"] != "" {
-			if local, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok && port(local.String()) == port(s.Addrs["https"]) {
-				s.Log.Debug("enrollment on the API port refused; client should use the enrollment port", "path", r.URL.Path, "remote", r.RemoteAddr)
-				panic(http.ErrAbortHandler)
-			}
-		}
-		h(w, r)
-	}
-}
 
 // tlsConfig tells the client which subject entries to put in its CSR. It
 // carries nothing else, as TAK Server, OpenTAKServer and FreeTAKServer send
@@ -172,6 +153,11 @@ func (s *Server) signClient(w http.ResponseWriter, r *http.Request, id *identity
 	agent := strings.ToLower(r.UserAgent())
 	iTAK := agent == "" || strings.Contains(agent, "itak") || strings.Contains(agent, "cfnetwork") || strings.Contains(agent, "darwin")
 	switch {
+	// ATAK and WinTAK (their enrollment library sends no User-Agent either)
+	// ask for XML and can read nothing else.
+	case strings.Contains(accept, "application/xml") && !strings.Contains(accept, "application/json"):
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?><enrollment><signedCert>%s</signedCert><ca>%s</ca></enrollment>`, signed, ca)
 	case iTAK || strings.Contains(accept, "text/plain") && !strings.Contains(accept, "application/json"):
 		// iTAK quietly drops the reply unless it has the CA as both ca0 and
 		// ca1 (as OpenTAKServer, which iTAK enrolls against, sends it). When
@@ -183,9 +169,6 @@ func (s *Server) signClient(w http.ResponseWriter, r *http.Request, id *identity
 			w.Header().Set("Content-Type", "application/json")
 		}
 		w.Write(body)
-	case strings.Contains(accept, "application/xml") && !strings.Contains(accept, "application/json"):
-		w.Header().Set("Content-Type", "application/xml")
-		fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?><enrollment><signedCert>%s</signedCert><ca>%s</ca></enrollment>`, signed, ca)
 	default:
 		writeJSON(w, http.StatusOK, map[string]string{"signedCert": signed, "ca0": ca})
 	}

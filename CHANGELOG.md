@@ -52,9 +52,6 @@ now matches TAK Server, OpenTAKServer and FreeTAKServer more closely:
   entries, without the certificate validity, which no client reads.
 - Device certificates list the user name first in the subject, and carry
   basic constraints and a key identifier.
-- Enrollment on the API port (8443) from clients without a certificate or
-  User-Agent gets the connection dropped, as on servers that require a
-  certificate there.
 
 **Fixed: TAK Aware enrollment.** iOS clients are now recognised by Apple's
 networking stack (CFNetwork, Darwin) as well as by name, so TAK Aware gets
@@ -62,9 +59,19 @@ the CA twice (`ca0` and `ca1`) as iTAK does. iOS clients get the
 certificates in 64-character lines again, as OpenTAKServer sends them:
 TAK Aware rejects one long line.
 
+**Fixed: ATAK enrollment.** ATAK and WinTAK get the XML reply they ask
+for again. Their enrollment sends no User-Agent, like TROP, and got the
+JSON meant for TROP, so they showed "TAK Server registration failed".
+
 **Fixed:** on the Plugins page, the buttons for each plugin (Treat as
 app or plugin, Change icon, Download, Delete) are under its name, so the
 list fits beside the map without scrolling sideways.
+
+## v1.12.0-rc.7 (2026-10-27)
+
+The seventh release candidate for v1.12.0: fixes ATAK enrollment ("TAK
+Server registration failed"), and ATAK can enroll on 8443 again. A
+pre-release.
 
 ## v1.12.0-rc.6 (2026-10-27)
 
