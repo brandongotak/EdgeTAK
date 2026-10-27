@@ -64,8 +64,8 @@ Guide: [People](#people) · [Data and maps](#data-and-maps) · [Messages](#messa
 - The admin console installs as an app on phones and desktops; its libraries
   are built in, so it works offline (only online base maps and weather need
   the internet).
-- The console, account and sign-in pages and Help in English, Spanish and
-  French.
+- The console, account and sign-in pages and Help in English, Spanish,
+  French, German and Italian.
 
 ## Install
 
@@ -1138,7 +1138,8 @@ the logo.
 ### Languages
 
 The console, the account, sign-in and sign-up pages and Help come in
-English, Spanish (ES) and French (FR). They follow the browser's language;
+English, Spanish (ES), French (FR), German (DE) and Italian (IT). They
+follow the browser's language;
 the language menu (top bar in the console, at the foot of the sign-in
 pages) changes it for that browser. Text a translation doesn't cover stays
 in English, as do names from the TAK apps (ATAK's menus are in English) and

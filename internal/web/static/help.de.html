@@ -1,0 +1,325 @@
+<!-- Die Hilfeseite der Konsole (wird in #help-body geladen). Ein <article> pro
+     Thema: data-group ist seine Überschrift im Inhaltsverzeichnis, data-tab die
+     Konsolenseite, die es erklärt (wird die Hilfe von dieser Seite aus geöffnet, erscheint es zuerst). -->
+
+<article class="help-topic" id="help-start" data-group="Einstieg" data-title="Erste Schritte">
+  <h2>Erste Schritte</h2>
+  <p>EdgeTAK ist ein TAK-Server: ATAK-, WinTAK-, TAKX- und iTAK-Geräte verbinden sich damit, um Positionen, Markierungen, Chat, Dateien und Video zu teilen. Die Konsole ist in der oberen Leiste in Bereiche gegliedert (Übersicht, Personen, Daten, Nachrichten, Server); die Seiten jedes Bereichs stehen in der Zeile darunter.</p>
+  <h3>Die ersten Schritte</h3>
+  <ol>
+    <li><strong>Admin-Passwort ändern:</strong> Klicken Sie unter <a data-goto="users">Benutzer</a> auf <em>Passwort</em> bei <code>admin</code>.</li>
+    <li><strong>Gruppen erstellen</strong> unter <a data-goto="groups">Gruppen</a>, zum Beispiel <code>Cyan</code> und <code>Command</code>. Geräte sehen nur den Verkehr der Gruppen, die sie gemeinsam haben.</li>
+    <li><strong>Benutzer erstellen</strong> unter <a data-goto="users">Benutzer</a> und ihre Gruppen ankreuzen. Geben Sie jeder Person einen eigenen Benutzer, damit Sie ein Gerät sperren können, ohne die anderen zu beeinträchtigen.</li>
+    <li><strong>Serveradresse prüfen:</strong> Auf einem lokalen Server verwenden Pakete und QR-Codes die Adresse, unter der Sie diese Konsole geöffnet haben. Öffnen Sie sie daher unter der Adresse, die die Geräte verwenden (nicht <code>localhost</code>). Mit Let's Encrypt verwenden sie den <em>Öffentlichen Host</em> aus der <a data-goto="dashboard">Übersicht</a>.</li>
+    <li><strong>Gerät verbinden:</strong> Erstellen Sie unter <a data-goto="connect">Verbinden</a> einen QR-Code für einen Benutzer und scannen Sie ihn mit der Kamera des Telefons. Siehe <a data-help="connect">Geräte verbinden</a>.</li>
+  </ol>
+  <h3>Tipps</h3>
+  <ul>
+    <li>Die Karte neben jeder Seite zeigt die Geräte live. <em>Karte</em> in der oberen Leiste blendet sie ein oder aus.</li>
+    <li>Ihre eigenen Geräte, Zertifikate und Ihr Passwort finden Sie unter <em>Mein Konto</em>.</li>
+    <li>Die Design-Schaltfläche in der oberen Leiste wechselt zwischen <em>Auto</em> (die Hell- oder Dunkel-Einstellung Ihres Geräts), <em>Hell</em> und <em>Dunkel</em>.</li>
+    <li>Jede Ihrer Änderungen wird im <a data-goto="audit">Audit-Protokoll</a> festgehalten.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-dashboard" data-group="Übersicht" data-tab="dashboard" data-title="Übersicht">
+  <h2>Übersicht</h2>
+  <p>Der Zustand des Servers auf einen Blick: verbundene Geräte, Nachrichten, Probleme, die Aufmerksamkeit brauchen, und Updates.</p>
+  <ul>
+    <li><strong>Probleme</strong> ganz oben listet alles auf, was nicht stimmt: eine volle Festplatte, bald ablaufende Zertifikate, eine unterbrochene Föderationsverbindung.</li>
+    <li><strong>Server</strong> zeigt die Version, die Adresse, die die Geräte verwenden (<em>Öffentlicher Host</em>), und die Ports.</li>
+    <li><strong>EdgeTAK-Updates:</strong> <em>Nach Updates suchen</em>, dann <em>Installieren</em>. EdgeTAK startet sich selbst neu; die Geräte verbinden sich von allein wieder. Kreuzen Sie <em>Vorabversionen einbeziehen</em> nur auf Testservern an.</li>
+    <li><strong>Verbundene Clients</strong> listet jedes Gerät mit Benutzer, Gruppen und Verbindung auf. Von hier aus können Sie ein Gerät trennen.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-health" data-group="Übersicht" data-tab="health" data-title="Zustand">
+  <h2>Zustand</h2>
+  <p>Diagramme der letzten Stunde bis 24 Stunden: CPU, Arbeitsspeicher, Festplatte, Netzwerk, Temperatur (auf einem Raspberry Pi), verbundene Geräte, Nachrichten und Videobandbreite, mit Warnungen bei voller Festplatte, Überhitzung oder verworfenen Nachrichten.</p>
+  <p>Die Tabelle <strong>Geräte</strong> listet für jedes Gerät den Akkustand (und wie schnell er sinkt), die letzte Meldung, den GPS-Fix und die Verbindung auf, die schlimmsten Probleme zuerst. So erkennen Sie ein Telefon, dessen Akku gleich leer ist, bevor es wegfällt.</p>
+</article>
+
+<article class="help-topic" id="help-users" data-group="Personen" data-tab="users" data-title="Benutzer">
+  <h2>Benutzer</h2>
+  <p>Alle, die sich anmelden: die Geräte der Personen, die Konsole und die Kontoseite.</p>
+  <h3>Benutzer hinzufügen</h3>
+  <ol>
+    <li>Geben Sie einen Benutzernamen und ein Passwort (8 Zeichen oder mehr) ein.</li>
+    <li>Kreuzen Sie die Gruppen an. Keine Gruppe bedeutet <code>__ANON__</code>, geteilt mit anonymen Geräten.</li>
+    <li>Kreuzen Sie <em>Administrator</em> nur für Personen an, die den Server betreiben.</li>
+    <li><em>Erstellen</em>, dann das Gerät der Person mit <em>QR</em> in ihrer Zeile verbinden.</li>
+  </ol>
+  <h3>Die Schaltflächen bei jedem Benutzer</h3>
+  <ul>
+    <li><strong>Gruppen:</strong> welche Gruppen und in welche Richtung: <em>ein + aus</em> (der Normalfall), <em>ein</em> (nur empfangen) oder <em>aus</em> (nur senden). Änderungen erreichen verbundene Geräte sofort.</li>
+    <li><strong>Passwort</strong> setzt ein neues. <strong>Zum Admin machen</strong> / <strong>Adminrechte entziehen</strong> ändert die Rolle.</li>
+    <li><strong>Deaktivieren</strong> sperrt die Person sofort (Anmeldungen, Zertifikate, verbundene Geräte), behält aber das Konto; <strong>Aktivieren</strong> stellt alles wieder her. Ziehen Sie das dem <em>Löschen</em> vor.</li>
+    <li><strong>QR</strong> erstellt einen QR-Code, der das Telefon der Person verbindet (siehe <a data-help="connect">Geräte verbinden</a>). <strong>Paket</strong> lädt ein Verbindungspaket herunter; <strong>.p12 ausstellen</strong> ein Zertifikat für von Hand eingerichtete Clients.</li>
+    <li><strong>QR-Bogen drucken…</strong> (über der Liste) druckt eine beschriftete QR-Karte für jeden gewählten Benutzer oder eine ganze Gruppe.</li>
+  </ul>
+  <h3>Ebenfalls auf dieser Seite</h3>
+  <ul>
+    <li><strong>Zwei-Faktor-Anmeldung</strong> für Ihr eigenes Konto: nach dem Passwort ein Code aus einer Authenticator-App. TAK-Apps sind davon nicht betroffen.</li>
+    <li><strong>Verzeichnisanmeldung (LDAP / Active Directory):</strong> Personen melden sich mit ihrem Verzeichniskonto an, und Verzeichnisgruppen werden zu EdgeTAK-Gruppen. Verwenden Sie vor dem Speichern <em>Diese Einstellungen testen</em>.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-groups" data-group="Personen" data-tab="groups" data-title="Gruppen und Geräteprofile">
+  <h2>Gruppen und Geräteprofile</h2>
+  <p>Gruppen bestimmen, wer was sieht: Ein Gerät empfängt den Verkehr, der an die Gruppen gesendet wird, in denen es <em>ein</em> ist, und sein eigener Verkehr geht an die Gruppen, in denen es <em>aus</em> ist. Benutzer können Gruppen auf ihrem Gerät mit <em>Channels</em> in ATAK ein- und ausschalten.</p>
+  <ul>
+    <li><strong>Gruppe erstellen</strong> mit Name und Beschreibung; Mitglieder legen Sie unter <a data-goto="users">Benutzer</a> oder hier mit der Schaltfläche der Gruppe fest.</li>
+    <li>Wenn Sie eine Gruppe löschen, wird sie bei ihren Mitgliedern entfernt.</li>
+  </ul>
+  <h3>Geräteprofile</h3>
+  <p>Einstellungen und Dateien, die an die Geräte der Mitglieder einer Gruppe (oder aller Benutzer) gesendet werden: ATAK-Einstellungen (Schlüssel, Typ und Wert), <code>.pref</code>-Dateien, Plugin-APKs, Kartenquellen und Ebenen.</p>
+  <ul>
+    <li>Geräte erhalten sie bei der Einrichtung und bei jeder Verbindung, wenn sich das Profil geändert hat.</li>
+    <li><strong>Jetzt senden</strong> erreicht Geräte, die bereits verbunden sind. <strong>Herunterladen</strong> zeigt genau, was die Geräte erhalten.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-events" data-group="Personen" data-tab="events" data-title="Veranstaltungen">
+  <h2>Veranstaltungen</h2>
+  <p>Ein zeitlich begrenzter Einsatz (eine Suche, eine Übung, ein Rennen) mit eigener Gruppe und auf Wunsch einer Data-Sync-Mission. Personen treten bei, indem sie einen QR-Code scannen, und wenn er endet, wird alles aufgeräumt.</p>
+  <ol>
+    <li><strong>Neue Veranstaltung:</strong> ein Name, wann sie endet und wie Personen beitreten:
+      <ul>
+        <li><em>Jede Person registriert sich</em>: Der QR-Code öffnet eine Registrierungsseite; jede Person wählt einen Namen und erhält ein eigenes Konto (begrenzen Sie die Anzahl mit <em>Höchstens … Personen</em>).</li>
+        <li><em>Ein gemeinsames Konto</em>: Der QR-Code verbindet ATAK sofort; alle Geräte verwenden dasselbe Konto. Am schnellsten für spontan Hinzukommende.</li>
+      </ul>
+    </li>
+    <li>Zeigen Sie den QR-Code oder verwenden Sie <em>Beitrittsblatt drucken</em>, um es am Check-in-Punkt auszuhängen.</li>
+    <li>Wenn die Veranstaltung endet (zur festgelegten Zeit oder mit <em>Jetzt beenden</em>), werden ihre Konten gelöscht, ihre Geräte getrennt und ihre Gruppe entfernt. Die Mission bleibt zur Auswertung erhalten.</li>
+  </ol>
+  <p><em>Ende ändern</em> ändert, wann sie endet. <em>Paket</em> liefert ein Verbindungspaket für das gemeinsame Konto.</p>
+</article>
+
+<article class="help-topic" id="help-signups" data-group="Personen" data-tab="signups" data-title="Registrierungen">
+  <h2>Registrierungen</h2>
+  <p>Lassen Sie Personen ihre Konten auf der Registrierungsseite selbst erstellen, statt jedes einzeln anzulegen.</p>
+  <ul>
+    <li><strong>Einladungslinks:</strong> Wählen Sie die Gruppen, wie viele Personen ihn nutzen dürfen (0 = unbegrenzt) und wie lange er gilt, und teilen Sie dann den Link oder seinen QR-Code. Wer ihn hat, erhält sofort ein Konto in diesen Gruppen.</li>
+    <li><strong>Registrierung ohne Einladung:</strong> <em>Aus</em> (nur Einladungen, die Voreinstellung), <em>Freigabe</em> (Anfragen warten unter <em>Offene Anfragen</em> auf Ihre Freigabe) oder <em>Offen</em> (jeder, der den Server erreicht). Verwenden Sie „Offen“ nur dort, wo jeder beitreten darf.</li>
+  </ul>
+  <p>Nach der Registrierung sehen Personen einen QR-Code, der ihr Telefon verbindet, und Verbindungspakete für jede App.</p>
+</article>
+
+<article class="help-topic" id="help-certs" data-group="Personen" data-tab="certs" data-title="Zertifikate">
+  <h2>Zertifikate</h2>
+  <p>Geräte verbinden sich mit einem Zertifikat, das EdgeTAK bei ihrer Einrichtung ausgestellt hat. Diese Seite listet alle auf.</p>
+  <ul>
+    <li><strong>Widerrufen</strong> Sie das Zertifikat eines verlorenen Geräts: Es wird getrennt und kann sich nicht mehr verbinden. Die anderen Geräte des Benutzers funktionieren weiter.</li>
+    <li><strong>Serverzertifikate</strong> zeigt, wann die CA, das Serverzertifikat und ein etwaiges Let's-Encrypt-Zertifikat ablaufen und wie jedes erneuert wird.</li>
+    <li>Gerätezertifikate werden vor ihrem Ablauf markiert (standardmäßig 30 Tage); hier legen Sie fest, wie lange neue gültig sind. Ein Gerät erneuert sein Zertifikat, indem es neu eingerichtet wird (ein neuer QR-Code oder ein neues Paket).</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-packages" data-group="Daten" data-tab="packages" data-title="Datenpakete">
+  <h2>Datenpakete</h2>
+  <p>Über den Server geteilte Dateien: was Geräte mit <em>Send → Server</em> in ATAK hochladen und was Sie hier hochladen. Jedes ist für die Gruppen der Person sichtbar, die es hochgeladen hat.</p>
+  <ul>
+    <li>Pakete hochladen, suchen, herunterladen und löschen.</li>
+    <li><strong>Auf der Karte zeigen</strong> zeichnet die Markierungen, Routen, Formen und etwaige KML-, KMZ- oder GeoJSON-Daten eines Pakets auf die Karte der Konsole.</li>
+    <li>Um ein Paket an Geräte zu senden, verwenden Sie <a data-goto="send">Senden</a>.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-missions" data-group="Daten" data-tab="missions" data-title="Missionen (Data Sync)">
+  <h2>Missionen (Data Sync)</h2>
+  <p>Data-Sync-Missionen sind gemeinsame Arbeitsbereiche: Kartenobjekte und Dateien, die das Gerät jedes Abonnenten synchron hält, wobei Änderungen live übertragen werden. Sie werden meist in ATAK, WinTAK oder iTAK erstellt (<em>Data Sync</em>); diese Seite verwaltet sie.</p>
+  <ul>
+    <li>Sehen Sie Abonnenten und ihre Rollen, die Objekte und Dateien, das Änderungsprotokoll und die Einladungen.</li>
+    <li><strong>Auf der Karte zeigen</strong> zeichnet die Objekte einer Mission; <strong>Exportieren</strong> lädt sie herunter.</li>
+    <li>Eine Mission ist für die Gruppen sichtbar, für die sie erstellt wurde. Eine <a data-goto="events">Veranstaltung</a> kann eine für ihre Gruppe erstellen.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-maps" data-group="Daten" data-tab="maps" data-title="Karten: Zeichnungen und Offline-Karten">
+  <h2>Karten: Zeichnungen und Offline-Karten</h2>
+  <h3>Zeichnungen</h3>
+  <p>Zeichnen Sie Markierungen, Routen, Flächen und Kreise auf die Karte der Konsole; sie erscheinen auf den Karten der Geräte wie Objekte, die ein Teammitglied gesetzt hat, für alle Geräte oder für gewählte Gruppen. Geräte, die ausgeschaltet waren, erhalten sie bei der Verbindung; Bearbeiten oder Löschen aktualisiert die Geräte.</p>
+  <h3>Offline-Karten</h3>
+  <ol>
+    <li>Erstellen oder besorgen Sie eine <strong>MBTiles</strong>-Datei mit Rasterkacheln (QGIS, MOBAC, gdal und Ähnliches).</li>
+    <li>Laden Sie sie hier hoch oder kopieren Sie große Dateien in den Ordner <code>maps</code> des Servers (auf der Seite angezeigt) und verwenden Sie <em>Ordner neu einlesen</em>.</li>
+    <li>Sie wird zur Grundkarte in der Konsole, und ATAK-Geräte erhalten sie bei der Verbindung als Kartenquelle, sodass Karten ohne Internet funktionieren.</li>
+  </ol>
+  <p>Ihre eigenen Kachelquellen (und ATAK-Kartenquelldateien im Format <code>.xml</code>) finden Sie unter <em>Kartenquellen</em> direkt auf der Karte; kreuzen Sie <em>An ATAK-Geräte senden</em> an, um eine davon zu den Kartenlisten der Geräte hinzuzufügen.</p>
+</article>
+
+<article class="help-topic" id="help-overlays" data-group="Daten" data-tab="overlays" data-title="Ebenen">
+  <h2>Ebenen</h2>
+  <p>Senden Sie Kartenebenen (Grenzen, Suchsektoren, Routen, Punkte) an Geräte, ohne Dateien von Hand weiterzugeben.</p>
+  <ol>
+    <li><strong>Importieren</strong> Sie eine KML-, KMZ- oder GeoJSON-Datei, benennen Sie sie und wählen Sie die Gruppen, deren Geräte sie erhalten (keine = alle Geräte).</li>
+    <li>Verbundene Geräte erhalten sie sofort als eine Ebene im Overlay Manager von ATAK; Geräte, die ausgeschaltet waren, erhalten sie bei der Verbindung.</li>
+    <li><strong>Datei ersetzen</strong> sendet eine neue Version, die die alte ersetzt; <strong>Senden beenden</strong> pausiert sie.</li>
+  </ol>
+  <p>ATAK lässt sich nicht anweisen, eine Ebene zu entfernen; <em>Löschen</em> beendet daher nur das Senden durch EdgeTAK, und die Personen entfernen sie auf ihrem Gerät.</p>
+</article>
+
+<article class="help-topic" id="help-plugins" data-group="Daten" data-tab="plugins" data-title="Plugins">
+  <h2>Plugins</h2>
+  <p>Ein Update-Server für ATAK wie der von tak.gov: Geräte installieren und aktualisieren Plugins und Apps über den Bildschirm <em>Plugins</em> in ATAK.</p>
+  <ul>
+    <li><strong>Hochladen</strong> von Plugin- oder App-APKs. Builds für mehrere ATAK-Versionen können nebeneinander liegen; jedes Gerät erhält den Build für seine Version (oder die nächstältere).</li>
+    <li>Geräte werden automatisch auf diesen Update-Server verwiesen (<em>Geräte auf diesen Update-Server verweisen</em>).</li>
+    <li>Wenn eine App in ATAK als Plugin erscheint (oder umgekehrt), verwenden Sie <em>Als App behandeln</em> / <em>Als Plugin behandeln</em>.</li>
+    <li><strong>Plugins von tak.gov:</strong> Verknüpfen Sie ein tak.gov-Konto, wählen Sie die ATAK-Version und fügen Sie Plugins mit <em>Hinzufügen</em> hinzu, ohne sie selbst herunterzuladen.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-video" data-group="Daten" data-tab="video" data-title="Video">
+  <h2>Video</h2>
+  <p>Video-Feeds für den Video Player von ATAK und WinTAK, nach Gruppe beschränkt.</p>
+  <ul>
+    <li><strong>Veröffentlichen:</strong> Senden Sie einen Stream mit einem beliebigen EdgeTAK-Benutzernamen und -Passwort, z. B. <code>rtsp://USER:PASSWORD@server:8554/NAME</code> (RTMP und SRT funktionieren ebenfalls). Er erscheint sofort auf dieser Seite.</li>
+    <li><strong>Als Feed speichern</strong> benennt ihn, legt fest, wer ihn ansehen darf, und kann ihm eine Kartenposition geben (eine Kameramarkierung auf den Geräten).</li>
+    <li><strong>Ansehen:</strong> Öffnen Sie auf Geräten den Video Player und importieren Sie vom Server; in der Konsole <em>Ansehen</em>.</li>
+    <li><strong>Veröffentlichen ohne Anmeldung</strong> ist für Kameras, die sich nicht anmelden können: Erlauben Sie es nur für benannte Feeds.</li>
+    <li><strong>Aufnahme</strong> (standardmäßig aus) bewahrt Streams eine festgelegte Anzahl von Tagen auf; Sie können sie unter <em>Aufnahmen</em> abspielen oder herunterladen.</li>
+    <li>Die Karte <strong>MediaMTX</strong> aktualisiert den Videoserver oder startet ihn neu.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-send" data-group="Nachrichten" data-tab="send" data-title="Senden">
+  <h2>Senden</h2>
+  <p>Senden Sie eine Chatnachricht oder ein Datenpaket an alle, an gewählte Gruppen oder an gewählte Geräte.</p>
+  <ul>
+    <li>Wählen Sie die <strong>Empfänger</strong>, schreiben Sie dann die <strong>Nachricht</strong> oder wählen Sie ein <strong>Datenpaket</strong> (einschließlich Einstellungspaketen im Format <code>.pref</code>).</li>
+    <li><strong>Server-Kontakt:</strong> Der Server kann auf den Geräten als HQ-Kontakt erscheinen; Antworten auf seine Nachrichten landen im <strong>Posteingang</strong>.</li>
+    <li><strong>Geplante Sendungen:</strong> eine Nachricht oder ein Paket zu einer festgelegten Zeit, einmalig oder wiederholt (alle paar Stunden, täglich, werktags, an gewählten Tagen).</li>
+    <li><strong>Gesendet</strong> listet auf, was verschickt wurde.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-chat" data-group="Nachrichten" data-tab="chat" data-title="Chat-Protokoll">
+  <h2>Chat-Protokoll</h2>
+  <p>Standardmäßig aus. Wenn es eingeschaltet ist, zeichnet es den über den Server gesendeten Chat auf (All Chat Rooms, Team- und Gruppenchats, Einzelnachrichten), für Nachbesprechungen.</p>
+  <p>Durchsuchen Sie es, filtern Sie nach Unterhaltung, Absender und Zeit und exportieren Sie es als CSV oder JSON. Wie lange Nachrichten aufbewahrt werden, legen Sie unter <a data-goto="settings">Einstellungen → Datenaufbewahrung</a> fest.</p>
+</article>
+
+<article class="help-topic" id="help-connect" data-group="Server" data-tab="connect" data-title="Geräte verbinden">
+  <h2>Geräte verbinden</h2>
+  <p>Wege, ein Gerät auf den Server zu bringen, der einfachste zuerst.</p>
+  <h3>QR-Code (ATAK)</h3>
+  <ol>
+    <li>Wählen Sie auf dieser Seite (oder mit <em>QR</em> neben einem Benutzer unter <a data-goto="users">Benutzer</a>) den Benutzer, wie lange der Code gilt und ob er für ein einzelnes Gerät ist.</li>
+    <li><em>QR-Code erstellen</em> und mit der <strong>Kamera</strong> des Telefons scannen. ATAK öffnet sich und verbindet sich als dieser Benutzer. Niemand tippt ein Passwort ein.</li>
+  </ol>
+  <ul>
+    <li>Mit Let's Encrypt bindet sich ATAK mit dem Code ein. Auf einem lokalen Server lädt es stattdessen ein Verbindungspaket (über Port 8080) mit einem Zertifikat herunter; verwenden Sie solche Codes in vertrauenswürdigen Netzen.</li>
+    <li>Bis zu seinem Ablauf ist der Code wie ein Passwort: Veröffentlichen Sie ihn nicht. Codes mit <em>Nur ein Gerät</em> funktionieren 10 Minuten nach ihrer ersten Verwendung nicht mehr.</li>
+    <li><strong>Verlorenes oder neues Telefon:</strong> Kreuzen Sie <em>Neues Telefon: seine Geräte ersetzen</em> an. Wenn das neue Telefon den Code scannt, werden die anderen Geräte des Benutzers getrennt (Sie bestätigen vorher; bis zum Scan passiert nichts).</li>
+    <li><strong>QR-Bogen drucken…</strong> erstellt für eine Einweisung eine Karte pro Benutzer.</li>
+    <li><strong>iTAK:</strong> Wählen Sie <em>iTAK</em> unter <em>App</em>. Mit Let's Encrypt scannt iTAK den Code (Settings → Network → Servers → + → Scan QR), meldet sich an und bindet sich mit dem darin enthaltenen Einmalcode selbst ein. Auf einem lokalen Server lädt die Kamera des iPhones stattdessen ein Paket herunter, das Sie in iTAK mit <em>Upload Server Package</em> hinzufügen.</li>
+  </ul>
+  <h3>Die Code-Liste</h3>
+  <p>Wird live aktualisiert. <em>Geräte</em> zeigt, was jeder Code eingerichtet hat: <em>online</em> mit dem Rufzeichen, <em>offline</em>, <em>widerrufen</em> oder <em>nie verbunden</em>. Wenn ein Telefon den Code gescannt hat, das bereits als jemand anderes mit diesem Server verbunden war, starten Sie ATAK neu. <strong>Widerrufen</strong> stoppt einen Code; <strong>Trennen</strong> trennt außerdem die Geräte, die er eingerichtet hat.</p>
+  <h3>Andere Wege</h3>
+  <ul>
+    <li><strong>Verbindungspaket</strong> (jede App): Laden Sie es hier herunter und importieren Sie es auf dem Gerät. Mit gewähltem Benutzer enthält es ein Zertifikat für diesen, sodass sich die App ohne Anmeldung verbindet (eines pro Gerät; widerrufen Sie es unter Zertifikate). Ohne Benutzer fragen ATAK, WinTAK und TAKX nach Benutzername und Passwort und binden sich ein. Für iTAK wählen Sie <em>iTAK</em>.</li>
+    <li><strong>Adresse eintippen</strong> (Server mit Let's Encrypt): Fügen Sie den Server in der App hinzu, schalten Sie <em>Use authentication</em> und <em>Enroll for client certificate</em> ein und geben Sie Benutzername und Passwort ein.</li>
+    <li><strong>Die Anmeldeseite für Benutzer</strong> (Link unten) lässt Personen ihren eigenen QR-Code und ihre Pakete abrufen.</li>
+  </ul>
+  <h3>Ebenfalls hier</h3>
+  <ul>
+    <li><strong>Positionsverlauf:</strong> Zeichnen Sie die Wege der Geräte auf (standardmäßig aus) für Spuren, Wiedergabe und KML/GPX-Export, über die Schaltfläche <em>Verlauf</em> der Karte.</li>
+    <li><strong>Kartenquellen:</strong> Kachelquellen, die an die Kartenlisten der Geräte gesendet werden.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-federation" data-group="Server" data-tab="federation" data-title="Föderation">
+  <h2>Föderation</h2>
+  <p>Verbinden Sie diesen Server mit einem TAK Server oder einem anderen EdgeTAK, damit die Geräte beider Seiten gegenseitig Positionen, Markierungen und Chat sehen und die Datenpakete der anderen Seite erhalten.</p>
+  <h3>Mit einem TAK Server verbinden</h3>
+  <ol>
+    <li><strong>Mit einem Server verbinden</strong>, seine Adresse eingeben und wählen, wie die Anmeldung erfolgt: ein Zertifikat (Port 9001; der TAK Server muss der CA von EdgeTAK vertrauen, was <em>TAK Server EdgeTAK vertrauen lassen</em> mit dessen Admin-Anmeldung erledigt) oder ein Föderationstoken (Port 9002).</li>
+    <li><strong>Seine CA:</strong> <em>Vom Server abrufen</em>, den Fingerabdruck mit dem Administrator des Servers abgleichen und ihr vertrauen.</li>
+    <li>Speichern. Die Liste zeigt den Zustand der Verbindung und die Nachrichtenzahlen.</li>
+  </ol>
+  <h3>Andere Server verbinden lassen</h3>
+  <p>Schalten Sie <em>Anderen Servern Verbindungen erlauben auf Port 9001</em> ein. Ein Server, der sich verbindet, wartet unter <em>Wartet auf Freigabe</em>; prüfen Sie seinen Fingerabdruck und klicken Sie dann auf <em>Freigeben</em>.</p>
+  <p>Geben Sie auf einem TAK Server mit LDAP dem Föderationspartner EdgeTAK eine der Gruppen Ihrer Benutzer (<em>TAK-Server-Gruppen für EdgeTAK</em>), sonst fließt kein Verkehr.</p>
+</article>
+
+<article class="help-topic" id="help-settings" data-group="Server" data-tab="settings" data-title="Einstellungen">
+  <h2>Einstellungen</h2>
+  <ul>
+    <li><strong>Notfallalarme:</strong> Wenn jemand den Notfallknopf von ATAK drückt, zeigt jede geöffnete Konsole ein rotes Banner und gibt einen Alarmton aus, bis der Alarm bestätigt wird. Das Protokoll finden Sie hier.</li>
+    <li><strong>Alarme bei Kontaktverlust:</strong> ein gelber Alarm mit der letzten Position, wenn ein Gerät keine Meldungen mehr sendet (nicht, wenn sich jemand absichtlich abmeldet). Zum Ausschalten das Häkchen entfernen.</li>
+    <li><strong>Geofences:</strong> Zeichnen Sie eine Fläche oder einen Kreis und erhalten Sie einen Alarm, wenn Geräte sie betreten oder verlassen.</li>
+    <li><strong>Logo:</strong> <em>Logo hochladen…</em> setzt das Logo Ihrer Organisation an die Stelle des ◆-Zeichens in der Konsole, auf den Anmelde-, Registrierungs- und Kontoseiten und auf gedruckten QR-Bögen und erzeugt daraus die Symbole für den Browser-Tab und die installierte App. PNG, JPEG oder WebP; <em>Entfernen</em> stellt die Voreinstellung wieder her.</li>
+    <li><strong>Unverschlüsseltes TCP:</strong> Schalten Sie Port 8087 (unverschlüsselt, anonyme Geräte, die nur <code>__ANON__</code> sehen) ohne Neustart ein oder aus. Das Ausschalten schließt den Port und trennt diese Geräte. Wenn der Server eine Firewall hat, öffnen Sie 8087 auch dort (<code>sudo ufw allow 8087/tcp</code>).</li>
+    <li><strong>Mesh-Brücke:</strong> verbindet das Mesh von ATAK (Geräte, die Positionen und Chat per Multicast über WLAN oder MANET-Funkgeräte teilen, ohne Server) mit EdgeTAK. Kreuzen Sie die Schnittstelle an, an der die Funkgeräte hängen, wählen Sie die Gruppe, an die Empfangenes geht, und die Gruppen, die zurückgesendet werden, sowie was gesendet wird (Positionen, Chat, Notfälle, Zeichnungen). Funkteams und Serverbenutzer sehen sich dann gegenseitig, und Funkgeräte können Direktchats an Serverbenutzer senden.</li>
+    <li><strong>ZeroTier:</strong> Bringen Sie den Server in ein ZeroTier-Netz, damit Geräte ihn von überall erreichen, ohne Router-Ports zu öffnen. <em>ZeroTier installieren</em>, Ihrem Netz über seine ID beitreten und dann den Knoten dieses Servers in ZeroTier Central autorisieren. <em>Für Geräte verwenden</em> neben seiner ZeroTier-Adresse lässt die Pakete und QR-Codes der Seite „Verbinden“ dorthin zeigen.</li>
+    <li><strong>Fernzugriff (FRP):</strong> Erreichen Sie den Server von überall, ohne Router-Ports zu öffnen. Sie brauchen einen FRP-Server (frps) auf einem VPS oder einen Relay-Dienst. <em>Fernzugriff einrichten</em>, seine <code>frpc.toml</code> einfügen oder laden (oder <em>Mit einer Vorlage beginnen</em> und Server und Token eintragen), speichern und <em>Verbinden</em>. EdgeTAK lädt frpc herunter und hält es am Laufen. <em>Für Geräte verwenden</em> lässt Pakete und QR-Codes auf den FRP-Server zeigen.</li>
+    <li><strong>Flugzeuge und Schiffe:</strong> Live-Flugzeuge (ADS-B, von adsb.lol, adsb.fi oder einer eigenen URL: die <code>aircraft.json</code> Ihres eigenen Empfängers oder eine andere API, mit deren API-Schlüssel in einem Header oder in der URL) und Schiffe (AIS, von aisstream.io mit einem kostenlosen API-Schlüssel) in einem Gebiet, als Kartenmarkierungen an die Geräte gesendet. Legen Sie den Mittelpunkt fest (oder <em>Kartenmitte verwenden</em>) und dann für jeden Feed den Radius, ob er gesendet wird und an welche Gruppen. Sie erscheinen auch auf der Karte der Konsole als Ebenen Flugzeuge und Schiffe.</li>
+    <li><strong>Anmeldeschutz:</strong> sperrt eine Adresse nach zu vielen falschen Passwörtern. Tragen Sie Ihre eigenen Netze unter <em>Nie sperren</em> ein und heben Sie Sperren hier auf.</li>
+    <li><strong>Datenaufbewahrung:</strong> wie lange Pakete, Missionen, Nachrichten, das Chat-Protokoll und das Audit-Protokoll aufbewahrt werden. Vor dem Speichern wird angezeigt, was entfernt würde.</li>
+    <li><strong>Sicherung und Wiederherstellung:</strong> Laden Sie eine Sicherung herunter (oder planen Sie Sicherungen) und stellen Sie eine auf diesem oder einem neuen Server wieder her.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-webhooks" data-group="Server" data-tab="webhooks" data-title="Webhooks">
+  <h2>Webhooks</h2>
+  <p>Senden Sie Alarme an Discord, Slack, Microsoft Teams, ntfy (Benachrichtigungen auf dem Telefon) oder eine beliebige URL, damit man auch bei geschlossener Konsole davon erfährt.</p>
+  <ol>
+    <li>Besorgen Sie sich beim Dienst eine Webhook-URL (die Seite enthält die Schritte für jeden Dienst).</li>
+    <li><strong>Webhook hinzufügen</strong>, den Dienst wählen, die URL einfügen und die Alarme wählen: Notfälle, Geofences, Kontaktverlust, Registrierungen, administrative Änderungen, Serverzustand, gesperrte Anmeldungen.</li>
+    <li>Speichern und auf <strong>Test senden</strong> klicken.</li>
+  </ol>
+  <p>Beschränken Sie einen Webhook auf Gruppen, um nur von den Geräten dieser Benutzer zu erfahren.</p>
+</article>
+
+<article class="help-topic" id="help-extensions" data-group="Server" data-tab="extensions" data-title="Erweiterungen">
+  <h2>Erweiterungen</h2>
+  <p>Server-Plugins, die EdgeTAK um Funktionen erweitern, etwa Tracker- oder Funkbrücken, Exporte und Integrationen. Eine Erweiterung ist ein Programm (eine .zip mit einer <code>plugin.json</code>), das EdgeTAK ausführt und am Laufen hält.</p>
+  <ol>
+    <li><strong>Erweiterung installieren…</strong> und die .zip wählen. Wenn Sie eine neuere Version einer installierten Erweiterung installieren, wird sie aktualisiert und behält ihre Daten.</li>
+    <li>Prüfen Sie, was sie darf: CoT empfangen, CoT senden, Serverdaten lesen (Gruppen, Geräte, Missionen, Positionsverlauf) oder hier eine Seite anzeigen.</li>
+    <li>Wählen Sie die Gruppen, aus denen sie <em>CoT empfängt</em> und an die sie <em>CoT sendet</em>. Sie funktionieren wie die Gruppen eines Benutzers.</li>
+    <li><strong>Starten</strong> Sie sie. EdgeTAK startet sie erneut, wenn sie anhält, und wenn EdgeTAK startet.</li>
+  </ol>
+  <ul>
+    <li><strong>Seite öffnen</strong> zeigt ihre Seite mit ihren Einstellungen. <strong>Protokoll</strong> zeigt ihre Ausgaben, die erste Anlaufstelle, wenn sie sich falsch verhält.</li>
+    <li>Sie läuft auf dem Server wie jedes andere Programm; installieren Sie daher nur Erweiterungen, denen Sie vertrauen.</li>
+    <li>Wie Sie selbst eine schreiben, steht im <a href="https://github.com/brandongotak/EdgeTAK/blob/master/docs/extensions.md" target="_blank" rel="noopener">Leitfaden für Erweiterungen</a> (auf Englisch).</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-audit" data-group="Server" data-tab="audit" data-title="Audit-Protokoll">
+  <h2>Audit-Protokoll</h2>
+  <p>Jede Änderung durch einen Administrator, mit wer, von wo, was und ob es geklappt hat; außerdem Anmeldungen, fehlgeschlagene Anmeldungen, gesperrte Adressen, Geräteeinbindungen und verwendete QR-Codes. Passwörter und Schlüssel werden nie aufgezeichnet.</p>
+  <p>Durchsuchen Sie es, zeigen Sie nur Fehlschläge an und laden Sie es als CSV herunter. Wie lange es aufbewahrt wird, steht unter <a data-goto="settings">Einstellungen → Datenaufbewahrung</a> (standardmäßig für immer).</p>
+  <p><strong>Protokoll leeren…</strong> löscht nach Ihrer Bestätigung alle Einträge; laden Sie vorher eine CSV herunter, wenn Sie sie brauchen. Das Leeren selbst bleibt als erster Eintrag des neuen Protokolls stehen.</p>
+</article>
+
+<article class="help-topic" id="help-simulator" data-group="Server" data-tab="simulator" data-title="Simulator">
+  <h2>Simulator</h2>
+  <p>Lasttests: Simulierte Geräte verbinden sich wie ATAK, bewegen sich und senden Positionen (und Chat), damit Sie vor einer großen Veranstaltung sehen, wie der Server die Last bewältigt.</p>
+  <ul>
+    <li>Wählen Sie, wie viele Geräte, wie schnell sie beitreten, wie oft sie melden und wie lange der Test läuft, und verfolgen Sie dann live Verbindungen, Ereignisse pro Sekunde, Weiterleitungszeit, CPU und Arbeitsspeicher.</li>
+    <li>Sie verwenden ein temporäres Konto in der Gruppe <em>Simulator</em>, sodass echte Geräte sie nicht sehen; es wird entfernt, wenn der Test endet.</li>
+    <li>Der Verkehr wächst mit dem Quadrat der Geräteanzahl; beginnen Sie auf einem Raspberry Pi klein. Schalten Sie vorher den Positionsverlauf aus, wenn sie nicht aufgezeichnet werden sollen.</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-account" data-group="Mehr" data-title="Mein Konto und Zwei-Faktor-Anmeldung">
+  <h2>Mein Konto und Zwei-Faktor-Anmeldung</h2>
+  <p>Alle melden sich auf derselben Seite an: Administratoren gelangen weiter zu dieser Konsole, Benutzer zu ihrer <strong>Kontoseite</strong>, wo sie einen QR-Code für ihr Telefon und Verbindungspakete erhalten, ihre Geräte und Zertifikate sehen, das Zertifikat eines verlorenen Geräts widerrufen und ihr Passwort ändern.</p>
+  <p><strong>Zwei-Faktor-Anmeldung</strong> (optional): Schalten Sie sie auf der Kontoseite ein (oder für sich selbst unter <a data-goto="users">Benutzer</a>), scannen Sie den Code mit einer Authenticator-App und bewahren Sie die Wiederherstellungscodes auf. TAK-Apps verwenden weiterhin das Passwort. Wenn jemand sein Telefon verliert, kann ein Admin unter „Benutzer“ <em>2FA zurücksetzen</em>.</p>
+</article>
+
+<article class="help-topic" id="help-trouble" data-group="Mehr" data-title="Fehlerbehebung">
+  <h2>Fehlerbehebung</h2>
+  <ul>
+    <li><strong>Ein Gerät kann sich nicht verbinden:</strong> Prüfen Sie, ob der <em>Öffentliche Host</em> in der Übersicht eine Adresse ist, die das Telefon erreichen kann, und ob die Ports offen sind (8089 für Geräte, 8443 für die API, 8446 für die Einrichtung). Ist der Benutzer deaktiviert oder das Zertifikat widerrufen?</li>
+    <li><strong>Ein QR-Code zeigt „nie verbunden“:</strong> Das Telefon war wahrscheinlich bereits als jemand anderes mit diesem Server verbunden. Starten Sie ATAK neu (oder entfernen Sie den Server in ATAK und scannen Sie erneut).</li>
+    <li><strong>Geräte sehen sich nicht:</strong> Sie brauchen eine gemeinsame Gruppe („ein“ auf der einen Seite, „aus“ auf der anderen). Prüfen Sie <em>Gruppen</em> bei jedem Benutzer.</li>
+    <li><strong>Jemand ist ausgesperrt:</strong> Sehen Sie unter <em>Derzeit gesperrt</em> in <a data-goto="settings">Einstellungen → Anmeldeschutz</a> nach.</li>
+    <li><strong>Sehen, was ein Gerät tut:</strong> Setzen Sie <code>log_level</code> auf <code>debug</code> und verfolgen Sie das Serverprotokoll (<code>journalctl -u edgetak -f</code>); jede Anfrage wird aufgeführt.</li>
+    <li>Das vollständige Handbuch ist die README auf <a href="https://github.com/brandongotak/EdgeTAK#readme" target="_blank" rel="noopener">GitHub</a>.</li>
+  </ul>
+</article>

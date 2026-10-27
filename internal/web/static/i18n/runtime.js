@@ -1,5 +1,6 @@
 // EdgeTAK translations. /admin/i18n.js sends the chosen language's
-// dictionary (English text -> translation, {0}, {1}... standing for values)
+// dictionary (English text -> translation, {0}, {1}... standing for values,
+// {1|Gerät|Geräte} choosing a word by whether the English value is empty)
 // followed by this file, which swaps English text in the page for it: text
 // in the HTML, text the pages add later, a few attributes, and confirm,
 // alert and prompt messages. Text without a translation stays English.
@@ -54,10 +55,18 @@
         // sentence that merely contains its words, nor reach across a
         // " · " that joins separate pieces of text.
         if (!m || key.length - p.litLen > 3 * p.litLen + 20) continue;
+        // Nor take a run of words as a value ("{0} received" in "Post to a
+        // channel when a webhook request is received"): values are numbers,
+        // names, times.
+        if (p.litLen < 12 && m.slice(1).some((c) => (c.match(/ /g) || []).length >= 4)) continue;
         if (!p.lits.some((l) => l.includes('·')) && m.slice(1).some((c) => c.includes(' · '))) continue;
-        out = p.v.replace(/\{(\d+)\}/g, (_, n) => {
+        // {n|one|many}: where the English adds a plural ending ("device{1}"
+        // with "" or "s"), the first form when its value is empty.
+        out = p.v.replace(/\{(\d+)(?:\|([^|}]*)\|([^}]*))?\}/g, (_, n, one, many) => {
           const i = p.order.indexOf(Number(n));
-          return i < 0 ? '' : value(m[i + 1]);
+          if (i < 0) return '';
+          if (one !== undefined) return m[i + 1].trim() === '' ? one : many;
+          return value(m[i + 1]);
         });
         break;
       }

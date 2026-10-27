@@ -16,8 +16,10 @@ func TestPickLanguage(t *testing.T) {
 	for _, tc := range []struct{ cookie, accept, want string }{
 		{"", "", "en"},
 		{"", "fr-CA,fr;q=0.9,en;q=0.8", "fr"},
-		{"", "de-DE,es;q=0.5,fr;q=0.7", "fr"},
-		{"", "de, ja", "en"},
+		{"", "pt-BR,es;q=0.5,fr;q=0.7", "fr"},
+		{"", "de-DE,en;q=0.5", "de"},
+		{"", "it", "it"},
+		{"", "pt, ja", "en"},
 		{"es", "fr", "es"},
 		{"xx", "fr", "fr"},
 		{"en", "es", "en"},
@@ -38,11 +40,11 @@ func TestPickLanguage(t *testing.T) {
 // TestDictionaries checks every translation keeps its English text's
 // {0}, {1}... placeholders, and that each language has a Help page.
 func TestDictionaries(t *testing.T) {
-	ph := regexp.MustCompile(`\{\d+\}`)
+	ph := regexp.MustCompile(`\{(\d+)(?:\|[^}]*)?\}`) // {n}, or {n|singular|plural}
 	count := func(s string) map[string]int {
 		m := map[string]int{}
-		for _, p := range ph.FindAllString(s, -1) {
-			m[p]++
+		for _, p := range ph.FindAllStringSubmatch(s, -1) {
+			m[p[1]] = 1 // a value may appear more than once
 		}
 		return m
 	}

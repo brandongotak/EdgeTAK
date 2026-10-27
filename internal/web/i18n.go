@@ -14,7 +14,7 @@ import (
 // The language is the edgetak_lang cookie (the language picker), else the
 // browser's Accept-Language, else English.
 
-var languages = []string{"en", "es", "fr"}
+var languages = []string{"en", "es", "fr", "de", "it"}
 
 func pickLanguage(r *http.Request) string {
 	if c, err := r.Cookie("edgetak_lang"); err == nil && slices.Contains(languages, c.Value) {

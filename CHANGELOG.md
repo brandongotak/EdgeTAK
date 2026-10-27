@@ -33,9 +33,18 @@ radio teams and server users see each other.
 - **Status:** the card shows the interfaces, traffic each way, and the
   devices heard lately.
 
+**German and Italian.** The console, the account, sign-in and sign-up
+pages and Help are also in German and Italian. They are picked from the
+browser's language, or from the language menu (DE, IT).
+
 **Fixed:** on the Plugins page, the buttons for each plugin (Treat as
 app or plugin, Change icon, Download, Delete) are under its name, so the
 list fits beside the map without scrolling sideways.
+
+## v1.12.0-rc.3 (2026-10-26)
+
+The third release candidate for v1.12.0: German and Italian. A
+pre-release.
 
 ## v1.12.0-rc.2 (2026-10-26)
 
