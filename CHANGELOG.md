@@ -33,22 +33,28 @@ radio teams and server users see each other.
 - **Status:** the card shows the interfaces, traffic each way, and the
   devices heard lately.
 
+**Data package groups.** Choose which groups a data package is for. On
+the Data Packages page, **Groups** on each package changes them, and the
+upload form has **Available to** to choose them when uploading (none
+chosen keeps the uploader's groups, as before). Devices that already
+downloaded a package keep their copy. A package's buttons are now under
+its name, so the list fits beside the map.
+
 **German and Italian.** The console, the account, sign-in and sign-up
 pages and Help are also in German and Italian. They are picked from the
 browser's language, or from the language menu (DE, IT).
 
-**Fixed: TROP couldn't connect.** TROP (an iOS TAK client) enrolled, then
-said "check credentials". EdgeTAK now answers enrollment as TAK Server,
-OpenTAKServer and FreeTAKServer do, which TROP works with:
+**Enrollment closer to other TAK servers.** While looking into TROP (an
+iOS TAK client that enrolls but doesn't connect yet), EdgeTAK's enrollment
+now matches TAK Server, OpenTAKServer and FreeTAKServer more closely:
 
 - The certificate settings reply (`tls/config`) carries only the name
-  entries. EdgeTAK also sent the certificate validity, which no client
-  reads.
+  entries, without the certificate validity, which no client reads.
 - Device certificates list the user name first in the subject, and carry
   basic constraints and a key identifier.
 - Enrollment on the API port (8443) from clients without a certificate or
   User-Agent gets the connection dropped, as on servers that require a
-  certificate there, so TROP uses the enrollment port (8446).
+  certificate there.
 
 **Fixed: TAK Aware enrollment.** iOS clients are now recognised by Apple's
 networking stack (CFNetwork, Darwin) as well as by name, so TAK Aware gets
@@ -59,6 +65,11 @@ TAK Aware rejects one long line.
 **Fixed:** on the Plugins page, the buttons for each plugin (Treat as
 app or plugin, Change icon, Download, Delete) are under its name, so the
 list fits beside the map without scrolling sideways.
+
+## v1.12.0-rc.6 (2026-10-27)
+
+The sixth release candidate for v1.12.0: choosing which groups a data
+package is for. A pre-release.
 
 ## v1.12.0-rc.5 (2026-10-27)
 

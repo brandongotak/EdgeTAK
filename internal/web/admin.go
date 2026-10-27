@@ -42,6 +42,7 @@ func (s *Server) adminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/api/packages", s.admin(func(w http.ResponseWriter, r *http.Request, _ *identity) {
 		writeJSON(w, http.StatusOK, s.Store.Packages())
 	}))
+	mux.HandleFunc("PUT /admin/api/packages/{hash}/groups", s.admin(s.setPackageGroups))
 	mux.HandleFunc("DELETE /admin/api/packages/{hash}", s.admin(func(w http.ResponseWriter, r *http.Request, _ *identity) {
 		if err := s.removePackage(r.PathValue("hash")); err != nil {
 			jsonError(w, http.StatusNotFound, "package not found")
@@ -481,4 +482,40 @@ func (s *Server) revokeCert(w http.ResponseWriter, r *http.Request, id *identity
 	}
 	s.Log.Info("certificate revoked", "admin", id.Username, "serial", serial)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// setPackageGroups chooses which groups can see and download a data package.
+func (s *Server) setPackageGroups(w http.ResponseWriter, r *http.Request, id *identity) {
+	var req struct {
+		Groups []string `json:"groups"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	groups := []string{}
+	for _, g := range req.Groups {
+		if _, ok := s.Store.Group(g); !ok {
+			jsonError(w, http.StatusBadRequest, "no such group: "+g)
+			return
+		}
+		if !slices.Contains(groups, g) {
+			groups = append(groups, g)
+		}
+	}
+	if len(groups) == 0 {
+		jsonError(w, http.StatusBadRequest, "Pick at least one group")
+		return
+	}
+	hash := strings.ToLower(r.PathValue("hash"))
+	if err := s.Store.UpdatePackage(hash, func(p *store.Package) { p.Groups = groups }); err != nil {
+		jsonError(w, http.StatusNotFound, "package not found")
+		return
+	}
+	p, _ := s.Store.Package(hash)
+	s.Log.Info("data package groups changed", "admin", id.Username, "package", p.Name, "groups", groups)
+	if s.Federation != nil {
+		go s.Federation.PackageStored(p) // federates now sharing a group get it
+	}
+	writeJSON(w, http.StatusOK, p)
 }

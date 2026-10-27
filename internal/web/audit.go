@@ -45,6 +45,7 @@ var auditActions = map[string]string{
 	"DELETE /admin/api/maps/{file}":                      "Deleted offline map",
 	"DELETE /admin/api/missions/{name}":                  "Deleted mission",
 	"DELETE /admin/api/overlays/{id}":                    "Deleted overlay",
+	"PUT /admin/api/packages/{hash}/groups":              "Changed data package groups",
 	"DELETE /admin/api/packages/{hash}":                  "Deleted data package",
 	"DELETE /admin/api/profiles/{id}":                    "Deleted device profile",
 	"DELETE /admin/api/profiles/{id}/files/{name}":       "Removed device profile file",

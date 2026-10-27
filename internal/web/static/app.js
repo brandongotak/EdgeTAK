@@ -2569,21 +2569,23 @@ $('#chat-clear').addEventListener('click', guard(async () => {
 // ---------- packages ----------
 
 async function loadPackages() {
-  const pkgs = await api('GET', 'api/packages');
+  const [pkgs, groups] = await Promise.all([api('GET', 'api/packages'), api('GET', 'api/groups')]);
+  allGroups = groups;
+  renderChips('#package-upload-groups', checkedIn('#package-upload-groups'));
   packagesByHash = Object.fromEntries(pkgs.map((p) => [p.hash, p]));
   const onMap = (h) => packageLayers.has(h) && map?.hasLayer(packageLayers.get(h).layer);
   $('#packages-table tbody').innerHTML = pkgs.map((p) => `<tr>
-    <td><strong>${esc(p.name)}</strong><div class="muted mono" title="${esc(p.hash)}">${esc(p.hash.slice(0, 16))}…</div></td>
+    <td class="pkg-name"><strong>${esc(p.name)}</strong><div class="muted mono" title="${esc(p.hash)}">${esc(p.hash.slice(0, 16))}…</div>
+      <div class="row-actions">
+        <button class="small" data-map="${esc(p.hash)}">${onMap(p.hash) ? 'Hide from map' : 'Show on map'}</button>
+        <a class="button small" href="/Marti/sync/content?hash=${esc(p.hash)}">Download</a>
+        <button class="small" data-groups="${esc(p.hash)}">Groups</button>
+        <button class="small danger" data-del="${esc(p.hash)}" data-name="${esc(p.name)}">Delete</button>
+      </div></td>
     <td>${bytes(p.size)}</td>
-    <td>${esc(p.submitter)}${p.creator_uid ? `<div class="muted mono">${esc(p.creator_uid)}</div>` : ''}</td>
+    <td>${esc(p.submitter)}${p.creator_uid ? `<div class="muted mono">${esc(p.creator_uid)}</div>` : ''}<div class="muted">${esc(date(p.submitted))}</div></td>
     <td>${groupPills(p.groups)}</td>
-    <td>${p.tool === 'public' ? '<span class="pill ok">public</span>' : `<span class="pill">${esc(p.tool || 'private')}</span>`}</td>
-    <td>${esc(date(p.submitted))}</td>
-    <td class="actions">
-      <button class="small" data-map="${esc(p.hash)}">${onMap(p.hash) ? 'Hide from map' : 'Show on map'}</button>
-      <a class="button small" href="/Marti/sync/content?hash=${esc(p.hash)}">Download</a>
-      <button class="small danger" data-del="${esc(p.hash)}" data-name="${esc(p.name)}">Delete</button>
-    </td></tr>`).join('') || emptyRow(7, 'No data packages');
+    <td>${p.tool === 'public' ? '<span class="pill ok">public</span>' : `<span class="pill">${esc(p.tool || 'private')}</span>`}</td></tr>`).join('') || emptyRow(5, 'No data packages');
 }
 
 // ---------- offline maps ----------
@@ -3124,9 +3126,14 @@ $('#package-form').addEventListener('submit', guard(async (e) => {
   if (!file) return;
   const fd = new FormData();
   fd.append('assetfile', file, file.name);
-  await api('POST', `/Marti/sync/missionupload?filename=${encodeURIComponent(file.name)}&creatorUid=admin-console`, fd);
+  const groups = checkedIn('#package-upload-groups');
+  const url = await (await api('POST', `/Marti/sync/missionupload?filename=${encodeURIComponent(file.name)}&creatorUid=admin-console`, fd)).text();
+  if (groups.length) {
+    const hash = new URL(url.trim(), location.href).searchParams.get('hash');
+    await api('PUT', `api/packages/${hash}/groups`, { groups });
+  }
   e.target.reset();
-  toast('Package uploaded');
+  toast(groups.length ? `Package uploaded for ${groups.join(', ')}` : 'Package uploaded');
   loadPackages();
 }));
 
@@ -3139,11 +3146,35 @@ $('#packages-table').addEventListener('click', guard(async (e) => {
     loadPackages();
     return;
   }
+  const edit = e.target.dataset.groups;
+  if (edit) {
+    const p = packagesByHash[edit];
+    $('#package-groups-title').textContent = `Groups for ${p.name}`;
+    renderChips('#package-groups-list', p.groups);
+    $('#package-groups-dialog').dataset.hash = edit;
+    $('#package-groups-dialog').showModal();
+    return;
+  }
   const hash = e.target.dataset.del;
   if (!hash || !confirm(`Delete ${e.target.dataset.name}?`)) return;
   forgetPackage(hash);
   await api('DELETE', `api/packages/${hash}`);
   toast('Package deleted');
+  loadPackages();
+}));
+
+$('#package-groups-form').addEventListener('submit', guard(async (e) => {
+  const dialog = $('#package-groups-dialog');
+  if (e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  const groups = checkedIn('#package-groups-list');
+  if (!groups.length) {
+    toast('Pick at least one group', true);
+    return;
+  }
+  const p = await api('PUT', `api/packages/${dialog.dataset.hash}/groups`, { groups });
+  dialog.close();
+  toast(`${p.name}: available to ${groups.join(', ')}`);
   loadPackages();
 }));
 

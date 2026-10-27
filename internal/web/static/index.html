@@ -843,15 +843,33 @@
     <section id="tab-packages" class="tab" hidden>
       <div class="card">
         <h2>Upload data package</h2>
-        <form id="package-form" class="inline-form">
-          <input type="file" name="assetfile" required>
-          <button class="primary" type="submit">Upload</button>
+        <form id="package-form" class="stack wide">
+          <div class="inline-form">
+            <input type="file" name="assetfile" required>
+            <button class="primary" type="submit">Upload</button>
+          </div>
+          <div>
+            <div class="muted picker-label">Available to (none chosen: your own groups)</div>
+            <div id="package-upload-groups" class="group-picker"></div>
+          </div>
         </form>
       </div>
+      <dialog id="package-groups-dialog" class="card dialog">
+        <form method="dialog" id="package-groups-form" class="stack wide">
+          <h2 id="package-groups-title">Groups</h2>
+          <p class="muted">Devices and users in these groups can see and download the package. Devices that already downloaded it keep their copy.</p>
+          <div id="package-groups-list" class="group-picker"></div>
+          <div class="inline-form">
+            <span class="spacer"></span>
+            <button value="cancel" formnovalidate>Cancel</button>
+            <button class="primary" value="save">Save</button>
+          </div>
+        </form>
+      </dialog>
       <div class="card">
         <h2>Data packages</h2>
         <div class="table-wrap"><table id="packages-table">
-          <thead><tr><th>Name</th><th>Size</th><th>Submitted by</th><th>Groups</th><th>Visibility</th><th>Submitted</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Size</th><th>Submitted by</th><th>Groups</th><th>Visibility</th></tr></thead>
           <tbody></tbody>
         </table></div>
       </div>
