@@ -38,12 +38,17 @@ pages and Help are also in German and Italian. They are picked from the
 browser's language, or from the language menu (DE, IT).
 
 **Fixed: TROP couldn't connect.** TROP (an iOS TAK client) enrolled, then
-said "check credentials". It tries the API port (8443) first and moves to
-the enrollment port (8446) when 8443 turns it away, as servers that require
-a client certificate there do. EdgeTAK let it enroll on 8443, which TROP
-can't use. Enrollment requests on 8443 from clients without a certificate
-or User-Agent now get the connection dropped, so TROP enrolls on 8446.
-Other clients can still enroll on 8443.
+said "check credentials". EdgeTAK now answers enrollment as TAK Server,
+OpenTAKServer and FreeTAKServer do, which TROP works with:
+
+- The certificate settings reply (`tls/config`) carries only the name
+  entries. EdgeTAK also sent the certificate validity, which no client
+  reads.
+- Device certificates list the user name first in the subject, and carry
+  basic constraints and a key identifier.
+- Enrollment on the API port (8443) from clients without a certificate or
+  User-Agent gets the connection dropped, as on servers that require a
+  certificate there, so TROP uses the enrollment port (8446).
 
 **Fixed: TAK Aware enrollment.** iOS clients are now recognised by Apple's
 networking stack (CFNetwork, Darwin) as well as by name, so TAK Aware gets
@@ -54,6 +59,11 @@ TAK Aware rejects one long line.
 **Fixed:** on the Plugins page, the buttons for each plugin (Treat as
 app or plugin, Change icon, Download, Delete) are under its name, so the
 list fits beside the map without scrolling sideways.
+
+## v1.12.0-rc.5 (2026-10-27)
+
+The fifth release candidate for v1.12.0: enrollment replies and device
+certificates laid out as FreeTAKServer's, for TROP. A pre-release.
 
 ## v1.12.0-rc.4 (2026-10-27)
 

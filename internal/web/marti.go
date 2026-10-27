@@ -96,13 +96,16 @@ func (s *Server) enrollPort(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// tlsConfig tells the client which subject entries to put in its CSR. It
+// carries nothing else, as TAK Server, OpenTAKServer and FreeTAKServer send
+// it: TROP enrolled but never connected while it also had validityDays.
 func (s *Server) tlsConfig(w http.ResponseWriter, r *http.Request, _ *identity) {
 	w.Header().Set("Content-Type", "application/xml")
 	fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
 		`<ns2:certificateConfig xmlns="http://bbn.com/marti/xml/config" xmlns:ns2="com.bbn.marti.config">`+
 		`<nameEntries><nameEntry name="O" value="%s"/><nameEntry name="OU" value="%s"/></nameEntries>`+
-		`<validityDays>%d</validityDays></ns2:certificateConfig>`,
-		xmlEscape(s.Cfg.CertOrg), xmlEscape(s.Cfg.CertOrgUnit), int(s.CA.ClientValidity().Hours()/24))
+		`</ns2:certificateConfig>`,
+		xmlEscape(s.Cfg.CertOrg), xmlEscape(s.Cfg.CertOrgUnit))
 }
 
 // issueFromCSR signs the CSR in the request body for the caller and records

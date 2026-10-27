@@ -7,9 +7,11 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
@@ -191,19 +193,52 @@ func (ca *CA) issueClient(pub any, cn string) (*x509.Certificate, error) {
 	if notAfter.After(ca.Cert.NotAfter) {
 		notAfter = ca.Cert.NotAfter
 	}
+	ski, err := subjectKeyID(pub)
+	if err != nil {
+		return nil, err
+	}
+	// Laid out as FreeTAKServer issues them, which TROP accepts: the subject
+	// CN first, then O and OU; basic constraints (not a CA); a key identifier.
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: cn, Organization: []string{ca.org}, OrganizationalUnit: []string{ca.ou}},
-		NotBefore:    now.Add(-time.Hour),
-		NotAfter:     notAfter,
-		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		Subject: pkix.Name{ExtraNames: []pkix.AttributeTypeAndValue{
+			{Type: oidCommonName, Value: cn}, {Type: oidOrganization, Value: ca.org}, {Type: oidOrganizationalUnit, Value: ca.ou},
+		}},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		SubjectKeyId:          ski,
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca.Cert, pub, ca.key)
 	if err != nil {
 		return nil, err
 	}
 	return x509.ParseCertificate(der)
+}
+
+var (
+	oidCommonName         = asn1.ObjectIdentifier{2, 5, 4, 3}
+	oidOrganization       = asn1.ObjectIdentifier{2, 5, 4, 10}
+	oidOrganizationalUnit = asn1.ObjectIdentifier{2, 5, 4, 11}
+)
+
+// subjectKeyID is the SHA-1 of the public key's bits (RFC 5280 method 1).
+func subjectKeyID(pub any) ([]byte, error) {
+	der, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		return nil, err
+	}
+	var spki struct {
+		Algorithm pkix.AlgorithmIdentifier
+		Key       asn1.BitString
+	}
+	if _, err := asn1.Unmarshal(der, &spki); err != nil {
+		return nil, err
+	}
+	sum := sha1.Sum(spki.Key.Bytes)
+	return sum[:], nil
 }
 
 // TrustStoreP12 returns the CA as a password-protected PKCS#12 truststore.

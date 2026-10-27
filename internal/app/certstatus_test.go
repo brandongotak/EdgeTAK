@@ -156,7 +156,12 @@ func TestCertificateValidity(t *testing.T) {
 	if a.Store.CertValidityDays() != 90 {
 		t.Error("not saved")
 	}
-	// Enrolling clients are told the new validity.
+	// New certificates get the new validity.
+	if cert, _, err := a.CA.NewClient("gina"); err != nil || cert.NotAfter.Sub(cert.NotBefore).Hours()/24 > 91 {
+		t.Errorf("new certificate validity: %v %v", err, cert.NotAfter.Sub(cert.NotBefore))
+	}
+	// tls/config carries only the name entries, as TAK Server, OpenTAKServer
+	// and FreeTAKServer send it: TROP rejects anything more.
 	hc := &http.Client{Transport: memTransport(&tls.Config{RootCAs: a.CA.Pool()})}
 	req, _ := http.NewRequest("GET", "https://"+a.Addrs["enroll"]+"/Marti/api/tls/config", nil)
 	req.SetBasicAuth("gina", "password-gina")
@@ -166,7 +171,7 @@ func TestCertificateValidity(t *testing.T) {
 	}
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if !strings.Contains(string(body), "<validityDays>90</validityDays>") {
+	if !strings.Contains(string(body), `<nameEntry name="O"`) || strings.Contains(string(body), "validityDays") {
 		t.Errorf("tls/config = %s", body)
 	}
 	// Saving only the warning period keeps the validity.
