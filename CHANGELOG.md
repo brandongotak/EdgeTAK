@@ -10,7 +10,7 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
-## v1.12.0 (2026-10-26)
+## v1.12.0 (2026-10-27)
 
 **Mesh bridge.** A **Mesh bridge** card on the Settings page connects
 ATAK's mesh to EdgeTAK. The mesh is devices sharing positions and chat over
@@ -37,9 +37,28 @@ radio teams and server users see each other.
 pages and Help are also in German and Italian. They are picked from the
 browser's language, or from the language menu (DE, IT).
 
+**Fixed: TROP couldn't connect.** TROP (an iOS TAK client) enrolled, then
+said "check credentials". It tries the API port (8443) first and moves to
+the enrollment port (8446) when 8443 turns it away, as servers that require
+a client certificate there do. EdgeTAK let it enroll on 8443, which TROP
+can't use. Enrollment requests on 8443 from clients without a certificate
+or User-Agent now get the connection dropped, so TROP enrolls on 8446.
+Other clients can still enroll on 8443.
+
+**Fixed: TAK Aware enrollment.** iOS clients are now recognised by Apple's
+networking stack (CFNetwork, Darwin) as well as by name, so TAK Aware gets
+the CA twice (`ca0` and `ca1`) as iTAK does. iOS clients get the
+certificates in 64-character lines again, as OpenTAKServer sends them:
+TAK Aware rejects one long line.
+
 **Fixed:** on the Plugins page, the buttons for each plugin (Treat as
 app or plugin, Change icon, Download, Delete) are under its name, so the
 list fits beside the map without scrolling sideways.
+
+## v1.12.0-rc.4 (2026-10-27)
+
+The fourth release candidate for v1.12.0: TROP and TAK Aware enrollment
+fixes. A pre-release.
 
 ## v1.12.0-rc.3 (2026-10-26)
 

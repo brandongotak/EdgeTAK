@@ -99,39 +99,59 @@ func TestEnrollmentForms(t *testing.T) {
 
 	// iTAK as it actually calls it: Accept */* with its User-Agent. It gets
 	// ca0 and ca1 as JSON; other clients keep the official ca0-only reply.
-	enrollAs := func(agent string) (string, map[string]string) {
-		req, _ := http.NewRequest("POST", "https://"+a.Addrs["enroll"]+"/Marti/api/tls/signClient/v2?clientUid=X",
+	enrollAt := func(listener, agent string) (string, map[string]string, error) {
+		req, _ := http.NewRequest("POST", "https://"+a.Addrs[listener]+"/Marti/api/tls/signClient/v2?clientUid=X",
 			bytes.NewReader([]byte(base64.StdEncoding.EncodeToString(der))))
 		req.SetBasicAuth("ios1", "ios1-password")
 		req.Header.Set("Accept", "*/*")
 		req.Header.Set("User-Agent", agent)
 		resp, err := hc.Do(req)
 		if err != nil {
-			t.Fatal(err)
+			return "", nil, err
 		}
 		defer resp.Body.Close()
 		var m map[string]string
 		json.NewDecoder(resp.Body).Decode(&m)
-		return resp.Header.Get("Content-Type"), m
+		return resp.Header.Get("Content-Type"), m, nil
+	}
+	enrollAs := func(agent string) (string, map[string]string) {
+		ct, m, err := enrollAt("enroll", agent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ct, m
 	}
 	if ct, m := enrollAs("iTAK%20App%20Store/651 CFNetwork/3896.100.1.2.1 Darwin/27.0.0"); ct != "application/json" || m["ca1"] == "" || m["ca1"] != m["ca0"] {
 		t.Errorf("iTAK */* enrollment: %q %v", ct, m)
 	}
-	// TROP sends no User-Agent and needs ca1 too, and, like any iOS
-	// decoder, base64 without line breaks.
-	ct, m := enrollAs("")
-	if ct != "application/json" || m["ca1"] == "" || m["ca1"] != m["ca0"] {
-		t.Errorf("TROP enrollment: %q %v", ct, m)
-	}
-	for _, k := range []string{"signedCert", "ca0"} {
-		raw, err := base64.StdEncoding.Strict().DecodeString(m[k])
-		if err != nil || strings.Contains(m[k], "\n") {
-			t.Errorf("TROP %s isn't one-line base64: %v", k, err)
-		} else if _, err := x509.ParseCertificate(raw); err != nil {
-			t.Errorf("TROP %s: %v", k, err)
+	// TAK Aware and TROP (no User-Agent) need ca1 too, and the base64 in
+	// 64-character lines: TAK Aware's PEM parser rejects one long line.
+	for _, agent := range []string{"TAKAware/1.0 CFNetwork/3826.500.131 Darwin/24.5.0", ""} {
+		ct, m := enrollAs(agent)
+		if ct != "application/json" || m["ca1"] == "" || m["ca1"] != m["ca0"] {
+			t.Errorf("enrollment as %q: %q %v", agent, ct, m)
+		}
+		for _, k := range []string{"signedCert", "ca0"} {
+			lines := strings.Split(m[k], "\n")
+			raw, err := base64.StdEncoding.DecodeString(strings.Join(lines, ""))
+			if err != nil || len(lines) < 2 || len(lines[0]) != 64 {
+				t.Errorf("%q %s isn't base64 in 64-character lines: %v", agent, k, err)
+			} else if _, err := x509.ParseCertificate(raw); err != nil {
+				t.Errorf("%q %s: %v", agent, k, err)
+			}
 		}
 	}
 	if _, m := enrollAs("TAK/5.5 (Android)"); m["ca0"] == "" || m["ca1"] != "" || !strings.Contains(m["signedCert"], "\n") {
 		t.Errorf("non-iTAK enrollment changed: %v", m)
+	}
+
+	// TROP tries the API port first and only moves to the enrollment port
+	// when that connection fails, so there it gets the connection dropped.
+	// Clients that identify themselves still enroll on the API port.
+	if _, m, err := enrollAt("https", ""); err == nil {
+		t.Errorf("TROP enrolled on the API port: %v", m)
+	}
+	if _, m, err := enrollAt("https", "TAK/5.5 (Android)"); err != nil || m["signedCert"] == "" {
+		t.Errorf("ATAK enrollment on the API port: %v %v", err, m)
 	}
 }

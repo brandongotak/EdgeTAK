@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -37,9 +37,9 @@ func (s *Server) martiRoutes(mux *http.ServeMux) {
 	})
 
 	// Certificate enrollment (ATAK/WinTAK/iTAK "enroll for client certificate").
-	mux.HandleFunc("GET /Marti/api/tls/config", s.named(s.tlsConfig))
-	mux.HandleFunc("POST /Marti/api/tls/signClient/v2", s.named(s.signClient))
-	mux.HandleFunc("POST /Marti/api/tls/signClient", s.named(s.signClientV1))
+	mux.HandleFunc("GET /Marti/api/tls/config", s.enrollPort(s.named(s.tlsConfig)))
+	mux.HandleFunc("POST /Marti/api/tls/signClient/v2", s.enrollPort(s.named(s.signClient)))
+	mux.HandleFunc("POST /Marti/api/tls/signClient", s.enrollPort(s.named(s.signClientV1)))
 	// Device profiles pushed at enrollment and on every connect (official
 	// ProfileAPI). They carry the preferences that turn on ATAK's Channels.
 	mux.HandleFunc("GET /Marti/api/tls/profile/enrollment", s.named(s.deviceProfile("Enrollment")))
@@ -77,6 +77,24 @@ func (s *Server) martiRoutes(mux *http.ServeMux) {
 }
 
 // ---- enrollment ----
+
+// enrollPort turns TROP away from enrolling on the HTTPS API port. TROP
+// tries its API port (8443) first and moves to its CSR port (8446) when the
+// connection fails, as it does on servers that require a client certificate
+// there. Enrolled on 8443 it never connects ("check credentials"). Its
+// requests carry no User-Agent and, before enrolling, no certificate; they
+// get the connection dropped, like a certificate-required handshake.
+func (s *Server) enrollPort(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.UserAgent() == "" && (r.TLS == nil || len(r.TLS.PeerCertificates) == 0) && s.Addrs["enroll"] != "" {
+			if local, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok && port(local.String()) == port(s.Addrs["https"]) {
+				s.Log.Debug("enrollment on the API port refused; client should use the enrollment port", "path", r.URL.Path, "remote", r.RemoteAddr)
+				panic(http.ErrAbortHandler)
+			}
+		}
+		h(w, r)
+	}
+}
 
 func (s *Server) tlsConfig(w http.ResponseWriter, r *http.Request, _ *identity) {
 	w.Header().Set("Content-Type", "application/xml")
@@ -144,13 +162,12 @@ func (s *Server) signClient(w http.ResponseWriter, r *http.Request, id *identity
 	}
 	signed, ca := pki.PEMBody(cert), pki.PEMBody(s.CA.Cert)
 	accept := strings.ToLower(r.Header.Get("Accept"))
-	// iOS clients: iTAK, and TROP, which sends no User-Agent. They get
-	// ca1 (below) and the base64 on one line: iOS's decoder rejects the
-	// line breaks, so TROP failed with "check credentials".
-	iTAK := strings.Contains(r.UserAgent(), "iTAK") || r.UserAgent() == ""
-	if iTAK {
-		signed, ca = base64.StdEncoding.EncodeToString(cert.Raw), base64.StdEncoding.EncodeToString(s.CA.Cert.Raw)
-	}
+	// iOS clients: iTAK, TAK Aware, and TROP, which sends no User-Agent,
+	// recognised by Apple's networking stack rather than by app name. They
+	// get ca1 (below). The base64 stays in 64-character lines, as
+	// OpenTAKServer sends it: TAK Aware's PEM parser rejects one long line.
+	agent := strings.ToLower(r.UserAgent())
+	iTAK := agent == "" || strings.Contains(agent, "itak") || strings.Contains(agent, "cfnetwork") || strings.Contains(agent, "darwin")
 	switch {
 	case iTAK || strings.Contains(accept, "text/plain") && !strings.Contains(accept, "application/json"):
 		// iTAK quietly drops the reply unless it has the CA as both ca0 and
