@@ -275,6 +275,21 @@
   <p>Limit a webhook to groups to hear only about those users' devices.</p>
 </article>
 
+<article class="help-topic" id="help-apikeys" data-group="Server" data-tab="apikeys" data-title="API keys">
+  <h2>API keys</h2>
+  <p>Tokens for scripts and automations (Grafana, Home Assistant, your own scripts) to use EdgeTAK's REST API without a person's password or two-factor login.</p>
+  <ol>
+    <li>Give the key a name, choose the user it acts as, and optionally make it read-only or expire after some days.</li>
+    <li><strong>Make key</strong> and copy it right away: it is shown only once.</li>
+    <li>Send it over HTTPS as <code>Authorization: Bearer etk_…</code>, for example <code>curl -H "Authorization: Bearer etk_…" https://your-server:8443/admin/api/status</code>.</li>
+  </ol>
+  <ul>
+    <li>A key can do whatever its user can: everything, for an administrator. A read-only key can only read.</li>
+    <li>It stops working when you delete it, when it expires, or when its user is deleted or disabled.</li>
+    <li>The list shows when and from where each key was last used, and the <a data-goto="audit">audit log</a> names the key behind each change.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-extensions" data-group="Server" data-tab="extensions" data-title="Extensions">
   <h2>Extensions</h2>
   <p>Server plugins that add features to EdgeTAK, such as tracker or radio bridges, exports and integrations. An extension is a program (a .zip with a <code>plugin.json</code>) that EdgeTAK runs and keeps running.</p>

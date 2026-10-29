@@ -275,6 +275,21 @@
   <p>Limita un webhook a ciertos grupos para enterarte solo de los dispositivos de esos usuarios.</p>
 </article>
 
+<article class="help-topic" id="help-apikeys" data-group="Servidor" data-tab="apikeys" data-title="Claves de API">
+  <h2>Claves de API</h2>
+  <p>Tokens para que scripts y automatizaciones (Grafana, Home Assistant, tus propios scripts) usen la API REST de EdgeTAK sin la contraseña ni el inicio de sesión en dos pasos de una persona.</p>
+  <ol>
+    <li>Ponle un nombre a la clave, elige el usuario con el que actúa y, si quieres, hazla de solo lectura o haz que caduque tras unos días.</li>
+    <li><strong>Crear clave</strong> y cópiala enseguida: solo se muestra una vez.</li>
+    <li>Envíala por HTTPS como <code>Authorization: Bearer etk_…</code>, por ejemplo <code>curl -H "Authorization: Bearer etk_…" https://tu-servidor:8443/admin/api/status</code>.</li>
+  </ol>
+  <ul>
+    <li>Una clave puede hacer todo lo que puede su usuario: todo, si es administrador. Una clave de solo lectura solo puede leer.</li>
+    <li>Deja de funcionar cuando la borras, cuando caduca o cuando su usuario se borra o se desactiva.</li>
+    <li>La lista muestra cuándo y desde dónde se usó cada clave por última vez, y el <a data-goto="audit">registro de auditoría</a> indica la clave detrás de cada cambio.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-extensions" data-group="Servidor" data-tab="extensions" data-title="Extensiones">
   <h2>Extensiones</h2>
   <p>Plugins de servidor que añaden funciones a EdgeTAK, como puentes de rastreadores o de radio, exportaciones e integraciones. Una extensión es un programa (un .zip con un <code>plugin.json</code>) que EdgeTAK ejecuta y mantiene en marcha.</p>

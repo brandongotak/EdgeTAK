@@ -55,6 +55,7 @@
       <button data-tab="federation" data-section="server">Federation</button>
       <button data-tab="settings" data-section="server">Settings</button>
       <button data-tab="webhooks" data-section="server">Webhooks</button>
+      <button data-tab="apikeys" data-section="server">API keys</button>
       <button data-tab="extensions" data-section="server">Extensions</button>
       <button data-tab="audit" data-section="server">Audit log</button>
       <button data-tab="simulator" data-section="server">Simulator</button>
@@ -255,6 +256,33 @@
           <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
         </form>
       </dialog>
+    </section>
+
+    <section id="tab-apikeys" class="tab" hidden>
+      <div class="card">
+        <h2>New API key</h2>
+        <p class="muted">An API key lets a script or automation use EdgeTAK's REST API as a user, without their password or two-factor login: send it as <code>Authorization: Bearer etk_…</code> over HTTPS. It can do whatever that user can (everything, for an administrator); a read-only key can only read. Treat it like a password.</p>
+        <form id="apikey-form" class="inline-form">
+          <label>Name <input name="name" required maxlength="60" placeholder="Grafana"></label>
+          <label>User <select name="username" required></select></label>
+          <label class="inline-label">Expires after <input type="number" name="days" min="0" max="3650" value="0" class="days-input"> days <span class="muted">(0 = no expiry)</span></label>
+          <label class="inline-label"><input type="checkbox" name="read_only"> Read-only</label>
+          <button class="primary" type="submit">Make key</button>
+        </form>
+        <div id="apikey-new" class="stack" hidden>
+          <p><strong>Copy the key now.</strong> EdgeTAK keeps only a fingerprint of it and can't show it again.</p>
+          <code id="apikey-value" class="uri"></code>
+          <code class="uri muted" id="apikey-example"></code>
+          <div class="inline-form"><button type="button" id="apikey-copy">Copy key</button> <button type="button" class="ghost" id="apikey-done">Done</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>API keys</h2>
+        <div class="table-wrap"><table id="apikey-table">
+          <thead><tr><th>Key</th><th>Last used</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
     </section>
 
     <section id="tab-audit" class="tab" hidden>

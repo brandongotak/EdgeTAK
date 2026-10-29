@@ -234,6 +234,8 @@ type db struct {
 
 	EnrollCodes []EnrollCode `json:"enroll_codes,omitempty"`
 
+	APIKeys []APIKey `json:"api_keys,omitempty"`
+
 	// PlainTCPOff turns off the plain TCP streaming port (8087), which is
 	// on by default; PlainTCPOn turns it on where the configuration has no
 	// tcp_addr (installed with --no-plaintext).
@@ -2275,6 +2277,77 @@ func (s *Store) DeleteEnrollCode(id string) error {
 	for i := range s.db.EnrollCodes {
 		if s.db.EnrollCodes[i].ID == id {
 			s.db.EnrollCodes = slices.Delete(s.db.EnrollCodes, i, i+1)
+			return s.save()
+		}
+	}
+	return ErrNotFound
+}
+
+// ---- API keys ----
+
+// APIKey lets a script or automation use the REST API as Username, without
+// that user's password or second factor. ReadOnly keys can only read.
+type APIKey struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Username  string    `json:"username"`
+	Hash      string    `json:"hash"`   // sha256 of the key; the key itself isn't kept
+	Prefix    string    `json:"prefix"` // its first characters, to tell keys apart
+	ReadOnly  bool      `json:"read_only,omitempty"`
+	Expires   time.Time `json:"expires,omitzero"`
+	Created   time.Time `json:"created"`
+	CreatedBy string    `json:"created_by"`
+	LastUsed  time.Time `json:"last_used,omitzero"`
+	LastIP    string    `json:"last_ip,omitempty"`
+}
+
+func (s *Store) APIKeys() []APIKey {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return slices.Clone(s.db.APIKeys)
+}
+
+// APIKeyByHash finds the key whose sha256 is hash.
+func (s *Store) APIKeyByHash(hash string) (APIKey, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, k := range s.db.APIKeys {
+		if k.Hash == hash {
+			return k, true
+		}
+	}
+	return APIKey{}, false
+}
+
+func (s *Store) AddAPIKey(k APIKey) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.APIKeys = append(s.db.APIKeys, k)
+	return s.save()
+}
+
+// TouchAPIKey records a use of key id, saving at most once a minute.
+func (s *Store) TouchAPIKey(id string, at time.Time, ip string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.APIKeys {
+		if k := &s.db.APIKeys[i]; k.ID == id {
+			if at.Sub(k.LastUsed) < time.Minute && k.LastIP == ip {
+				return nil
+			}
+			k.LastUsed, k.LastIP = at, ip
+			return s.save()
+		}
+	}
+	return ErrNotFound
+}
+
+func (s *Store) DeleteAPIKey(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.APIKeys {
+		if s.db.APIKeys[i].ID == id {
+			s.db.APIKeys = slices.Delete(s.db.APIKeys, i, i+1)
 			return s.save()
 		}
 	}

@@ -20,10 +20,24 @@ address); EdgeTAK checks that the domain resolves and that it can open port
 host. The card shows whether the certificate is being requested, who issued
 it and when it expires.
 
+**API keys.** An **API keys** page under Server makes tokens for scripts
+and automations to use the REST API, sent as `Authorization: Bearer etk_…`
+over HTTPS. Each key acts as a user you choose, without their password or
+two-factor login; it can be read-only and can expire. The key is shown once
+and only its hash is kept. The list shows when and from where each key was
+last used, and the audit log names the key behind each change. Keys stop
+working when deleted, when they expire, or when their user is deleted or
+disabled. Only an administrator signed in to the console can make one.
+
 **Fixed:** on the Plugins page, the **Add** button for each tak.gov plugin
 is under its name, with its version and size, so the list fits beside the
 map without scrolling sideways. Its **Product** is a MIL, CIV or GOV
 dropdown instead of a box to type in.
+
+## v1.13.0-rc.3 (2026-10-29)
+
+API keys: an **API keys** page under Server makes tokens for scripts and
+automations to use the REST API. A pre-release.
 
 ## v1.13.0-rc.2 (2026-10-29)
 

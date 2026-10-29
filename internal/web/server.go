@@ -142,7 +142,9 @@ type identity struct {
 	OutGroups []string
 	Admin     bool
 	Anonymous bool
-	Session   bool // authenticated via admin console cookie
+	Session   bool   // authenticated via admin console cookie
+	APIKey    string // the name of the API key it authenticated with
+	ReadOnly  bool   // a read-only API key: GET and HEAD only
 }
 
 // Handler returns the HTTP handler. tlsListener reports whether it is served
@@ -185,6 +187,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.scheduleRoutes(mux)
 	s.loginGuardRoutes(mux)
 	s.enrollCodeRoutes(mux)
+	s.apiKeyRoutes(mux)
 	s.plainTCPRoutes(mux)
 	s.letsEncryptRoutes(mux)
 	s.zerotierRoutes(mux)
@@ -333,7 +336,7 @@ func isLoopback(remote string) bool {
 }
 
 // identify resolves the caller from (in order) a verified client certificate,
-// HTTP basic auth, or an admin session cookie. It returns nil when the request
+// an API key or OAuth token, HTTP basic auth, or an admin session cookie. It returns nil when the request
 // is unauthenticated and anonymous access is not permitted.
 func (s *Server) identify(r *http.Request) *identity {
 	if r.TLS != nil && len(r.TLS.VerifiedChains) > 0 {
@@ -342,6 +345,9 @@ func (s *Server) identify(r *http.Request) *identity {
 			return nil
 		}
 		return s.userIdentity(leaf.Subject.CommonName)
+	}
+	if id, ok := s.apiKeyIdentity(r); id != nil || !ok {
+		return id
 	}
 	if id := s.bearerIdentity(r); id != nil {
 		return id
@@ -378,6 +384,8 @@ func (s *Server) identify(r *http.Request) *identity {
 	}
 	return nil
 }
+
+const readOnlyKey = "this API key is read-only"
 
 func safeMethod(m string) bool { return m == http.MethodGet || m == http.MethodHead }
 
@@ -422,6 +430,10 @@ func (s *Server) authed(h handlerFunc) http.HandlerFunc {
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}
+		if id.ReadOnly && !safeMethod(r.Method) {
+			http.Error(w, readOnlyKey, http.StatusForbidden)
+			return
+		}
 		h(w, r, id)
 	}
 }
@@ -459,9 +471,14 @@ func (s *Server) adminIdentity(w http.ResponseWriter, r *http.Request) *identity
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "administrator required"})
 		return nil
 	}
+	if id.ReadOnly && !safeMethod(r.Method) {
+		jsonError(w, http.StatusForbidden, readOnlyKey)
+		return nil
+	}
 	// A password alone (basic auth, OAuth token, device certificate) must
-	// not get around an account's two-factor login.
-	if !id.Session {
+	// not get around an account's two-factor login. An API key can: an
+	// administrator signed in to the console made it.
+	if !id.Session && id.APIKey == "" {
 		if u, ok := s.Store.User(id.Username); ok && u.TwoFactor() {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "this account uses two-factor login; sign in to the admin console"})
 			return nil

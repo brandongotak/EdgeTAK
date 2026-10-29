@@ -24,6 +24,8 @@ import (
 
 // auditActions describes each admin route that changes something.
 var auditActions = map[string]string{
+	"DELETE /admin/api/api-keys/{id}":                    "Deleted an API key",
+	"POST /admin/api/api-keys":                           "Made an API key",
 	"DELETE /admin/api/apps/{id}":                        "Deleted plugin",
 	"DELETE /admin/api/backups/{name}":                   "Deleted backup",
 	"DELETE /admin/api/chat":                             "Cleared the chat log",
@@ -279,6 +281,12 @@ func (s *Server) auditTarget(r *http.Request, body []byte) string {
 					return c.Username
 				}
 			}
+		case strings.Contains(path, "/api-keys/"):
+			for _, k := range s.Store.APIKeys() {
+				if k.ID == id {
+					return k.Name + " (" + k.Username + ")"
+				}
+			}
 		case strings.Contains(path, "/schedules/"):
 			for _, c := range s.Store.Schedules() {
 				if c.ID == id {
@@ -360,7 +368,11 @@ func (s *Server) auditRequest(h handlerFunc, w http.ResponseWriter, r *http.Requ
 	if status == 0 {
 		status = http.StatusOK
 	}
-	e := audit.Entry{Actor: id.Username, IP: clientIP(r), Action: action, Target: target, Details: auditDetails(body),
+	actor := id.Username
+	if id.APIKey != "" {
+		actor += " (API key " + id.APIKey + ")"
+	}
+	e := audit.Entry{Actor: actor, IP: clientIP(r), Action: action, Target: target, Details: auditDetails(body),
 		Status: status, Failed: status >= 400}
 	s.Audit.Add(e)
 	if !e.Failed {

@@ -275,6 +275,21 @@
   <p>Limitez un webhook à des groupes pour n'être prévenu que des appareils de ces utilisateurs.</p>
 </article>
 
+<article class="help-topic" id="help-apikeys" data-group="Serveur" data-tab="apikeys" data-title="Clés d'API">
+  <h2>Clés d'API</h2>
+  <p>Des jetons pour que des scripts et des automatisations (Grafana, Home Assistant, vos propres scripts) utilisent l'API REST d'EdgeTAK sans le mot de passe ni la connexion en deux étapes d'une personne.</p>
+  <ol>
+    <li>Donnez un nom à la clé, choisissez l'utilisateur au nom duquel elle agit et, si vous le souhaitez, mettez-la en lecture seule ou faites-la expirer après quelques jours.</li>
+    <li><strong>Créer la clé</strong> et copiez-la tout de suite : elle n'est affichée qu'une fois.</li>
+    <li>Envoyez-la en HTTPS comme <code>Authorization: Bearer etk_…</code>, par exemple <code>curl -H "Authorization: Bearer etk_…" https://votre-serveur:8443/admin/api/status</code>.</li>
+  </ol>
+  <ul>
+    <li>Une clé peut faire tout ce que son utilisateur peut faire : tout, pour un administrateur. Une clé en lecture seule ne peut que lire.</li>
+    <li>Elle cesse de fonctionner quand vous la supprimez, quand elle expire, ou quand son utilisateur est supprimé ou désactivé.</li>
+    <li>La liste indique quand et d'où chaque clé a servi pour la dernière fois, et le <a data-goto="audit">journal d'audit</a> nomme la clé derrière chaque modification.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-extensions" data-group="Serveur" data-tab="extensions" data-title="Extensions">
   <h2>Extensions</h2>
   <p>Des plugins de serveur qui ajoutent des fonctions à EdgeTAK, comme des passerelles de balises ou de radio, des exports et des intégrations. Une extension est un programme (un .zip avec un <code>plugin.json</code>) qu'EdgeTAK exécute et maintient en marche.</p>

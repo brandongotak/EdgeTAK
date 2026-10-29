@@ -156,6 +156,7 @@ const loaders = {
   federation: loadFederation,
   simulator: loadSim,
   webhooks: loadWebhooks,
+  apikeys: loadAPIKeys,
   extensions: loadExtensions,
   audit: () => loadAudit(),
   settings: () => Promise.all([loadLogo(), loadPlainTCP(), loadLetsEncrypt(), loadMesh(), loadZeroTier(), loadFRP(), loadFeeds(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
@@ -5958,6 +5959,65 @@ $('#hook-table').addEventListener('click', guard(async (e) => {
     toast(h.off ? `${h.name} is on` : `${h.name} is off`);
   }
   if (d.hookDel && confirm(`Delete the webhook ${h.name}?`)) renderWebhooks(await api('DELETE', `api/webhooks/${encodeURIComponent(h.id)}`));
+}));
+
+// ---------- API keys ----------
+
+let apiKeys = [];
+
+function renderAPIKeys(list) {
+  apiKeys = list;
+  const state = { expired: '<span class="pill warn">expired</span>', 'no user': '<span class="pill warn">user deleted or disabled</span>' };
+  $('#apikey-table tbody').innerHTML = list.map((k) => `<tr${k.state !== 'active' ? ' class="dim"' : ''}>
+    <td class="pkg-name"><div><strong>${esc(k.name)}</strong> <span class="pill">${esc(k.username)}</span>
+      ${k.read_only ? '<span class="pill">read-only</span>' : ''} ${state[k.state] || ''}</div>
+      <div class="muted mono">${esc(k.prefix)}…</div>
+      <div class="muted"><span>made ${esc(date(k.created))} by ${esc(k.created_by)}</span>${k.expires ? ` · <span>expires ${esc(date(k.expires))}</span>` : ''}</div>
+      <div class="row-actions"><button class="small danger" data-apikey-del="${esc(k.id)}">Delete</button></div></td>
+    <td>${k.last_used ? `<div title="${esc(date(k.last_used))}">${esc(ago(k.last_used))}</div><div class="muted mono">${esc(k.last_ip || '')}</div>` : '<span class="muted">never</span>'}</td></tr>`).join('')
+    || emptyRow(2, 'No API keys yet');
+}
+
+async function loadAPIKeys() {
+  const [list, users] = await Promise.all([api('GET', 'api/api-keys'), api('GET', 'api/users')]);
+  const sel = $('#apikey-form').username;
+  const keep = sel.value || $('#me').textContent;
+  sel.length = 0;
+  for (const u of users.filter((x) => !x.disabled).sort((a, b) => a.username.localeCompare(b.username))) {
+    sel.add(new Option(u.username + (u.admin ? ' (admin)' : ''), u.username));
+  }
+  if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
+  renderAPIKeys(list);
+}
+
+$('#apikey-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const r = await api('POST', 'api/api-keys', { name: f.name.value.trim(), username: f.username.value, read_only: f.read_only.checked, days: Number(f.days.value) || 0 });
+  renderAPIKeys(r.keys);
+  $('#apikey-value').textContent = r.key;
+  $('#apikey-example').textContent = `curl -H "Authorization: Bearer ${r.key}" ${location.origin}/admin/api/status`;
+  $('#apikey-new').hidden = false;
+  f.name.value = '';
+}));
+
+$('#apikey-copy').addEventListener('click', guard(async () => {
+  await navigator.clipboard.writeText($('#apikey-value').textContent);
+  toast('Key copied');
+}));
+
+$('#apikey-done').addEventListener('click', () => {
+  $('#apikey-new').hidden = true;
+  $('#apikey-value').textContent = $('#apikey-example').textContent = '';
+});
+
+$('#apikey-table').addEventListener('click', guard(async (e) => {
+  const k = apiKeys.find((x) => x.id === e.target.dataset.apikeyDel);
+  if (k && confirm(`Delete the API key ${k.name}?
+
+Scripts using it stop working at once.`)) {
+    renderAPIKeys(await api('DELETE', `api/api-keys/${encodeURIComponent(k.id)}`));
+  }
 }));
 
 // ---------- simulator ----------

@@ -275,6 +275,21 @@
   <p>Limita un webhook a dei gruppi per ricevere solo gli avvisi sui dispositivi di quegli utenti.</p>
 </article>
 
+<article class="help-topic" id="help-apikeys" data-group="Server" data-tab="apikeys" data-title="Chiavi API">
+  <h2>Chiavi API</h2>
+  <p>Token con cui script e automazioni (Grafana, Home Assistant, i tuoi script) usano l'API REST di EdgeTAK senza la password né l'accesso in due passaggi di una persona.</p>
+  <ol>
+    <li>Dai un nome alla chiave, scegli l'utente per cui agisce e, se vuoi, rendila in sola lettura o falla scadere dopo qualche giorno.</li>
+    <li><strong>Crea chiave</strong> e copiala subito: viene mostrata una sola volta.</li>
+    <li>Inviala via HTTPS come <code>Authorization: Bearer etk_…</code>, per esempio <code>curl -H "Authorization: Bearer etk_…" https://il-tuo-server:8443/admin/api/status</code>.</li>
+  </ol>
+  <ul>
+    <li>Una chiave può fare tutto ciò che può il suo utente: tutto, per un amministratore. Una chiave in sola lettura può solo leggere.</li>
+    <li>Smette di funzionare quando la elimini, quando scade o quando il suo utente viene eliminato o disattivato.</li>
+    <li>L'elenco mostra quando e da dove ogni chiave è stata usata l'ultima volta, e il <a data-goto="audit">registro di controllo</a> indica la chiave dietro ogni modifica.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-extensions" data-group="Server" data-tab="extensions" data-title="Estensioni">
   <h2>Estensioni</h2>
   <p>Plugin del server che aggiungono funzioni a EdgeTAK, come bridge per tracker o radio, esportazioni e integrazioni. Un'estensione è un programma (un .zip con un <code>plugin.json</code>) che EdgeTAK esegue e mantiene in esecuzione.</p>

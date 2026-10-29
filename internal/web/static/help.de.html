@@ -275,6 +275,21 @@
   <p>Beschränken Sie einen Webhook auf Gruppen, um nur von den Geräten dieser Benutzer zu erfahren.</p>
 </article>
 
+<article class="help-topic" id="help-apikeys" data-group="Server" data-tab="apikeys" data-title="API-Schlüssel">
+  <h2>API-Schlüssel</h2>
+  <p>Tokens, mit denen Skripte und Automatisierungen (Grafana, Home Assistant, eigene Skripte) die REST-API von EdgeTAK ohne das Passwort oder die Zwei-Faktor-Anmeldung einer Person verwenden.</p>
+  <ol>
+    <li>Geben Sie dem Schlüssel einen Namen, wählen Sie den Benutzer, als der er handelt, und machen Sie ihn bei Bedarf schreibgeschützt oder lassen Sie ihn nach einigen Tagen ablaufen.</li>
+    <li><strong>Schlüssel erstellen</strong> und sofort kopieren: Er wird nur einmal angezeigt.</li>
+    <li>Senden Sie ihn über HTTPS als <code>Authorization: Bearer etk_…</code>, zum Beispiel <code>curl -H "Authorization: Bearer etk_…" https://ihr-server:8443/admin/api/status</code>.</li>
+  </ol>
+  <ul>
+    <li>Ein Schlüssel kann alles, was sein Benutzer kann: alles, bei einem Administrator. Ein schreibgeschützter Schlüssel kann nur lesen.</li>
+    <li>Er funktioniert nicht mehr, wenn Sie ihn löschen, wenn er abläuft oder wenn sein Benutzer gelöscht oder deaktiviert wird.</li>
+    <li>Die Liste zeigt, wann und von wo jeder Schlüssel zuletzt verwendet wurde, und das <a data-goto="audit">Audit-Protokoll</a> nennt den Schlüssel hinter jeder Änderung.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-extensions" data-group="Server" data-tab="extensions" data-title="Erweiterungen">
   <h2>Erweiterungen</h2>
   <p>Server-Plugins, die EdgeTAK um Funktionen erweitern, etwa Tracker- oder Funkbrücken, Exporte und Integrationen. Eine Erweiterung ist ein Programm (eine .zip mit einer <code>plugin.json</code>), das EdgeTAK ausführt und am Laufen hält.</p>
