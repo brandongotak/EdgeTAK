@@ -3023,7 +3023,12 @@ function renderTakGov(v) {
     $('#takgov-open').href = v.pending.verification_uri_complete || v.pending.verification_uri;
   }
   const f = $('#takgov-form');
-  if (!f.product.value) f.product.value = v.product;
+  if (!f.product.dataset.loaded) {
+    // The last product browsed; one typed by hand before the dropdown may not be a choice.
+    f.product.value = String(v.product || '').toUpperCase();
+    if (!f.product.value) f.product.value = 'ATAK-CIV';
+    f.product.dataset.loaded = '1';
+  }
   // tak.gov's ATAK versions, plus the one last browsed (or the server's plugins are for).
   let chosen = f.version.value || v.product_version;
   if (!takgovVersionOK(chosen)) chosen = '5.6.0';

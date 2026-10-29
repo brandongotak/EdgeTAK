@@ -22,7 +22,13 @@ it and when it expires.
 
 **Fixed:** on the Plugins page, the **Add** button for each tak.gov plugin
 is under its name, with its version and size, so the list fits beside the
-map without scrolling sideways.
+map without scrolling sideways. Its **Product** is a MIL, CIV or GOV
+dropdown instead of a box to type in.
+
+## v1.13.0-rc.2 (2026-10-29)
+
+The tak.gov plugin list's **Product** is a MIL, CIV or GOV dropdown instead
+of a box to type in. A pre-release.
 
 ## v1.13.0-rc.1 (2026-10-29)
 

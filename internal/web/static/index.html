@@ -957,8 +957,7 @@
         </div>
         <div id="takgov-linked" hidden>
           <form id="takgov-form" class="inline-form">
-            <label>Product <input name="product" list="takgov-products" required class="days-input" style="width:9em"></label>
-            <datalist id="takgov-products"><option value="ATAK-CIV"><option value="ATAK-MIL"><option value="ATAK-GOV"></datalist>
+            <label>Product <select name="product" required><option value="ATAK-MIL">MIL</option><option value="ATAK-CIV">CIV</option><option value="ATAK-GOV">GOV</option></select></label>
             <label>ATAK version <select name="version" required></select></label>
             <button class="primary" type="submit">Show plugins</button>
             <input type="search" id="takgov-filter" placeholder="Filter" hidden>
