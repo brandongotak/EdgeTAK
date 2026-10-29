@@ -82,6 +82,9 @@ type Server struct {
 	DataDir    string
 	ConfigPath string
 	Restart    func()
+	// LookupHost resolves a domain before Let's Encrypt is turned on
+	// (tests); nil uses DNS.
+	LookupHost func(ctx context.Context, host string) ([]string, error)
 	// Maps are the offline maps (MBTiles) in <data>/maps.
 	Maps *maps.Library
 	// Addrs maps listener names (tcp, tls, https, enroll, http) to their
@@ -183,6 +186,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.loginGuardRoutes(mux)
 	s.enrollCodeRoutes(mux)
 	s.plainTCPRoutes(mux)
+	s.letsEncryptRoutes(mux)
 	s.zerotierRoutes(mux)
 	s.feedRoutes(mux)
 	s.frpRoutes(mux)

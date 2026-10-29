@@ -176,6 +176,9 @@ curl -fsSL https://github.com/brandongotak/EdgeTAK/releases/latest/download/inst
 - Watch for `Let's Encrypt certificate ready` with `journalctl -u edgetak -f`.
   Until then, 8446 serves the EdgeTAK certificate, so quick connect starts
   working once the certificate is issued.
+- Installed without it? Turn it on later under **Settings → Let's Encrypt**
+  in the console: enter the domain, and EdgeTAK restarts with it. Running the
+  install command again with `--letsencrypt` does the same.
 
 **3. Log in**
 

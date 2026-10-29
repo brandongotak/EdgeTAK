@@ -383,6 +383,22 @@
         <p class="muted">Lets TAK apps connect on port <span id="tcp-port">8087</span> without encryption or a login. They are anonymous and only see the <code>__ANON__</code> group. Useful on a closed local network for apps without a certificate; turn it off on servers others can reach. Turning it off closes the port and disconnects the devices connected that way. If the server has a firewall, the port must be open there too (for example <code>sudo ufw allow 8087/tcp</code>); servers installed with <code>--no-plaintext</code> start with it off and closed in the firewall.</p>
         <label class="check"><input type="checkbox" id="tcp-on"> Allow plain TCP connections</label>
       </div>
+      <div class="card" id="le-card">
+        <div class="card-head"><h2>Let's Encrypt</h2><span id="le-state"></span></div>
+        <p class="muted">A Let's Encrypt certificate on the enrollment port (<span id="le-port">8446</span>) lets TAK apps connect with just the address, a username and a password (quick connect), and opens the console there without a browser warning. EdgeTAK requests and renews it itself. It needs a domain name whose DNS record points at this server, and port 80 open to the internet (for example <code>sudo ufw allow 80/tcp</code>, and in the cloud provider's firewall). Turning it on or off restarts EdgeTAK; devices reconnect by themselves. The domain becomes the server's public host, so connection packages and QR codes made before point at the old address.</p>
+        <form id="le-form" class="stack">
+          <div class="inline-form">
+            <label>Domain <input name="domain" placeholder="tak.example.com" autocomplete="off" spellcheck="false"></label>
+            <label>Email (optional) <input name="email" type="email" autocomplete="off"></label>
+          </div>
+          <p class="muted" id="le-current"></p>
+          <div class="inline-form">
+            <button class="primary" value="on" id="le-on">Turn on</button>
+            <button class="danger" value="off" id="le-off" hidden>Turn off</button>
+            <span class="muted" id="le-progress"></span>
+          </div>
+        </form>
+      </div>
       <div class="card" id="mesh-card">
         <div class="card-head"><h2>Mesh bridge</h2><span id="mesh-state"></span></div>
         <p class="muted">Without a server, ATAK and WinTAK devices on one network (Wi-Fi or MANET radios) share positions and chat over multicast: their mesh. The bridge joins that network: what it hears goes into a group here, and the traffic of the groups you choose goes out to it, so radio teams and server users see each other. It sends TAK Protocol, or XML while a device that only reads XML is about, as ATAK does.</p>
@@ -949,7 +965,7 @@
             <button class="ghost" type="button" id="takgov-unlink">Unlink</button>
           </form>
           <div class="table-wrap"><table id="takgov-table" hidden>
-            <thead><tr><th></th><th>Name</th><th>Version</th><th>Size</th><th></th></tr></thead>
+            <thead><tr><th></th><th>Plugin</th></tr></thead>
             <tbody></tbody>
           </table></div>
         </div>

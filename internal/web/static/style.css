@@ -191,7 +191,7 @@ tbody tr:hover { background: var(--panel-2); }
 td.actions { text-align: right; white-space: nowrap; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .pkg-name { white-space: normal; min-width: 14em; }
-.pkg-name strong { overflow-wrap: anywhere; }
+.pkg-name strong, .pkg-name .mono { overflow-wrap: anywhere; }
 td.actions > * + * { margin-left: 6px; }
 /* The QR code list sits in a half-width card: stack its buttons. */
 @media (min-width: 701px) { #qr-codes td.actions > * { display: block; margin: 0 0 4px auto; } }

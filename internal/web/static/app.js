@@ -158,7 +158,7 @@ const loaders = {
   webhooks: loadWebhooks,
   extensions: loadExtensions,
   audit: () => loadAudit(),
-  settings: () => Promise.all([loadLogo(), loadPlainTCP(), loadMesh(), loadZeroTier(), loadFRP(), loadFeeds(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
+  settings: () => Promise.all([loadLogo(), loadPlainTCP(), loadLetsEncrypt(), loadMesh(), loadZeroTier(), loadFRP(), loadFeeds(), loadRetention(), loadEmergencyCard(), loadLostContact(), loadGeofences(), loadLoginGuard(), loadBackups()]),
 };
 
 let currentTab = '';
@@ -3066,11 +3066,10 @@ function renderTakGovPlugins() {
   $('#takgov-filter').hidden = !takgovPlugins.length;
   $('#takgov-table tbody').innerHTML = list.map((p, i) => `<tr>
     <td>${p.icon_url ? `<img class="app-icon" loading="lazy" src="api/takgov/icon?url=${encodeURIComponent(p.icon_url)}" alt="" onerror="this.style.visibility='hidden'">` : ''}</td>
-    <td><div><strong>${esc(p.display_name || p.package_name)}</strong><div class="muted mono">${esc(p.package_name)}</div>${p.description ? `<div class="muted">${esc(p.description.length > 160 ? p.description.slice(0, 160) + '…' : p.description)}</div>` : ''}</div></td>
-    <td>${esc(p.version)}</td>
-    <td>${p.apk_size_bytes ? bytes(p.apk_size_bytes) : ''}</td>
-    <td class="actions">${p.installed ? '<span class="pill ok">on this server</span>' : `<button class="small primary" data-takgov-install="${takgovPlugins.indexOf(p)}">Add</button>`}</td></tr>`).join('')
-    || emptyRow(5, takgovPlugins.length ? 'No plugin matches' : 'tak.gov lists no plugins for this product and version');
+    <td class="pkg-name"><strong>${esc(p.display_name || p.package_name)}</strong><div class="muted mono">${esc(p.package_name)}</div>${p.description ? `<div class="muted">${esc(p.description.length > 160 ? p.description.slice(0, 160) + '…' : p.description)}</div>` : ''}
+      <div class="row-actions">${p.installed ? '<span class="pill ok">on this server</span>' : `<button class="small primary" data-takgov-install="${takgovPlugins.indexOf(p)}">Add</button>`}
+        <span class="muted">${esc([p.version, p.apk_size_bytes ? bytes(p.apk_size_bytes) : ''].filter(Boolean).join(' · '))}</span></div></td></tr>`).join('')
+    || emptyRow(2, takgovPlugins.length ? 'No plugin matches' : 'tak.gov lists no plugins for this product and version');
 }
 
 async function showTakGovPlugins() {
@@ -4032,6 +4031,64 @@ $('#tcp-on').addEventListener('change', guard(async (e) => {
     e.target.checked = !on;
     throw ex;
   }
+}));
+
+// ---- Let's Encrypt ----
+
+function renderLetsEncrypt(v) {
+  const f = $('#le-form');
+  const on = v.mode === 'letsencrypt';
+  if (!f.contains(document.activeElement)) {
+    f.domain.value = v.domain || '';
+    f.email.value = v.email || '';
+  }
+  $('#le-on').textContent = on ? 'Save and restart' : 'Turn on';
+  $('#le-off').hidden = !on;
+  const enroll = status?.listeners?.enroll;
+  if (enroll) $('#le-port').textContent = enroll.split(':').pop();
+  const cur = v.current || {};
+  $('#le-state').innerHTML = v.pending ? '<span class="pill warn">waiting for a restart</span>'
+    : !on ? '<span class="pill">off</span>'
+    : cur.status === 'pending' ? '<span class="pill warn">requesting</span>' : '<span class="pill ok">on</span>';
+  $('#le-current').textContent = on && cur.mode === 'letsencrypt'
+    ? (cur.status === 'pending'
+      ? 'Requesting the certificate. If this lasts more than a few minutes, check the DNS record and that port 80 is open.'
+      : `Certificate from ${cur.issuer}, renewed automatically; it expires ${new Date(cur.not_after).toLocaleDateString()}.`)
+    : '';
+  $('#le-current').hidden = !$('#le-current').textContent;
+}
+
+async function loadLetsEncrypt() {
+  try {
+    renderLetsEncrypt(await api('GET', 'api/letsencrypt'));
+  } catch {
+    $('#le-card').hidden = true; // no configuration file to change
+  }
+}
+
+$('#le-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const on = e.submitter?.value !== 'off';
+  if (on && !f.domain.value.trim()) { toast('Enter the domain name'); return; }
+  if (!confirm(on ? `Use a Let's Encrypt certificate for ${f.domain.value.trim()}?\n\nEdgeTAK restarts: devices reconnect by themselves within a minute.`
+    : "Turn Let's Encrypt off?\n\nEdgeTAK restarts and uses its own certificate on the enrollment port again. Quick connect stops working until apps trust the EdgeTAK CA.")) return;
+  const v = await api('PUT', 'api/letsencrypt', { on, domain: f.domain.value, email: f.email.value });
+  renderLetsEncrypt(v);
+  if (!v.restarting) {
+    $('#le-progress').textContent = 'Saved. Restart EdgeTAK to apply it.';
+    return;
+  }
+  $('#le-progress').textContent = 'EdgeTAK is restarting…';
+  await new Promise((res) => setTimeout(res, 4000));
+  for (let i = 0; i < 90; i++) {
+    try {
+      const res = await fetch('/', { cache: 'no-store' });
+      if (res.ok) { location.reload(); return; }
+    } catch { /* still restarting */ }
+    await new Promise((res) => setTimeout(res, 2000));
+  }
+  $('#le-progress').textContent = 'EdgeTAK has not come back yet. If it runs without a service manager, start it again.';
 }));
 
 // ---- remote access (FRP) ----

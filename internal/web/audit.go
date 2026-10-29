@@ -79,6 +79,7 @@ var auditActions = map[string]string{
 	"POST /admin/api/emergencies/{id}/dismiss":           "Dismissed alert",
 	"POST /admin/api/enroll-codes":                       "Made a quick-connect QR code",
 	"PUT /admin/api/plain-tcp":                           "Turned plain TCP on or off",
+	"PUT /admin/api/letsencrypt":                         "Turned Let's Encrypt on or off",
 	"POST /admin/api/zerotier/install":                   "Installed ZeroTier",
 	"POST /admin/api/zerotier/networks":                  "Joined a ZeroTier network",
 	"DELETE /admin/api/zerotier/networks/{id}":           "Left a ZeroTier network",

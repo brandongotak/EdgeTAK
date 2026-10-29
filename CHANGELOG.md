@@ -10,6 +10,25 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.13.0 (2026-10-29)
+
+**Let's Encrypt from the console.** A **Let's Encrypt** card on the
+Settings page turns the public certificate on or off after install, as the
+installer's `--letsencrypt` does. Enter the domain (and optionally an email
+address); EdgeTAK checks that the domain resolves and that it can open port
+80, saves the setting and restarts. The domain becomes the server's public
+host. The card shows whether the certificate is being requested, who issued
+it and when it expires.
+
+**Fixed:** on the Plugins page, the **Add** button for each tak.gov plugin
+is under its name, with its version and size, so the list fits beside the
+map without scrolling sideways.
+
+## v1.13.0-rc.1 (2026-10-29)
+
+The first release candidate for v1.13.0: Let's Encrypt from the console,
+and the tak.gov plugin list fitting beside the map. A pre-release.
+
 ## v1.12.0 (2026-10-27)
 
 **Mesh bridge.** A **Mesh bridge** card on the Settings page connects
