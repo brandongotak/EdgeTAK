@@ -10,7 +10,7 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
-## v1.13.0 (2026-10-29)
+## v1.13.0 (2026-11-02)
 
 **Let's Encrypt from the console.** A **Let's Encrypt** card on the
 Settings page turns the public certificate on or off after install, as the
