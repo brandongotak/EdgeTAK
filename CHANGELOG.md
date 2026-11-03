@@ -10,6 +10,12 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.14.0 (2026-11-02)
+
+**Show password.** Password boxes on the sign-in page, the account page
+(change password, confirm) and the sign-up page have an eye button that
+shows the password as typed, and hides it again.
+
 ## v1.13.0 (2026-11-02)
 
 **Let's Encrypt from the console.** A **Let's Encrypt** card on the

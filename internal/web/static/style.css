@@ -238,6 +238,13 @@ td.wrap-actions > * { margin: 2px 0 2px 4px; }
   border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
 }
 .version-tag:empty { display: none; }
+.pw-field { position: relative; display: flex; }
+.pw-field input { flex: 1; padding-right: 40px; }
+.pw-toggle { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); display: grid; place-items: center;
+  padding: 5px; border: none; background: transparent; color: var(--muted); }
+.pw-toggle:hover { color: var(--text); }
+.pw-toggle .pw-slash { display: none; }
+.pw-toggle[aria-pressed="true"] .pw-slash { display: inline; }
 .login .version { margin: 0; font-size: 12px; text-align: center; }
 .login .version a, .console-footer a { color: inherit; }
 .console-footer { font-size: 12px; text-align: center; padding: 8px 0 4px; }
