@@ -12,6 +12,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/brandongotak/EdgeTAK/internal/pki"
+	"github.com/brandongotak/EdgeTAK/internal/store"
 )
 
 // OAuth2 password grant at /oauth/token, as served by the official server
@@ -135,7 +138,23 @@ func (s *Server) oauthToken(w http.ResponseWriter, r *http.Request) {
 		oauthError(w, http.StatusBadRequest, "unsupported_grant_type", "use grant_type=password")
 		return
 	}
-	u, err := s.passwordSignIn(r, r.Form.Get("username"), r.Form.Get("password"))
+	var u *store.User
+	var err error
+	if r.Form.Get("password") == "" {
+		// A client with an EdgeTAK certificate and no password (TAKX set
+		// up from a connection package) gets a token for the certificate's
+		// user, who it already is everywhere else. Without either, there
+		// is nothing to check, and nothing to count as a failed sign-in.
+		var ok bool
+		if u, ok = s.certUser(r, r.Form.Get("username")); !ok {
+			s.Log.Warn("oauth login without a password, and no client certificate of the user", "user", r.Form.Get("username"),
+				"cert", r.TLS != nil && len(r.TLS.PeerCertificates) > 0, "remote", r.RemoteAddr)
+			oauthError(w, http.StatusBadRequest, "invalid_grant", "Bad credentials")
+			return
+		}
+	} else {
+		u, err = s.passwordSignIn(r, r.Form.Get("username"), r.Form.Get("password"))
+	}
 	if errors.Is(err, errBlocked) {
 		oauthError(w, http.StatusBadRequest, "invalid_grant", "Too many failed sign-ins from this address; try again later")
 		return
@@ -163,7 +182,25 @@ func (s *Server) oauthToken(w http.ResponseWriter, r *http.Request) {
 		"token_type":   "Bearer",
 		"expires_in":   int(accessTokenTTL.Seconds()) - 1,
 	})
-	s.Log.Info("oauth token issued", "user", u.Username, "remote", r.RemoteAddr)
+	s.Log.Info("oauth token issued", "user", u.Username, "certificate", r.Form.Get("password") == "", "remote", r.RemoteAddr)
+}
+
+// certUser is the user named by the request's verified, unrevoked EdgeTAK
+// client certificate, if they exist, are enabled and are the username asked
+// for (when one is).
+func (s *Server) certUser(r *http.Request, username string) (*store.User, bool) {
+	if r.TLS == nil || len(r.TLS.VerifiedChains) == 0 {
+		return nil, false
+	}
+	leaf := r.TLS.PeerCertificates[0]
+	if s.Store.IsRevoked(pki.SerialHex(leaf)) {
+		return nil, false
+	}
+	u, ok := s.Store.User(leaf.Subject.CommonName)
+	if !ok || u.Disabled || username != "" && !strings.EqualFold(username, u.Username) {
+		return nil, false
+	}
+	return u, true
 }
 
 func oauthError(w http.ResponseWriter, status int, code, desc string) {

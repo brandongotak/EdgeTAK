@@ -10,6 +10,19 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.14.1 (2026-11-04)
+
+**Fixed:** TAKX set up from a connection package couldn't load contacts,
+groups or missions ("Failed to query Contact List"). It asks for a sign-in
+token without a password; EdgeTAK now gives it one for the user its client
+certificate belongs to. Such requests no longer count as failed sign-ins,
+which could have blocked TAKX's address.
+
+## v1.14.1-rc.1 (2026-11-04)
+
+The first release candidate for v1.14.1: TAKX with a connection package
+loads contacts, groups and missions. A pre-release.
+
 ## v1.14.0 (2026-11-02)
 
 **Show password.** Password boxes on the sign-in page, the account page

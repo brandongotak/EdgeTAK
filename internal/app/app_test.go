@@ -483,6 +483,52 @@ func TestEndToEnd(t *testing.T) {
 		}
 	})
 
+	// TAKX set up from a connection package has a certificate but no
+	// password, and asks for a token with none.
+	t.Run("oauth token for a client certificate (TAKX package)", func(t *testing.T) {
+		token := func(cert *tls.Certificate, addr, form string) (int, string) {
+			cfg := &tls.Config{RootCAs: a.CA.Pool()}
+			if cert != nil {
+				cfg.Certificates = []tls.Certificate{*cert}
+			}
+			hc := &http.Client{Transport: memTransport(cfg)}
+			resp, err := hc.Post("https://"+a.Addrs[addr]+"/oauth/token?"+form, "application/x-www-form-urlencoded", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			var m map[string]any
+			json.NewDecoder(resp.Body).Decode(&m)
+			tok, _ := m["access_token"].(string)
+			return resp.StatusCode, tok
+		}
+		for _, addr := range []string{"enroll", "https"} {
+			st, tok := token(&bobCert, addr, "grant_type=password&username=bob")
+			if st != 200 || tok == "" {
+				t.Fatalf("%s: bob's certificate = %d", addr, st)
+			}
+			req, _ := http.NewRequest("GET", "https://"+a.Addrs["https"]+"/Marti/api/groups/all", nil)
+			req.Header.Set("Authorization", "Bearer "+tok)
+			resp, err := (&http.Client{Transport: memTransport(&tls.Config{RootCAs: a.CA.Pool()})}).Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			if resp.StatusCode != 200 {
+				t.Errorf("%s: groups with the token = %d", addr, resp.StatusCode)
+			}
+		}
+		if st, _ := token(&bobCert, "enroll", "grant_type=password"); st != 200 {
+			t.Errorf("certificate without a username = %d", st)
+		}
+		if st, _ := token(&bobCert, "enroll", "grant_type=password&username=alice"); st != 400 {
+			t.Errorf("bob's certificate for alice = %d", st)
+		}
+		if st, _ := token(nil, "enroll", "grant_type=password&username=bob"); st != 400 {
+			t.Errorf("no certificate, no password = %d", st)
+		}
+	})
+
 	t.Run("https never resumes sessions and sends the full chain", func(t *testing.T) {
 		tr := memTransport(&tls.Config{RootCAs: a.CA.Pool(), Certificates: []tls.Certificate{aliceCert}, ClientSessionCache: tls.NewLRUClientSessionCache(8)})
 		tr.DisableKeepAlives = true
