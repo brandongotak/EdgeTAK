@@ -191,6 +191,28 @@ function markSections() {
   }
 }
 
+// The Settings page is long: a row of links to its cards, rebuilt each time
+// so cards hidden on this server are left out.
+function settingsToc() {
+  const tab = $('#tab-settings');
+  let nav = tab.querySelector(':scope > .page-toc');
+  if (!nav) {
+    nav = document.createElement('nav');
+    nav.className = 'page-toc';
+    nav.setAttribute('aria-label', 'Settings');
+    tab.prepend(nav);
+    nav.addEventListener('click', (e) => {
+      const a = e.target.closest('a[data-card]');
+      if (!a) return;
+      e.preventDefault();
+      document.getElementById(a.dataset.card)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+  nav.innerHTML = [...tab.querySelectorAll(':scope > div.card[id]')]
+    .filter((c) => !c.hidden && c.querySelector('.card-head h2'))
+    .map((c) => `<a href="#" data-card="${esc(c.id)}">${esc(c.querySelector('.card-head h2').textContent)}</a>`).join('');
+}
+
 function selectTab(name) {
   if (!loaders[name]) name = 'dashboard';
   if (name === 'help' && currentTab !== 'help') helpFrom = currentTab; // Help opens at that page's topic
@@ -206,6 +228,7 @@ function selectTab(name) {
   markSections();
   showActiveTab();
   for (const s of document.querySelectorAll('.tab')) s.hidden = s.id !== 'tab-' + name;
+  if (name === 'settings') settingsToc();
   clearInterval(pollTimer);
   guard(loaders[name])();
   if (name === 'dashboard') {
@@ -4663,6 +4686,9 @@ function labelCells(table) {
   for (const tr of table.querySelectorAll('tbody tr')) {
     [...tr.children].forEach((td, i) => {
       if (heads[i] && !td.hasAttribute('colspan') && !td.classList.contains('actions')) td.dataset.label = heads[i];
+      // Cells wrap so tables fit beside the map; short values (dates,
+      // numbers, states) stay on one line.
+      if (td.textContent.trim().length <= 24 && !td.querySelector('button, select, input, textarea')) td.classList.add('nw');
     });
   }
 }

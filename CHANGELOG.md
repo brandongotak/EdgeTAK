@@ -10,6 +10,21 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.14.2-rc.1 (2026-11-23)
+
+A tidier console.
+
+- **Tables fit beside the map.** Users, Groups, Certificates and the other
+  tables no longer scroll sideways with their buttons cut off: longer text
+  wraps in its cell, row buttons wrap onto a second line, and short values
+  such as dates and states stay on one line.
+- **Stat tiles in one row.** The Dashboard and Certificates tiles fit in a
+  single row instead of wrapping to a half-empty second one.
+- **Account button.** The header shows your username as one button to your
+  account page, in place of "My account" next to a separate name.
+- **Settings jump links.** A row of links at the top of Settings goes to
+  each of its sections.
+
 ## v1.14.1 (2026-11-04)
 
 **Fixed:** TAKX set up from a connection package couldn't load contacts,

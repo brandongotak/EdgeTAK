@@ -100,7 +100,6 @@ label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--t
     display: flex; flex-direction: column; align-items: stretch; gap: 6px; position: absolute; right: 0; top: calc(100% + 6px); z-index: 1100;
     min-width: 180px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 6px 20px #0006;
   }
-  .who.open .who-items #me { display: block; padding: 2px 4px 6px; border-bottom: 1px solid var(--line); color: var(--text); font-weight: 600; }
   .who.open .who-items > button, .who.open .who-items > a { justify-content: flex-start; text-align: left; }
 }
 #map-toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
@@ -114,10 +113,10 @@ main { padding: 16px; max-width: 1400px; margin: 0 auto; display: flex; flex-dir
 #tab-connect .grid-2 { grid-template-columns: 1fr 1fr; }
 @media (max-width: 900px) { .grid-2, #tab-connect .grid-2 { grid-template-columns: 1fr; } }
 
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; }
 .stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
 .stat .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.stat .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.stat .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
 
 /* The map sits beside every tab on wide screens and opens full screen on narrow ones. */
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr); }
@@ -185,14 +184,16 @@ fieldset.plain { border: 1px solid var(--line); border-radius: 8px; padding: 10p
 
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th, td.nw { white-space: nowrap; }
+td button, td .button, td .pill, td .badge, td select { white-space: nowrap; }
 th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
 tbody tr:hover { background: var(--panel-2); }
-td.actions { text-align: right; white-space: nowrap; }
+td.actions { text-align: right; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .pkg-name { white-space: normal; min-width: 14em; }
 .pkg-name strong, .pkg-name .mono { overflow-wrap: anywhere; }
-td.actions > * + * { margin-left: 6px; }
+td.actions > * { margin: 2px 0 2px 6px; }
 /* The QR code list sits in a half-width card: stack its buttons. */
 @media (min-width: 701px) { #qr-codes td.actions > * { display: block; margin: 0 0 4px auto; } }
 td.wrap-actions { white-space: normal; min-width: 220px; max-width: 300px; }
@@ -447,7 +448,6 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .tabs { order: 3; flex: 1 0 100%; margin: 0 -12px; padding: 0 12px 2px; scrollbar-width: none; }
   .tabs::-webkit-scrollbar { display: none; }
   .subtabs { margin: 0 -12px -8px; padding: 4px 12px 6px; }
-  .who #me { display: none; }
 
   main { padding: 12px; gap: 12px; }
   .tab { gap: 12px; }
@@ -503,3 +503,14 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* Language picker */
 select.lang-pick { width: auto; padding: 4px 8px; font-size: 13px; }
 .lang-foot { text-align: center; margin: 16px; }
+
+/* Account button in the header: the signed-in user's name. */
+#me-link { display: inline-flex; align-items: center; gap: 6px; max-width: 180px; }
+#me-link svg { width: 16px; height: 16px; flex: none; }
+#me { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Settings: jump links to each card. */
+.page-toc { display: flex; flex-wrap: wrap; gap: 6px; }
+.page-toc a { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: inherit; text-decoration: none; font-size: 13px; }
+.page-toc a:hover { border-color: var(--accent); color: var(--accent); }
+#tab-settings > .card { scroll-margin-top: calc(var(--topbar-h, 100px) + 12px); }
