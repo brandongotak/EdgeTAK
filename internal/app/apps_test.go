@@ -89,6 +89,11 @@ func TestUpdateServer(t *testing.T) {
 	if st != 200 || !bytes.Equal(raw, apk) {
 		t.Errorf("APK download = %d (%d bytes)", st, len(raw))
 	}
+	// From a version index, ATAK asks for the APK under that version.
+	st, _, raw = device.do("GET", "/update/5.7.0/apk/"+hash+".apk", nil)
+	if st != 200 || !bytes.Equal(raw, apk) {
+		t.Errorf("APK download from the 5.7.0 index = %d (%d bytes)", st, len(raw))
+	}
 
 	// Without a certificate ATAK is asked for a username and password.
 	plain := &http.Client{Transport: memTransport(&tls.Config{RootCAs: a.CA.Pool()})}
@@ -146,6 +151,31 @@ func TestUpdateServer(t *testing.T) {
 		t.Error("update server still sent after turning it off")
 	}
 
+	// A new build of the same app replaces it; a device whose index still
+	// lists the old build can download that for a while.
+	apk2 := withZipComment(t, apk, "build 2")
+	sum2 := sha256.Sum256(apk2)
+	hash2 := hex.EncodeToString(sum2[:])
+	body.Reset()
+	mw = multipart.NewWriter(&body)
+	fw, _ = mw.CreateFormFile("apk", "helloworld.apk")
+	fw.Write(apk2)
+	mw.Close()
+	req, _ = http.NewRequest("POST", base+"/admin/api/apps", &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("X-EdgeTAK", "1")
+	if resp, err = hc.Do(req); err != nil || resp.StatusCode != 200 {
+		t.Fatalf("upload build 2 = %v %v", resp, err)
+	}
+	resp.Body.Close()
+	if _, _, raw := device.do("GET", "/update/product.inf", nil); strings.Contains(string(raw), hash) || !strings.Contains(string(raw), hash2) {
+		t.Errorf("index after replacing = %s", raw)
+	}
+	if st, _, raw := device.do("GET", "/update/5.7.0/apk/"+hash+".apk", nil); st != 200 || !bytes.Equal(raw, apk) {
+		t.Errorf("replaced APK = %d (%d bytes)", st, len(raw))
+	}
+	hash = hash2
+
 	// Deleting removes it from the index and the disk.
 	if code, _ := call("DELETE", "/admin/api/apps/"+hash, nil); code != 200 {
 		t.Fatalf("delete = %d", code)
@@ -153,4 +183,15 @@ func TestUpdateServer(t *testing.T) {
 	if st, _, _ := device.do("GET", "/update/apk/"+hash+".apk", nil); st != 404 {
 		t.Errorf("deleted APK = %d", st)
 	}
+}
+
+// withZipComment gives a zip (an APK) a comment: the same app, another hash.
+func withZipComment(t *testing.T, z []byte, comment string) []byte {
+	t.Helper()
+	if len(z) < 22 || !bytes.Equal(z[len(z)-22:len(z)-18], []byte("PK")) {
+		t.Fatal("zip has a comment already")
+	}
+	out := append([]byte{}, z...)
+	out[len(out)-2], out[len(out)-1] = byte(len(comment)), byte(len(comment)>>8)
+	return append(out, comment...)
 }

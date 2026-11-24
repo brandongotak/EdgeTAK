@@ -10,6 +10,13 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.16.0-rc.3 (2026-11-24)
+
+**No more 404 when updating a plugin.** When you add a newer build of a
+plugin, the build it replaces stays downloadable for 7 days. ATAK keeps the
+plugin list it last fetched, so until it syncs again it asks for the old
+build, which used to give a 404.
+
 ## v1.16.0-rc.2 (2026-11-24)
 
 **ATAK 5.9.** **Plugins from tak.gov** can show the plugins tak.gov publishes

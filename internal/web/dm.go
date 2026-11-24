@@ -37,6 +37,7 @@ func (s *Server) Start(ctx context.Context) {
 	s.retentionStart(ctx)
 	s.backupStart(ctx)
 	go s.redrawAppIcons()
+	go s.pruneRetiredAPKs()
 	s.lostStart(ctx)
 	s.geofenceStart()
 	s.drawingsStart()

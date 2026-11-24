@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -31,7 +32,56 @@ const (
 
 func (s *Server) appsDir() string { return filepath.Join(filepath.Dir(s.PackageDir), "apps") }
 
-func (s *Server) apkFile(a store.App) string  { return filepath.Join(s.appsDir(), a.SHA256+".apk") }
+func (s *Server) apkFile(a store.App) string { return filepath.Join(s.appsDir(), a.SHA256+".apk") }
+
+// Replaced builds stay downloadable for a while: ATAK keeps the index it
+// last fetched, and asks for the build listed there until it syncs again.
+const retiredFor = 7 * 24 * time.Hour
+
+func (s *Server) retiredDir() string { return filepath.Join(s.appsDir(), "replaced") }
+
+// retireAPK moves a replaced build's APK aside, and drops ones older than
+// retiredFor.
+func (s *Server) retireAPK(a store.App) {
+	if os.MkdirAll(s.retiredDir(), 0o750) != nil || os.Rename(s.apkFile(a), filepath.Join(s.retiredDir(), a.SHA256+".apk")) != nil {
+		os.Remove(s.apkFile(a))
+	}
+	now := time.Now()
+	os.Chtimes(filepath.Join(s.retiredDir(), a.SHA256+".apk"), now, now)
+	s.pruneRetiredAPKs()
+}
+
+func (s *Server) pruneRetiredAPKs() {
+	entries, _ := os.ReadDir(s.retiredDir())
+	for _, e := range entries {
+		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > retiredFor {
+			os.Remove(filepath.Join(s.retiredDir(), e.Name()))
+		}
+	}
+}
+
+// serveRetiredAPK serves a replaced build an out-of-date index still lists.
+func (s *Server) serveRetiredAPK(w http.ResponseWriter, r *http.Request, sha string) bool {
+	if !shaRE.MatchString(sha) {
+		return false
+	}
+	f, err := os.Open(filepath.Join(s.retiredDir(), sha+".apk"))
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || time.Since(info.ModTime()) > retiredFor {
+		return false
+	}
+	w.Header().Set("Content-Type", "application/vnd.android.package-archive")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+sha+`.apk"`)
+	http.ServeContent(w, r, "", info.ModTime(), f)
+	return true
+}
+
+var shaRE = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
 func (s *Server) iconFile(a store.App) string { return filepath.Join(s.appsDir(), a.SHA256+".png") }
 
 // updateServerURL is where devices find the update server: the HTTPS API on
@@ -202,8 +252,13 @@ func (s *Server) updateServer(w http.ResponseWriter, r *http.Request, id *identi
 		w.Header().Set("Content-Length", fmt.Sprint(len(data)))
 		w.Write(data)
 	case strings.HasPrefix(path, "apk/") && strings.HasSuffix(path, ".apk"):
-		a, ok := s.app(strings.TrimSuffix(strings.TrimPrefix(path, "apk/"), ".apk"))
+		sha := strings.TrimSuffix(strings.TrimPrefix(path, "apk/"), ".apk")
+		a, ok := s.app(sha)
 		if !ok {
+			if s.serveRetiredAPK(w, r, sha) {
+				s.Log.Info("replaced ATAK app build downloaded (the device should sync its plugin list)", "user", id.Username, "sha256", sha)
+				return
+			}
 			http.NotFound(w, r)
 			return
 		}
@@ -364,7 +419,7 @@ func (s *Server) addAPK(src io.Reader, name string, id *identity) (*store.App, e
 		return nil, err
 	}
 	for _, old := range replaced {
-		os.Remove(s.apkFile(old))
+		s.retireAPK(old)
 		os.Remove(s.iconFile(old))
 	}
 	s.Log.Info("ATAK app added", "admin", id.Username, "package", a.Package, "name", a.Name, "version", a.Version,
