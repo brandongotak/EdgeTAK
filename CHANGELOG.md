@@ -10,6 +10,11 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.16.0-rc.2 (2026-11-24)
+
+**ATAK 5.9.** **Plugins from tak.gov** can show the plugins tak.gov publishes
+for ATAK 5.9.0.
+
 ## v1.16.0-rc.1 (2026-11-24)
 
 **Find a plugin.** The plugins and apps on **Data → Plugins** have a filter

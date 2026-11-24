@@ -3056,7 +3056,7 @@ $('#apk-table').addEventListener('click', guard(async (e) => {
 // ---------- tak.gov plugins ----------
 
 // ATAK 5.5 and later (a newer version the server has plugins for is added).
-const TAKGOV_VERSIONS = ['5.8.0', '5.7.0', '5.6.0', '5.5.0'];
+const TAKGOV_VERSIONS = ['5.9.0', '5.8.0', '5.7.0', '5.6.0', '5.5.0'];
 const takgovVersionOK = (v) => /^\d+(\.\d+)*$/.test(v) && v.localeCompare('5.5', undefined, { numeric: true }) >= 0;
 let takgov = {};
 let takgovPlugins = [];
