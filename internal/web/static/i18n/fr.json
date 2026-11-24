@@ -2236,5 +2236,13 @@
  "⬆ out": "⬆ sortie",
  "⬇ in": "⬇ entrée",
  "🔇 Click anywhere on the page to hear the alarm.": "🔇 Cliquez n'importe où sur la page pour entendre l'alarme.",
- "🚨 EMERGENCY · {0}": "🚨 URGENCE · {0}"
+ "🚨 EMERGENCY · {0}": "🚨 URGENCE · {0}",
+ "Search name, package or description": "Rechercher par nom, paquet ou description",
+ "Search plugins and apps": "Rechercher des plugins et des apps",
+ "Plugins and apps": "Plugins et apps",
+ "Plugins only": "Plugins uniquement",
+ "Apps only": "Apps uniquement",
+ "Any ATAK version": "Toute version d'ATAK",
+ "{0} of {1} shown": "{0} sur {1} affichés",
+ "Nothing matches the filter": "Rien ne correspond au filtre"
 }

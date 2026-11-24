@@ -968,6 +968,16 @@
         <p class="muted">Update server address: <code id="apk-url"></code>. To set it by hand, in ATAK open <strong>Plugins</strong>, the settings menu, turn on <strong>Update Server</strong> and enter this address.</p>
       </div>
       <div class="card">
+        <div class="inline-form" id="apk-filters">
+          <input type="search" id="apk-filter" placeholder="Search name, package or description" aria-label="Search plugins and apps">
+          <select id="apk-kind" aria-label="Show">
+            <option value="">Plugins and apps</option>
+            <option value="plugin">Plugins only</option>
+            <option value="app">Apps only</option>
+          </select>
+          <select id="apk-atak" aria-label="ATAK version"><option value="">Any ATAK version</option></select>
+          <span class="muted" id="apk-count"></span>
+        </div>
         <div class="table-wrap"><table id="apk-table">
           <thead><tr><th></th><th>Name</th><th>Version</th><th>For</th><th>Android</th><th>Size</th><th>Uploaded</th></tr></thead>
           <tbody></tbody>

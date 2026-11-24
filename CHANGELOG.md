@@ -10,6 +10,13 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.16.0-rc.1 (2026-11-24)
+
+**Find a plugin.** The plugins and apps on **Data → Plugins** have a filter
+row: search by name, package, description or version, show only plugins or
+only apps, and pick the ATAK version they're built for. A count shows how many
+match.
+
 ## v1.15.0 (2026-11-23)
 
 **TerraTAK.** EdgeTAK can run [TerraTAK](https://tak.gov/products/terratak),

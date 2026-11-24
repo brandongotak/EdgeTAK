@@ -2220,5 +2220,13 @@
  "⬆ out": "⬆ ausgehend",
  "⬇ in": "⬇ eingehend",
  "🔇 Click anywhere on the page to hear the alarm.": "🔇 Klicken Sie irgendwo auf die Seite, um den Alarm zu hören.",
- "🚨 EMERGENCY · {0}": "🚨 NOTFALL · {0}"
+ "🚨 EMERGENCY · {0}": "🚨 NOTFALL · {0}",
+ "Search name, package or description": "Nach Name, Paket oder Beschreibung suchen",
+ "Search plugins and apps": "Plugins und Apps durchsuchen",
+ "Plugins and apps": "Plugins und Apps",
+ "Plugins only": "Nur Plugins",
+ "Apps only": "Nur Apps",
+ "Any ATAK version": "Jede ATAK-Version",
+ "{0} of {1} shown": "{0} von {1} angezeigt",
+ "Nothing matches the filter": "Nichts passt zum Filter"
 }

@@ -2699,10 +2699,34 @@ $('#maps-table').addEventListener('click', guard(async (e) => {
 
 const ANDROID = { 21: '5.0', 22: '5.1', 23: '6', 24: '7', 25: '7.1', 26: '8', 27: '8.1', 28: '9', 29: '10', 30: '11', 31: '12', 32: '12L', 33: '13', 34: '14', 35: '15', 36: '16' };
 
+let appsList = [];
+
 function renderApps(r) {
   $('#apk-url').textContent = r.url || '(set the public host in Settings)';
   $('#apk-configure').checked = r.configure_devices;
-  $('#apk-table tbody').innerHTML = r.apps.map((a) => {
+  appsList = r.apps;
+  // ATAK versions the plugins are built for, newest first.
+  const sel = $('#apk-atak');
+  const cur = sel.value;
+  const vers = [...new Set(r.apps.filter((a) => a.is_plugin && a.atak_version).map((a) => a.atak_version))]
+    .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+  sel.innerHTML = '<option value="">Any ATAK version</option>' + vers.map((v) => `<option value="${esc(v)}">ATAK ${esc(v)}</option>`).join('');
+  sel.value = vers.includes(cur) ? cur : '';
+  sel.hidden = !vers.length;
+  $('#apk-filters').hidden = !r.apps.length;
+  renderAppRows();
+}
+
+function renderAppRows() {
+  const q = $('#apk-filter').value.trim().toLowerCase();
+  const kind = $('#apk-kind').value;
+  const atak = $('#apk-atak').value;
+  const list = appsList.filter((a) => (!q || `${a.name} ${a.package} ${a.description || ''} ${a.version || ''}`.toLowerCase().includes(q))
+    && (!kind || (kind === 'plugin') === !!a.is_plugin)
+    && (!atak || (a.is_plugin && a.atak_version === atak)));
+  $('#apk-count').textContent = list.length === appsList.length ? '' : `${list.length} of ${appsList.length} shown`;
+  $('#apk-table tbody').innerHTML = !appsList.length ? emptyRow(7, 'No plugins or apps yet')
+    : !list.length ? emptyRow(7, 'Nothing matches the filter') : list.map((a) => {
     const flavor = a.plugin_api ? a.plugin_api.split('.').pop() : '';
     return `<tr>
     <td><img class="app-icon" src="api/apps/${esc(a.sha256)}/icon" alt=""></td>
@@ -2717,8 +2741,12 @@ function renderApps(r) {
     <td>${a.min_sdk ? esc(ANDROID[a.min_sdk] ? ANDROID[a.min_sdk] + '+' : 'API ' + a.min_sdk) : ''}</td>
     <td>${bytes(a.size)}</td>
     <td>${esc(date(a.uploaded))}<div class="muted">${esc(a.uploader)}</div></td></tr>`;
-  }).join('') || emptyRow(7, 'No plugins or apps yet');
+  }).join('');
 }
+
+$('#apk-filter').addEventListener('input', renderAppRows);
+$('#apk-kind').addEventListener('change', renderAppRows);
+$('#apk-atak').addEventListener('change', renderAppRows);
 
 async function loadApps() {
   renderApps(await api('GET', 'api/apps'));
