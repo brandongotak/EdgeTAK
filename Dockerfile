@@ -49,7 +49,7 @@ ENV EDGETAK_DATA=/data \
 VOLUME /data
 # CoT TCP/TLS, HTTPS API + console, enrollment, plain HTTP, Let's Encrypt,
 # and video (RTSP, RTMP, SRT).
-EXPOSE 8087 8089 8443 8446 8080 80 8554 1935 8890/udp
+EXPOSE 8087 8089 8443 8446 8080 80 8554 1935 8890/udp 8447
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD ["/usr/local/bin/edgetak", "-healthcheck"]
 USER nonroot
 ENTRYPOINT ["/usr/local/bin/edgetak"]

@@ -49,6 +49,7 @@
       <button data-tab="overlays" data-section="data">Overlays</button>
       <button data-tab="plugins" data-section="data">Plugins</button>
       <button data-tab="video" data-section="data">Video</button>
+      <button data-tab="terratak" data-section="data">TerraTAK</button>
       <button data-tab="send" data-section="messages">Send</button>
       <button data-tab="chat" data-section="messages">Chat log</button>
       <button data-tab="connect" data-section="server">Connect</button>
@@ -1176,6 +1177,21 @@
       </dialog>
     </section>
 
+    <section id="tab-terratak" class="tab" hidden>
+      <div class="card">
+        <div class="card-head"><h2>TerraTAK</h2><span id="tt-state"></span></div>
+        <p class="muted">TerraTAK, from the TAK Product Center, makes map tilesets from your own imagery (GeoTIFF, NITF, CADRG, MrSID), terrain (DTED, SRTM) and vector data (KML, GeoPackage, Shapefile, OpenStreetMap), and streams them to TAK devices. EdgeTAK runs it on this server and opens it to administrators only.</p>
+        <div id="tt-body"></div>
+      </div>
+      <div class="card" id="tt-tilesets-card" hidden>
+        <div class="card-head"><h2>Tilesets</h2><button type="button" class="small" id="tt-refresh">Refresh</button></div>
+        <p class="muted">Imagery tilesets can go to devices as ATAK map sources in their device profile, like offline maps: devices get them when they enroll or connect, and load the tiles from this server with their certificate.</p>
+        <div class="table-wrap"><table id="tt-table">
+          <thead><tr><th>Name</th><th>Type</th><th>Zoom</th><th>Added</th><th>Devices</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
     <section id="tab-send" class="tab" hidden>
       <div class="card">
         <h2>Recipients</h2>

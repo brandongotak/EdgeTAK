@@ -51,6 +51,32 @@ type Config struct {
 
 	// Video connects EdgeTAK to a MediaMTX media server (installer --video).
 	Video Video `json:"video"`
+
+	// TerraTAK connects EdgeTAK to a TerraTAK tile server (installer --terratak).
+	TerraTAK TerraTAK `json:"terratak"`
+}
+
+// TerraTAK configures the TerraTAK companion: TAK Product Center's tile
+// server, run in a container next to EdgeTAK. It has no login of its own, so
+// it listens on loopback only; EdgeTAK serves its web app on Addr over TLS
+// to administrators, and its tiles to devices on the HTTPS port.
+type TerraTAK struct {
+	Enabled bool `json:"enabled"`
+	// URL is where TerraTAK listens (its container's published port).
+	URL string `json:"url"`
+	// Addr is EdgeTAK's TLS listener for the TerraTAK web app (8447).
+	Addr string `json:"addr"`
+}
+
+// Normalized fills defaults for unset TerraTAK settings.
+func (t TerraTAK) Normalized() TerraTAK {
+	if t.URL == "" {
+		t.URL = "http://127.0.0.1:8098"
+	}
+	if t.Addr == "" {
+		t.Addr = ":8447"
+	}
+	return t
 }
 
 // Video configures the MediaMTX companion. EdgeTAK writes MediaMTX's config

@@ -209,6 +209,8 @@ type db struct {
 	Backups BackupSettings `json:"backups"`
 
 	OfflineMaps map[string]OfflineMap `json:"offline_maps"` // by file name in the maps folder
+	// TerraTAKTilesets are the TerraTAK tilesets sent to devices, by tileset ID.
+	TerraTAKTilesets map[string]TerraTAKTileset `json:"terratak_tilesets,omitempty"`
 
 	LostContact LostContactSettings `json:"lost_contact"`
 
@@ -2687,6 +2689,42 @@ func (s *Store) DeleteOfflineMap(file string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.db.OfflineMaps, file)
+	return s.save()
+}
+
+// ---- TerraTAK ----
+
+// TerraTAKTileset is a TerraTAK tileset sent to devices as an ATAK map
+// source, with what the map source needs (kept so device profiles don't wait
+// on TerraTAK).
+type TerraTAKTileset struct {
+	Name    string    `json:"name"`
+	MinZoom int       `json:"min_zoom"`
+	MaxZoom int       `json:"max_zoom"`
+	Format  string    `json:"format"` // ATAK tile type: png or jpg
+	Updated time.Time `json:"updated"`
+}
+
+// TerraTAKTilesets returns the tilesets sent to devices, by ID.
+func (s *Store) TerraTAKTilesets() map[string]TerraTAKTileset {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return maps.Clone(s.db.TerraTAKTilesets)
+}
+
+// SetTerraTAKTileset sends a tileset to devices (t != nil) or stops (nil).
+func (s *Store) SetTerraTAKTileset(id string, t *TerraTAKTileset) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if t == nil {
+		delete(s.db.TerraTAKTilesets, id)
+		return s.save()
+	}
+	if s.db.TerraTAKTilesets == nil {
+		s.db.TerraTAKTilesets = map[string]TerraTAKTileset{}
+	}
+	t.Updated = time.Now().UTC()
+	s.db.TerraTAKTilesets[id] = *t
 	return s.save()
 }
 

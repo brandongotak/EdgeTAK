@@ -183,6 +183,16 @@
     <li>La scheda <strong>MediaMTX</strong> aggiorna o riavvia il server video.</li>
   </ul>
 </article>
+<article class="help-topic" id="help-terratak" data-group="Dati" data-tab="terratak" data-title="TerraTAK">
+  <h2>TerraTAK</h2>
+  <p>TerraTAK, il server di tasselli del TAK Product Center, crea set di tasselli di mappa dalle tue immagini, dai dati del terreno e dai dati vettoriali. EdgeTAK lo esegue su questo server (in un container) e lo apre solo agli amministratori.</p>
+  <ul>
+    <li><strong>Configurazione:</strong> in <em>Dati → TerraTAK</em>, fai clic su <em>Installa Docker</em> se il server non ce l'ha, poi carica l'immagine di TerraTAK da tak.gov (Products → TerraTAK): <code>amd64</code> per la maggior parte di PC e server, <code>arm64</code> per un Raspberry Pi. Oppure installa con <code>--terratak terratak-&lt;version&gt;-&lt;arch&gt;.tar</code> (aggiungi <code>--install-docker</code> per installare Docker senza conferma).</li>
+    <li><strong>Uso:</strong> <em>Apri TerraTAK</em> apre la sua app sulla porta 8447, dove importi i dati di origine e crei, unisci e ritagli set di tasselli. Accedi prima a questa console.</li>
+    <li><strong>Dispositivi:</strong> spunta <em>come fonte della mappa ATAK</em> accanto a un set di tasselli di immagini; i dispositivi lo ricevono nel loro profilo dispositivo quando si registrano o si connettono e caricano i tasselli da questo server con il loro certificato. <em>Mostra sulla mappa</em> lo mostra sulla mappa della console.</li>
+    <li><strong>Aggiornamento:</strong> carica un'immagine più recente in <em>Aggiorna TerraTAK</em>. <em>Rimuovi</em> elimina il container e l'immagine; i set di tasselli e i dati di origine vengono conservati.</li>
+  </ul>
+</article>
 
 <article class="help-topic" id="help-send" data-group="Messaggi" data-tab="send" data-title="Invia">
   <h2>Invia</h2>

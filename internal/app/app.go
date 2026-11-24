@@ -275,12 +275,24 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		{"enroll", a.Cfg.EnrollAddr, httpsTLS, true},
 		{"http", a.Cfg.HTTPAddr, nil, true},
 	}
+	if tt := a.Cfg.TerraTAK.Normalized(); tt.Enabled && tt.Addr != "" {
+		// TerraTAK's web app, for administrators' browsers: no client
+		// certificates, and the enrollment port's certificate (Let's
+		// Encrypt, if configured).
+		ttTLS := httpsTLS.Clone()
+		ttTLS.ClientAuth = tls.NoClientCert
+		specs = append(specs, struct {
+			name, addr string
+			tls        *tls.Config
+			web        bool
+		}{"terratak", tt.Addr, ttTLS, true})
+	}
 	var binds []bound
 	for _, sp := range specs {
 		if sp.addr == "" {
 			continue
 		}
-		if sp.tls != nil && a.Public.Uses(sp.name) {
+		if sp.tls != nil && (a.Public.Uses(sp.name) || sp.name == "terratak" && a.Public.Uses("enroll")) {
 			// Present the publicly trusted certificate; client certificates
 			// are still verified against the EdgeTAK CA.
 			sp.tls = sp.tls.Clone()
@@ -431,8 +443,12 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 			}()
 			continue
 		}
+		handler := ws.Handler(b.tls)
+		if b.name == "terratak" {
+			handler = ws.TerraTAKHandler()
+		}
 		srv := &http.Server{
-			Handler:           ws.Handler(b.tls),
+			Handler:           handler,
 			ReadHeaderTimeout: 15 * time.Second,
 			IdleTimeout:       2 * time.Minute,
 			ErrorLog:          errLog,

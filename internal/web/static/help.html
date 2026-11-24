@@ -183,6 +183,16 @@
     <li>The <strong>MediaMTX</strong> card updates or restarts the video server.</li>
   </ul>
 </article>
+<article class="help-topic" id="help-terratak" data-group="Data" data-tab="terratak" data-title="TerraTAK">
+  <h2>TerraTAK</h2>
+  <p>TerraTAK, the TAK Product Center's tile server, makes map tilesets from your own imagery, terrain and vector data. EdgeTAK runs it on this server (in a container) and opens it to administrators only.</p>
+  <ul>
+    <li><strong>Setting it up:</strong> on <em>Data → TerraTAK</em>, click <em>Install Docker</em> if the server doesn't have it, then upload the TerraTAK image from tak.gov (Products → TerraTAK): <code>amd64</code> for most PCs and servers, <code>arm64</code> for a Raspberry Pi. Or install with <code>--terratak terratak-&lt;version&gt;-&lt;arch&gt;.tar</code> (add <code>--install-docker</code> to install Docker without being asked).</li>
+    <li><strong>Using it:</strong> <em>Open TerraTAK</em> opens its own app on port 8447, where you import source data and make, merge and chip tilesets. Sign in to this console first.</li>
+    <li><strong>Devices:</strong> tick <em>as an ATAK map source</em> next to an imagery tileset; devices get it in their device profile when they enroll or connect, and load the tiles from this server with their certificate. <em>Show on map</em> shows it on the console map.</li>
+    <li><strong>Updating:</strong> upload a newer image under <em>Update TerraTAK</em>. <em>Remove</em> deletes the container and image; tilesets and source data are kept.</li>
+  </ul>
+</article>
 
 <article class="help-topic" id="help-send" data-group="Messages" data-tab="send" data-title="Send">
   <h2>Send</h2>

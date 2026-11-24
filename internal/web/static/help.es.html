@@ -183,6 +183,16 @@
     <li>La tarjeta de <strong>MediaMTX</strong> actualiza o reinicia el servidor de vídeo.</li>
   </ul>
 </article>
+<article class="help-topic" id="help-terratak" data-group="Datos" data-tab="terratak" data-title="TerraTAK">
+  <h2>TerraTAK</h2>
+  <p>TerraTAK, el servidor de teselas del TAK Product Center, crea conjuntos de teselas de mapa a partir de tus propias imágenes, datos de terreno y datos vectoriales. EdgeTAK lo ejecuta en este servidor (en un contenedor) y solo lo abre a los administradores.</p>
+  <ul>
+    <li><strong>Configuración:</strong> en <em>Datos → TerraTAK</em>, pulsa <em>Instalar Docker</em> si el servidor no lo tiene y luego sube la imagen de TerraTAK de tak.gov (Products → TerraTAK): <code>amd64</code> para la mayoría de PC y servidores, <code>arm64</code> para una Raspberry Pi. O instala con <code>--terratak terratak-&lt;version&gt;-&lt;arch&gt;.tar</code> (añade <code>--install-docker</code> para instalar Docker sin que se pregunte).</li>
+    <li><strong>Uso:</strong> <em>Abrir TerraTAK</em> abre su propia aplicación en el puerto 8447, donde importas datos de origen y creas, combinas y recortas conjuntos de teselas. Inicia sesión antes en esta consola.</li>
+    <li><strong>Dispositivos:</strong> marca <em>como fuente de mapa de ATAK</em> junto a un conjunto de teselas de imágenes; los dispositivos lo reciben en su perfil de dispositivo al inscribirse o conectarse y cargan las teselas desde este servidor con su certificado. <em>Mostrar en el mapa</em> lo muestra en el mapa de la consola.</li>
+    <li><strong>Actualizar:</strong> sube una imagen más reciente en <em>Actualizar TerraTAK</em>. <em>Quitar</em> borra el contenedor y la imagen; los conjuntos de teselas y los datos de origen se conservan.</li>
+  </ul>
+</article>
 
 <article class="help-topic" id="help-send" data-group="Mensajes" data-tab="send" data-title="Enviar">
   <h2>Enviar</h2>

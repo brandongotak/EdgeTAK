@@ -23,6 +23,8 @@ services:
       # Video (the bundled MediaMTX) is on; "0" turns it off (and drop the
       # video ports below).
       # EDGETAK_VIDEO: "0"
+      # TerraTAK (the terratak service below): its address on this network.
+      # EDGETAK_TERRATAK_URL: http://terratak:8080
     ports:
       - "8089:8089"   # CoT over TLS (devices)
       - "8443:8443"   # Marti API and admin console
@@ -34,8 +36,23 @@ services:
       - "8890:8890/udp"   # video: SRT
       # - "80:80"         # Let's Encrypt
       # - "9001:9001"     # federation: other servers connecting here (Federation tab)
+      # - "8447:8447"     # TerraTAK's web app, for administrators
     volumes:
       - edgetak-data:/data
 
+  # TerraTAK, the TAK Product Center's tile server (Data → TerraTAK). Load the
+  # image from tak.gov first: docker load -i terratak-<version>-<arch>.tar
+  # It has no login of its own: publish no ports for it; EdgeTAK serves it
+  # to administrators on 8447.
+  # terratak:
+  #   image: terratak:0.8.6
+  #   container_name: terratak
+  #   restart: unless-stopped
+  #   environment:
+  #     TERRATAK_MAX_MEMORY: 512M
+  #   volumes:
+  #     - terratak-data:/opt/terratak
+
 volumes:
   edgetak-data:
+  # terratak-data:

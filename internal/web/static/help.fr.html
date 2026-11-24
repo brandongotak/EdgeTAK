@@ -183,6 +183,16 @@
     <li>La carte <strong>MediaMTX</strong> met à jour ou redémarre le serveur vidéo.</li>
   </ul>
 </article>
+<article class="help-topic" id="help-terratak" data-group="Données" data-tab="terratak" data-title="TerraTAK">
+  <h2>TerraTAK</h2>
+  <p>TerraTAK, le serveur de tuiles du TAK Product Center, crée des jeux de tuiles cartographiques à partir de vos propres images, données de terrain et données vectorielles. EdgeTAK l'exécute sur ce serveur (dans un conteneur) et ne l'ouvre qu'aux administrateurs.</p>
+  <ul>
+    <li><strong>Mise en place :</strong> dans <em>Données → TerraTAK</em>, cliquez sur <em>Installer Docker</em> si le serveur ne l'a pas, puis envoyez l'image TerraTAK de tak.gov (Products → TerraTAK) : <code>amd64</code> pour la plupart des PC et serveurs, <code>arm64</code> pour un Raspberry Pi. Ou installez avec <code>--terratak terratak-&lt;version&gt;-&lt;arch&gt;.tar</code> (ajoutez <code>--install-docker</code> pour installer Docker sans confirmation).</li>
+    <li><strong>Utilisation :</strong> <em>Ouvrir TerraTAK</em> ouvre son application sur le port 8447, où vous importez des données sources et créez, fusionnez et découpez des jeux de tuiles. Connectez-vous d'abord à cette console.</li>
+    <li><strong>Appareils :</strong> cochez <em>comme source de carte ATAK</em> à côté d'un jeu de tuiles d'images ; les appareils le reçoivent dans leur profil d'appareil lors de leur inscription ou connexion, et chargent les tuiles depuis ce serveur avec leur certificat. <em>Afficher sur la carte</em> l'affiche sur la carte de la console.</li>
+    <li><strong>Mise à jour :</strong> envoyez une image plus récente dans <em>Mettre à jour TerraTAK</em>. <em>Retirer</em> efface le conteneur et l'image ; les jeux de tuiles et les données sources sont conservés.</li>
+  </ul>
+</article>
 
 <article class="help-topic" id="help-send" data-group="Messages" data-tab="send" data-title="Envoyer">
   <h2>Envoyer</h2>

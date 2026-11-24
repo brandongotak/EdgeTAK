@@ -48,6 +48,11 @@ func applyEnv(cfg *config.Config, dataDir string) error {
 	if isOn(os.Getenv("EDGETAK_NO_PLAINTEXT")) {
 		cfg.TCPAddr, cfg.HTTPAddr = "", ""
 	}
+	// TerraTAK in its own container (docker-compose): its address.
+	if v := strings.TrimSpace(os.Getenv("EDGETAK_TERRATAK_URL")); v != "" {
+		cfg.TerraTAK = cfg.TerraTAK.Normalized()
+		cfg.TerraTAK.Enabled, cfg.TerraTAK.URL = !isOff(v), v
+	}
 	if isOff(os.Getenv("EDGETAK_VIDEO")) {
 		cfg.Video.Enabled = false
 	} else if isOn(os.Getenv("EDGETAK_VIDEO")) {

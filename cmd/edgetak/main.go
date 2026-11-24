@@ -42,6 +42,8 @@ func main() {
 	enableLE := flag.String("enable-letsencrypt", "", "use a Let's Encrypt certificate on the enrollment port, optionally registered to `email` (-enable-letsencrypt= for none); needs public_host to be a domain pointing here and port 80 reachable")
 	enableVideo := flag.Bool("enable-video", false, "connect EdgeTAK to a MediaMTX media server on this machine (the installer sets it up)")
 	disableVideo := flag.Bool("disable-video", false, "turn video off (the installer's --no-video)")
+	enableTerraTAK := flag.Bool("enable-terratak", false, "connect EdgeTAK to a TerraTAK tile server on this machine (the installer sets it up)")
+	disableTerraTAK := flag.Bool("disable-terratak", false, "turn TerraTAK off (the installer's --no-terratak)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	backupTo := flag.String("backup", "", "write a backup of the data and configuration to `file` (.tar.gz), then exit")
 	restoreFrom := flag.String("restore", "", "restore a backup `file` made by -backup or the console, then exit; stop EdgeTAK first")
@@ -144,6 +146,22 @@ func main() {
 			fatal(err)
 		}
 		fmt.Println("Video disabled (restart EdgeTAK to apply)")
+		return
+	}
+	if *disableTerraTAK || *enableTerraTAK {
+		if *disableTerraTAK && !cfg.TerraTAK.Enabled {
+			return
+		}
+		cfg.TerraTAK = cfg.TerraTAK.Normalized()
+		cfg.TerraTAK.Enabled = *enableTerraTAK
+		if err := config.Save(*cfgPath, cfg); err != nil {
+			fatal(err)
+		}
+		if *enableTerraTAK {
+			fmt.Printf("TerraTAK enabled: its web app on port %s (restart EdgeTAK to apply)\n", strings.TrimPrefix(cfg.TerraTAK.Addr, ":"))
+		} else {
+			fmt.Println("TerraTAK disabled (restart EdgeTAK to apply)")
+		}
 		return
 	}
 	if *enableVideo {

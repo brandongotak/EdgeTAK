@@ -727,6 +727,46 @@ External cameras or media servers can be added with their own URL (`rtsp://`,
 cannot play them. Bandwidth is the main limit: every viewer receives a full
 copy of the stream, about 2 to 4 Mbit/s for 1080p.
 
+### TerraTAK
+
+[TerraTAK](https://tak.gov/products/terratak), the TAK Product Center's tile
+server, makes map tilesets from your own imagery (GeoTIFF, NITF, CADRG,
+MrSID), terrain (DTED, SRTM) and vector data (KML, GeoPackage, Shapefile,
+OpenStreetMap). EdgeTAK can run it next to the server. It comes as a
+container image from tak.gov, which EdgeTAK doesn't redistribute: download
+`terratak-<version>-amd64.tar` (most PCs and servers) or
+`terratak-<version>-arm64.tar` (Raspberry Pi) there.
+
+- **From the console:** on **Data → TerraTAK**, click **Install Docker** if
+  the server doesn't have it (`docker.io` from the system's packages, or
+  Podman on Red Hat-type systems), then upload the image. EdgeTAK loads it,
+  starts TerraTAK and restarts itself.
+- **With the installer:** add `--terratak terratak-<version>-<arch>.tar`.
+  Without Docker, the installer asks whether to install it; `--install-docker`
+  installs it without asking (for scripts). `--no-terratak` removes TerraTAK.
+
+TerraTAK has no login of its own, so it only listens on localhost. EdgeTAK
+serves its app on port **8447** to signed-in administrators (sign in to the
+console first; **Open TerraTAK** links there), rewrites the tile addresses
+TerraTAK hands out to HTTPS, and refuses changes from other sites. Its memory
+use is about 0.5 to 1 GB, so on a Raspberry Pi use a Pi 5 or a Pi 4 with 4 GB
+or more.
+
+**Tilesets on devices.** The TerraTAK page lists the tilesets. Tick **as an
+ATAK map source** next to an imagery tileset and devices get it in their
+device profile when they enroll or connect, like offline maps; they load its
+tiles from `https://<host>:8443/terratak/tiles/...` with their certificate.
+**Show on map** shows it on the console map.
+
+**Updating and removing.** Upload a newer image under **Update TerraTAK** (or
+rerun the installer with it). **Remove** deletes the container and image;
+tilesets and source data stay in the `edgetak-terratak` Docker volume for
+when you load TerraTAK again, until `--uninstall --purge`. TerraTAK's log:
+`journalctl -u edgetak-terratak-app -f`.
+
+**EdgeTAK in Docker:** run TerraTAK as a second container and set
+`EDGETAK_TERRATAK_URL` (see `docker-compose.yml`).
+
 ## Messages
 
 **Send** (Messages → Send): send a chat message or offer a data package
@@ -1250,6 +1290,7 @@ safe as the server, and somewhere else.
 | 8554 | Video: RTSP (not with `--no-video`) |
 | 1935 | Video: RTMP (not with `--no-video`) |
 | 8890/udp | Video: SRT (not with `--no-video`) |
+| 8447 | TerraTAK's web app, for administrators (only with TerraTAK) |
 
 With video on, MediaMTX's API (9997), its HLS server (8888) and EdgeTAK's
 video auth endpoint (8099) listen on localhost only. `video.bind_host` in the

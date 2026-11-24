@@ -149,6 +149,7 @@ const loaders = {
   overlays: loadOverlays,
   missions: loadMissions,
   video: loadVideo,
+  terratak: loadTerraTAK,
   send: loadSend,
   connect: loadConnect,
   help: loadHelp,
@@ -4415,6 +4416,156 @@ $('#zt-body').addEventListener('submit', guard(async (e) => {
   e.preventDefault();
   renderZeroTier(await api('POST', 'api/zerotier/networks', { network_id: e.target.nwid.value }));
   toast('Joining the network…');
+}));
+
+// ---------- TerraTAK ----------
+//
+// TAK Product Center's tile server, run next to EdgeTAK in a container. The
+// root-owned helper installs Docker and loads the image uploaded here;
+// EdgeTAK serves TerraTAK's app on its own port to administrators.
+
+let terratak = null;
+let ttTimer = null;
+const ttLayers = {}; // tileset id → Leaflet layer on the console map
+
+function terratakAppURL(t) {
+  return t.app_port ? `https://${location.hostname}:${t.app_port}/` : '';
+}
+
+function renderTerraTAK(t) {
+  terratak = t;
+  const st = t.status;
+  const busy = st && st.state === 'running';
+  $('#tt-state').innerHTML = !t.enabled ? '<span class="pill">off</span>'
+    : t.reachable ? '<span class="pill ok">running</span>' : '<span class="pill warn">not answering</span>';
+  const status = st ? `<p class="${st.state === 'error' ? 'error' : 'muted'}">${esc(st.message || st.state)}</p>` : '';
+  const upload = `<form id="tt-upload" class="inline-form">
+      <input type="file" name="file" accept=".tar" required>
+      <button class="primary" type="submit"${busy ? ' disabled' : ''}>Upload and start</button>
+      <span class="muted" id="tt-progress"></span>
+    </form>`;
+  let body = '';
+  if (!t.can_manage && !t.enabled) {
+    body = `<p>${esc(t.manage_note)}</p>`;
+  } else if (!t.enabled) {
+    body = `<ol class="steps">
+      <li><strong>Docker.</strong> ${t.runtime
+        ? `<span class="pill ok">installed</span> <span class="muted">TerraTAK runs in a container (${esc(t.runtime)}).</span>`
+        : `TerraTAK runs in a container, so this server needs Docker. <button type="button" class="small primary" id="tt-docker"${busy ? ' disabled' : ''}>Install Docker</button>`}</li>
+      <li><strong>The TerraTAK image.</strong> <span>Download it from tak.gov (Products → TerraTAK) for this server's processor: amd64 for most PCs and servers, arm64 for a Raspberry Pi. It's about 650 MB.</span>${t.runtime ? upload : ''}</li>
+    </ol>${status}`;
+  } else {
+    const url = terratakAppURL(t);
+    body = `<dl class="kv">
+        <dt>Version</dt><dd>${t.version ? esc(t.version) : '—'}</dd>
+        <dt>Address</dt><dd>${url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>` : '—'}</dd>
+      </dl>
+      ${t.error ? `<p class="error">${esc(t.error)}</p>` : ''}${status}
+      <div class="row-actions">${url ? `<a class="button primary" href="${esc(url)}" target="_blank" rel="noopener">Open TerraTAK</a>` : ''}
+        ${t.can_manage ? `<button type="button" id="tt-restart"${busy ? ' disabled' : ''}>Restart</button>
+        <button type="button" class="danger" id="tt-remove"${busy ? ' disabled' : ''}>Remove</button>` : ''}</div>
+      ${t.can_manage ? `<details class="tt-update"><summary>Update TerraTAK</summary><p class="muted">Upload a newer image from tak.gov; tilesets and source data are kept.</p>${upload}</details>` : ''}`;
+  }
+  $('#tt-body').innerHTML = body;
+
+  $('#tt-tilesets-card').hidden = !t.reachable;
+  $('#tt-table tbody').innerHTML = (t.tilesets || []).map((x) => `<tr>
+      <td><strong>${esc(x.name)}</strong></td>
+      <td><span class="pill">${esc(x.content_type || '')}</span></td>
+      <td>${x.min_zoom}–${x.max_zoom}</td>
+      <td>${x.added ? esc(date(x.added)) : ''}</td>
+      <td>${x.content_type === 'imagery' ? `<label class="check"><input type="checkbox" data-tt-devices="${esc(x.id)}" ${x.devices ? 'checked' : ''}> as an ATAK map source</label>` : '<span class="muted">imagery only</span>'}</td>
+      <td class="actions">${x.content_type === 'imagery' ? `<button class="small" data-tt-show="${esc(x.id)}">${ttLayers[x.id] ? 'Hide from map' : 'Show on map'}</button>` : ''}</td></tr>`).join('')
+    || emptyRow(6, 'No tilesets yet: make one in TerraTAK');
+
+  // Keep checking while the helper works, and while EdgeTAK restarts to
+  // turn TerraTAK on or off after it (about 15 seconds).
+  const recent = st && st.state === 'done' && Date.now() - new Date(st.at) < 90000;
+  const settling = recent && ((/ is running$/.test(st.message) && !t.reachable) || (/ was removed/.test(st.message) && t.enabled));
+  clearTimeout(ttTimer);
+  if ((busy || settling) && currentTab === 'terratak') ttTimer = setTimeout(pollTerraTAK, 3000);
+}
+
+function pollTerraTAK() {
+  if (currentTab !== 'terratak') return;
+  api('GET', 'api/terratak').then(renderTerraTAK).catch(() => { ttTimer = setTimeout(pollTerraTAK, 3000); });
+}
+
+async function loadTerraTAK() {
+  renderTerraTAK(await api('GET', 'api/terratak'));
+}
+
+// The image is large: XHR shows the upload's progress.
+function uploadTerraTAKImage(file) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'api/terratak/image');
+    xhr.setRequestHeader('X-EdgeTAK', '1');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) $('#tt-progress').textContent = `${Math.floor((e.loaded / e.total) * 100)}%`;
+    };
+    xhr.onload = () => {
+      let body = null;
+      try { body = JSON.parse(xhr.responseText); } catch { /* not JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+      else reject(new Error((body && body.error) || xhr.statusText));
+    };
+    xhr.onerror = () => reject(new Error('Upload failed'));
+    xhr.send(file);
+  });
+}
+
+$('#tab-terratak').addEventListener('click', guard(async (e) => {
+  const id = e.target.id;
+  if (id === 'tt-docker') {
+    if (!confirm('Install Docker on this server? It comes from your system\'s package sources (docker.io, or Podman on Red Hat-type systems).')) return;
+    renderTerraTAK(await api('POST', 'api/terratak/docker'));
+    toast('Installing Docker…');
+  } else if (id === 'tt-restart') {
+    renderTerraTAK(await api('POST', 'api/terratak/restart'));
+    toast('Restarting TerraTAK…');
+  } else if (id === 'tt-remove') {
+    if (!confirm('Remove TerraTAK from this server? Its container and image are deleted; its tilesets and source data are kept for when you load it again.')) return;
+    renderTerraTAK(await api('POST', 'api/terratak/remove'));
+    toast('Removing TerraTAK…');
+  } else if (id === 'tt-refresh') {
+    await loadTerraTAK();
+  } else if (e.target.dataset.ttShow) {
+    const tid = e.target.dataset.ttShow;
+    const x = (terratak?.tilesets || []).find((v) => v.id === tid);
+    if (!x) return;
+    setMapVisible(true);
+    if (ttLayers[tid]) {
+      map.removeLayer(ttLayers[tid]);
+      delete ttLayers[tid];
+    } else {
+      ttLayers[tid] = L.tileLayer(`/terratak/tiles/${encodeURIComponent(tid)}/{z}/{x}/{y}`, { minZoom: 0, maxZoom: MAX_ZOOM, maxNativeZoom: x.max_zoom, zIndex: 300 }).addTo(map);
+      if (x.bounds) map.fitBounds([[x.bounds[1], x.bounds[0]], [x.bounds[3], x.bounds[2]]]);
+    }
+    renderTerraTAK(terratak);
+  }
+}));
+
+$('#tab-terratak').addEventListener('change', guard(async (e) => {
+  const tid = e.target.dataset.ttDevices;
+  if (!tid) return;
+  renderTerraTAK(await api('PUT', `api/terratak/tilesets/${encodeURIComponent(tid)}`, { devices: e.target.checked }));
+  toast(e.target.checked ? 'Devices get this map when they next connect' : 'No longer sent to devices (devices that have it keep it)');
+}));
+
+$('#tab-terratak').addEventListener('submit', guard(async (e) => {
+  if (e.target.id !== 'tt-upload') return;
+  e.preventDefault();
+  const file = e.target.file.files[0];
+  if (!file) return;
+  e.target.querySelector('button').disabled = true;
+  try {
+    renderTerraTAK(await uploadTerraTAKImage(file));
+    toast('Loading TerraTAK… this takes a minute or two');
+  } finally {
+    const b = e.target.querySelector('button');
+    if (b) b.disabled = false;
+  }
 }));
 
 // ---- theme ----

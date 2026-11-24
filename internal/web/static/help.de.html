@@ -183,6 +183,16 @@
     <li>Die Karte <strong>MediaMTX</strong> aktualisiert den Videoserver oder startet ihn neu.</li>
   </ul>
 </article>
+<article class="help-topic" id="help-terratak" data-group="Daten" data-tab="terratak" data-title="TerraTAK">
+  <h2>TerraTAK</h2>
+  <p>TerraTAK, der Kachelserver des TAK Product Center, erstellt Karten-Kachelsätze aus Ihren eigenen Bildern, Geländedaten und Vektordaten. EdgeTAK führt ihn auf diesem Server aus (in einem Container) und öffnet ihn nur für Administratoren.</p>
+  <ul>
+    <li><strong>Einrichten:</strong> Klicken Sie unter <em>Daten → TerraTAK</em> auf <em>Docker installieren</em>, falls der Server es nicht hat, und laden Sie dann das TerraTAK-Image von tak.gov hoch (Products → TerraTAK): <code>amd64</code> für die meisten PCs und Server, <code>arm64</code> für einen Raspberry Pi. Oder installieren Sie mit <code>--terratak terratak-&lt;version&gt;-&lt;arch&gt;.tar</code> (mit <code>--install-docker</code> wird Docker ohne Nachfrage installiert).</li>
+    <li><strong>Verwenden:</strong> <em>TerraTAK öffnen</em> öffnet seine eigene App auf Port 8447, in der Sie Quelldaten importieren und Kachelsätze erstellen, zusammenführen und zuschneiden. Melden Sie sich vorher an dieser Konsole an.</li>
+    <li><strong>Geräte:</strong> Aktivieren Sie <em>als ATAK-Kartenquelle</em> neben einem Bild-Kachelsatz; Geräte erhalten ihn bei der Registrierung oder beim Verbinden in ihrem Geräteprofil und laden die Kacheln mit ihrem Zertifikat von diesem Server. <em>Auf der Karte zeigen</em> zeigt ihn auf der Karte der Konsole.</li>
+    <li><strong>Aktualisieren:</strong> Laden Sie unter <em>TerraTAK aktualisieren</em> ein neueres Image hoch. <em>Entfernen</em> löscht Container und Image; Kachelsätze und Quelldaten bleiben erhalten.</li>
+  </ul>
+</article>
 
 <article class="help-topic" id="help-send" data-group="Nachrichten" data-tab="send" data-title="Senden">
   <h2>Senden</h2>
