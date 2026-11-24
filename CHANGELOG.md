@@ -10,6 +10,34 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.15.0 (2026-11-23)
+
+**TerraTAK.** EdgeTAK can run [TerraTAK](https://tak.gov/products/terratak),
+the TAK Product Center's tile server, next to it. TerraTAK makes map tilesets
+from your own imagery (GeoTIFF, NITF, CADRG, MrSID), terrain (DTED, SRTM) and
+vector data (KML, GeoPackage, Shapefile, OpenStreetMap). It comes as a
+container image from tak.gov, which EdgeTAK doesn't redistribute: you load
+the one you downloaded.
+
+- **Setting it up:** on the new **Data → TerraTAK** page, **Install Docker**
+  (if the server doesn't have it), then upload the image. Or install with
+  `--terratak terratak-<version>-<arch>.tar`; without Docker, the installer
+  asks whether to install it (`--install-docker` installs it without asking).
+  `--no-terratak` removes TerraTAK; its tilesets are kept.
+- **Using it:** TerraTAK has no login of its own, so it only listens on
+  localhost. EdgeTAK serves its app on port **8447** to signed-in
+  administrators (**Open TerraTAK**).
+- **Devices:** tick **as an ATAK map source** next to an imagery tileset, and
+  devices get it in their device profile, like offline maps, loading the tiles
+  from this server with their certificate. **Show on map** shows it on the
+  console map.
+- **Docker:** run TerraTAK as a second container and set
+  `EDGETAK_TERRATAK_URL` (see `docker-compose.yml`).
+
+**A tidier console.** Tables fit beside the map, the stat tiles sit on one
+row, your account has its own button in the header, and long Settings pages
+have jump links at the top.
+
 ## v1.15.0-rc.1 (2026-11-23)
 
 **TerraTAK.** EdgeTAK can run [TerraTAK](https://tak.gov/products/terratak),
