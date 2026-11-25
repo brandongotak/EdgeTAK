@@ -29,7 +29,9 @@ func (s *Service) List(c Caller, withProtected bool, tool string) []map[string]a
 	defer s.mu.RUnlock()
 	out := []map[string]any{}
 	for _, m := range s.sorted() {
-		if !m.visibleTo(c) || (tool != "" && m.Tool != tool) {
+		// The Reports plugin's missions are listed only when asked for by
+		// tool, as on TAK Server (which lists "public" missions by default).
+		if !m.visibleTo(c) || (tool != "" && m.Tool != tool) || (tool == "" && m.Tool == "citrap") {
 			continue
 		}
 		if m.PasswordHash != "" && !withProtected && s.role(m, c) == "" {
@@ -141,6 +143,33 @@ func (s *Service) Create(p CreateParams, c Caller) (view map[string]any, created
 	s.log.Info("mission created", "mission", m.Name, "user", c.Username, "creatorUid", p.CreatorUID, "groups", m.Groups)
 	s.router.Inject(missionEvent(m, "t-x-m-n", "CREATE", p.CreatorUID, ""), m.Groups)
 	return s.render(m, View{Token: s.ownerToken(m, c)}), true, nil
+}
+
+// EnsureEveryone creates a server mission every user sees (read-only for
+// them), if it doesn't exist yet.
+func (s *Service) EnsureEveryone(name, tool, creatorUID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if m, ok := s.get(name); ok {
+		if !m.Everyone {
+			m.Everyone = true
+			return s.save(m)
+		}
+		return nil
+	}
+	now := time.Now().UTC()
+	m := &Mission{
+		GUID: newGUID(), Name: name, Tool: tool, Keywords: []string{}, CreatorUID: creatorUID, Created: now, LastEdited: now,
+		DefaultRole: RoleReadOnly, Expiration: -1, Everyone: true,
+		Subscriptions: map[string]*Subscription{}, CoT: map[string]string{},
+	}
+	m.addChange(Change{Type: ChangeCreate, Timestamp: now, CreatorUID: creatorUID})
+	if err := s.save(m); err != nil {
+		return err
+	}
+	s.missions[strings.ToLower(m.Name)] = m
+	s.log.Info("mission created", "mission", m.Name, "for", "everyone")
+	return nil
 }
 
 func (s *Service) ownerToken(m *Mission, c Caller) string {

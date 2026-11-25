@@ -212,6 +212,10 @@ type db struct {
 	// TerraTAKTilesets are the TerraTAK tilesets sent to devices, by tileset ID.
 	TerraTAKTilesets map[string]TerraTAKTileset `json:"terratak_tilesets,omitempty"`
 
+	// Reports are the ATAK Reports plugin's reports (TAK Server's CITRAP
+	// API), by report ID.
+	Reports map[string]*Report `json:"reports,omitempty"`
+
 	LostContact LostContactSettings `json:"lost_contact"`
 
 	Geofences map[string]*Geofence `json:"geofences"` // by id
@@ -2725,6 +2729,83 @@ func (s *Store) SetTerraTAKTileset(id string, t *TerraTAKTileset) error {
 	}
 	t.Updated = time.Now().UTC()
 	s.db.TerraTAKTilesets[id] = *t
+	return s.save()
+}
+
+// ---- reports (ATAK Reports plugin, TAK Server's CITRAP API) ----
+
+// Report is one report: the fields the plugin searches on, the report XML,
+// and the data package (report XML and attachments) stored under Hash.
+type Report struct {
+	ID                  string    `json:"id"`
+	Type                string    `json:"type"`
+	Title               string    `json:"title"`
+	UserCallsign        string    `json:"user_callsign"`
+	UserDescription     string    `json:"user_description"`
+	DateTime            time.Time `json:"date_time"`
+	DateTimeDescription string    `json:"date_time_description"`
+	Location            string    `json:"location"` // WKT, e.g. POINT (lon lat)
+	LocationDescription string    `json:"location_description"`
+	EventScale          string    `json:"event_scale"`
+	Importance          string    `json:"importance"`
+	Status              string    `json:"status"`
+	XML                 string    `json:"xml"`
+	Hash                string    `json:"hash"`
+	OldHashes           []string  `json:"old_hashes,omitempty"` // earlier versions' packages
+	Groups              []string  `json:"groups"`
+	CreatorUID          string    `json:"creator_uid"`
+	Submitter           string    `json:"submitter"`
+	Created             time.Time `json:"created"`
+	Updated             time.Time `json:"updated"`
+}
+
+func cloneReport(r *Report) *Report {
+	c := *r
+	c.Groups = slices.Clone(r.Groups)
+	c.OldHashes = slices.Clone(r.OldHashes)
+	return &c
+}
+
+// Reports returns every report, newest first (by the report's date).
+func (s *Store) Reports() []*Report {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*Report, 0, len(s.db.Reports))
+	for _, r := range s.db.Reports {
+		out = append(out, cloneReport(r))
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].DateTime.After(out[j].DateTime) })
+	return out
+}
+
+func (s *Store) Report(id string) (*Report, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	r, ok := s.db.Reports[id]
+	if !ok {
+		return nil, false
+	}
+	return cloneReport(r), true
+}
+
+// PutReport adds or replaces a report.
+func (s *Store) PutReport(r Report) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.db.Reports == nil {
+		s.db.Reports = map[string]*Report{}
+	}
+	s.db.Reports[r.ID] = &r
+	return s.save()
+}
+
+func (s *Store) DeleteReport(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.db.Reports[id]; !ok {
+		return ErrNotFound
+	}
+	delete(s.db.Reports, id)
 	return s.save()
 }
 

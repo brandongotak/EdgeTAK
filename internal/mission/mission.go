@@ -150,6 +150,9 @@ type Mission struct {
 	DefaultRole    string    `json:"default_role"`
 	InviteOnly     bool      `json:"invite_only"`
 	Expiration     int64     `json:"expiration"`
+	// Everyone is a server mission every user sees whatever their groups,
+	// like TAK Server's "citrap" mission for the Reports plugin.
+	Everyone bool `json:"everyone,omitempty"`
 
 	UIDs          []UIDItem                `json:"uids"`
 	Contents      []ContentItem            `json:"contents"`
@@ -286,7 +289,7 @@ func (s *Service) get(name string) (*Mission, bool) {
 // ---- access control ----
 
 func (m *Mission) visibleTo(c Caller) bool {
-	if c.Admin {
+	if c.Admin || (m.Everyone && !c.Anonymous) {
 		return true
 	}
 	for _, g := range m.Groups {

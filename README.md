@@ -480,6 +480,9 @@ certificates last is set on the same page.
   items and files, the change feed, logs, invitations and export, with
   changes pushed live to subscribers. **Show on map** draws a mission's map
   items and the files in it the map can read as one layer.
+- **ATAK Reports plugin:** reports uploaded from the plugin are kept on the
+  server (TAK Server's CITRAP API), and the plugin can search, download,
+  update and delete them. Reports are shared with the uploader's groups.
 
 ### The map
 

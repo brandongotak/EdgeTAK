@@ -10,6 +10,14 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.16.0-rc.4 (2026-11-25)
+
+**ATAK Reports plugin.** EdgeTAK now has the report API the Reports plugin
+uses on TAK Server (CITRAP). Reports uploaded from the plugin, with their
+attachments, are kept on the server, and the plugin can search them by
+keyword, map area, time, type and callsign, download, update, add
+attachments and delete. Reports are shared with the uploader's groups.
+
 ## v1.16.0-rc.3 (2026-11-24)
 
 **No more 404 when updating a plugin.** When you add a newer build of a

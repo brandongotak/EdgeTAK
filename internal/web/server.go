@@ -192,6 +192,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.letsEncryptRoutes(mux)
 	s.zerotierRoutes(mux)
 	s.terratakRoutes(mux)
+	s.citrapRoutes(mux)
 	s.feedRoutes(mux)
 	s.frpRoutes(mux)
 	s.brandingRoutes(mux)
