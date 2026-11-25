@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"syscall"
 	"time"
 
 	"github.com/brandongotak/EdgeTAK/internal/cot"
@@ -218,7 +219,10 @@ func (s *Server) writeLoop(conn net.Conn, c *router.Client, ctrl <-chan control,
 }
 
 // cleanEnd reports whether a stream ended because the client closed it (or
-// EdgeTAK did), rather than going silent (timeout) or being reset.
+// EdgeTAK did), rather than going silent (timeout). A reset counts as closed:
+// the device itself answered, which is what quitting ATAK with data still
+// unread looks like; a phone that loses its network goes silent instead.
 func cleanEnd(err error) bool {
-	return err == nil || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, net.ErrClosed)
+	return err == nil || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, errConnReset)
 }

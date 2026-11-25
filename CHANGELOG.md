@@ -10,6 +10,16 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.16.1 (2026-11-25)
+
+**Fix: quitting ATAK raised a lost contact alert.** Quitting ATAK can reset
+its connection instead of closing it, and EdgeTAK took the reset for lost
+contact. A reset now counts as signing off, like turning the connection
+off. A phone that loses its network goes silent rather than resetting, so
+that still raises the alert after the grace period. To turn lost contact
+alerts off altogether, untick *Alert when contact is lost* under
+Settings → Lost contact alerts.
+
 ## v1.16.0 (2026-11-25)
 
 **ATAK Reports plugin.** EdgeTAK now has the report API the Reports plugin
