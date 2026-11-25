@@ -10,6 +10,25 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.16.0 (2026-11-25)
+
+**ATAK Reports plugin.** EdgeTAK now has the report API the Reports plugin
+uses on TAK Server (CITRAP). Reports uploaded from the plugin, with their
+attachments, are kept on the server, and the plugin can search them by
+keyword, map area, time, type and callsign, download, update, add
+attachments and delete. Reports are shared with the uploader's groups.
+
+**Find a plugin.** The plugins and apps on **Data → Plugins** have a filter
+row: search by name, package, description or version, show only plugins or
+only apps, and pick the ATAK version they're built for.
+
+**ATAK 5.9.** **Plugins from tak.gov** can show the plugins tak.gov publishes
+for ATAK 5.9.0.
+
+**No more 404 when updating a plugin.** When you add a newer build of a
+plugin, the build it replaces stays downloadable for 7 days, so devices that
+haven't synced their plugin list since still get it.
+
 ## v1.16.0-rc.4 (2026-11-25)
 
 **ATAK Reports plugin.** EdgeTAK now has the report API the Reports plugin
