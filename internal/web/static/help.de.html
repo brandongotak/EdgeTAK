@@ -136,6 +136,17 @@
   </ul>
 </article>
 
+<article class="help-topic" id="help-reports" data-group="Daten" data-tab="reports" data-title="Berichte">
+  <h2>Berichte</h2>
+  <p>Berichte aus dem ATAK-Plugin <strong>Reports</strong> (Formulare für Vorfälle und Beobachtungen) werden auf diesem Server gespeichert; ohne ihn hat das Plugin keinen Server, an den es sie senden kann. Im Plugin sieht jeder die Berichte seiner Gruppen; diese Seite zeigt alle.</p>
+  <ul>
+    <li>Suchen oder die Liste nach Art und Status eingrenzen.</li>
+    <li><strong>Details</strong> zeigt die ausgefüllten Angaben mit Fotos und anderen Anhängen; <strong>Herunterladen</strong> holt den Bericht so, wie das Plugin ihn sendet (ein Zip).</li>
+    <li><strong>Auf der Karte zeigen</strong> markiert den Ort; die Kartenebene <em>Berichte</em> zeigt alle.</li>
+    <li><strong>Löschen</strong> entfernt ihn vom Server und aus der Suche des Plugins; Kopien, die schon auf Geräten sind, bleiben.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-maps" data-group="Daten" data-tab="maps" data-title="Karten: Zeichnungen und Offline-Karten">
   <h2>Karten: Zeichnungen und Offline-Karten</h2>
   <h3>Zeichnungen</h3>
@@ -209,6 +220,16 @@
   <h2>Chat-Protokoll</h2>
   <p>Standardmäßig aus. Wenn es eingeschaltet ist, zeichnet es den über den Server gesendeten Chat auf (All Chat Rooms, Team- und Gruppenchats, Einzelnachrichten), für Nachbesprechungen.</p>
   <p>Durchsuchen Sie es, filtern Sie nach Unterhaltung, Absender und Zeit und exportieren Sie es als CSV oder JSON. Wie lange Nachrichten aufbewahrt werden, legen Sie unter <a data-goto="settings">Einstellungen → Datenaufbewahrung</a> fest.</p>
+</article>
+
+<article class="help-topic" id="help-cot" data-group="Nachrichten" data-tab="cot" data-title="CoT-Verlauf">
+  <h2>CoT-Verlauf</h2>
+  <p>Standardmäßig aus. Eingeschaltet zeichnet er jedes Ereignis auf, das durch den Server läuft: Markierungen, Formen, Routen, Chat, Alarme, Video und Löschungen, von Geräten, föderierten Servern, der Mesh-Brücke und Erweiterungen. Die eigenen Positionsmeldungen der Geräte werden etwa einmal pro Minute behalten; ADS-B- und AIS-Feeds werden nicht aufgezeichnet. Wählen Sie, wie viele Tage behalten werden (sonst 7).</p>
+  <ul>
+    <li>Suchen Sie nach Text (Rufnamen, UIDs, Benutzer, Bemerkungen), Typ (Feind, Chat, Zeichnungen… oder jedes Typ-Präfix wie <code>a-h-G</code>), Zeit und mit <strong>Nur im Kartenausschnitt</strong> nach Gebiet: Verschieben oder zoomen Sie die Karte, und die Ergebnisse folgen.</li>
+    <li><strong>Details</strong> zeigt das XML des Ereignisses; <strong>Ergebnisse auf der Karte zeigen</strong> zeichnet sie ein, nach Zugehörigkeit eingefärbt.</li>
+    <li>Exportieren Sie als CSV, KML (Google Earth) oder JSON oder als <strong>Datenpaket</strong> für ATAK, mit der letzten Version jeder Markierung, Form und Route.</li>
+  </ul>
 </article>
 
 <article class="help-topic" id="help-connect" data-group="Server" data-tab="connect" data-title="Geräte verbinden">
@@ -297,6 +318,7 @@
     <li>Ein Schlüssel kann alles, was sein Benutzer kann: alles, bei einem Administrator. Ein schreibgeschützter Schlüssel kann nur lesen.</li>
     <li>Er funktioniert nicht mehr, wenn Sie ihn löschen, wenn er abläuft oder wenn sein Benutzer gelöscht oder deaktiviert wird.</li>
     <li>Die Liste zeigt, wann und von wo jeder Schlüssel zuletzt verwendet wurde, und das <a data-goto="audit">Audit-Protokoll</a> nennt den Schlüssel hinter jeder Änderung.</li>
+    <li><strong>Prometheus:</strong> Die Metriken von EdgeTAK (Geräte, CoT-Verkehr, Benutzer, Alarme, Föderation, CPU, Speicher, Festplatte) stehen unter <code>/metrics</code>. Geben Sie Prometheus einen schreibgeschützten Schlüssel eines Administrators; die Karte unten auf dieser Seite enthält einen fertigen Scrape-Job und das CA-Zertifikat.</li>
   </ul>
 </article>
 

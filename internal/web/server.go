@@ -21,6 +21,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/audit"
 	"github.com/brandongotak/EdgeTAK/internal/chatlog"
 	"github.com/brandongotak/EdgeTAK/internal/config"
+	"github.com/brandongotak/EdgeTAK/internal/eventlog"
 	"github.com/brandongotak/EdgeTAK/internal/extension"
 	"github.com/brandongotak/EdgeTAK/internal/federation"
 	"github.com/brandongotak/EdgeTAK/internal/feeds"
@@ -48,6 +49,7 @@ type Server struct {
 	Missions   *mission.Service
 	Public     *publiccert.Provider // nil unless a public certificate is configured
 	History    *history.Recorder
+	CoTLog     *eventlog.Log
 	Chat       *chatlog.Log
 	Federation *federation.Manager
 	// PlainTCP turns the plain TCP streaming port on and off; nil when it
@@ -175,6 +177,8 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.retentionRoutes(mux)
 	s.certStatusRoutes(mux)
 	s.chatRoutes(mux)
+	s.cotLogRoutes(mux)
+	s.metricsRoutes(mux)
 	s.recordingRoutes(mux)
 	s.emergencyRoutes(mux)
 	s.profileRoutes(mux)

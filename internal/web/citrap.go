@@ -56,6 +56,7 @@ func (s *Server) citrapRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /Marti/api/citrap/{id}", s.authed(s.citrapPut))
 	mux.HandleFunc("DELETE /Marti/api/citrap/{id}", s.authed(s.citrapDelete))
 	mux.HandleFunc("POST /Marti/api/citrap/{id}/attachment", s.authed(s.citrapAttachment))
+	s.reportAdminRoutes(mux)
 }
 
 // citrapReport is the root element of a report's XML.
@@ -635,17 +636,24 @@ func (s *Server) citrapDelete(w http.ResponseWriter, r *http.Request, id *identi
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if err := s.Store.DeleteReport(rep.ID); err != nil {
+	if err := s.deleteReport(rep, id.Username, r.URL.Query().Get("clientUid")); err != nil {
 		http.Error(w, "report not found", http.StatusNotFound)
 		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// deleteReport removes a report, its files and its mission.
+func (s *Server) deleteReport(rep *store.Report, username, clientUID string) error {
+	if err := s.Store.DeleteReport(rep.ID); err != nil {
+		return err
 	}
 	for _, h := range append(rep.OldHashes, rep.Hash) {
 		s.dropReportPackage(h, rep.ID)
 	}
 	if s.Missions != nil {
-		sys := mission.Caller{Username: id.Username, Admin: true, ClientUID: r.URL.Query().Get("clientUid")}
-		s.Missions.Delete(rep.ID, sys)
+		s.Missions.Delete(rep.ID, mission.Caller{Username: username, Admin: true, ClientUID: clientUID})
 	}
-	s.Log.Info("report deleted", "report", rep.ID, "title", rep.Title, "user", id.Username)
-	w.WriteHeader(http.StatusOK)
+	s.Log.Info("report deleted", "report", rep.ID, "title", rep.Title, "user", username)
+	return nil
 }

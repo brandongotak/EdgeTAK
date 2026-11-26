@@ -136,6 +136,17 @@
   </ul>
 </article>
 
+<article class="help-topic" id="help-reports" data-group="Données" data-tab="reports" data-title="Rapports">
+  <h2>Rapports</h2>
+  <p>Les rapports créés avec le plugin <strong>Reports</strong> d'ATAK (formulaires d'incident et d'observation) sont conservés sur ce serveur ; sans lui, le plugin n'a pas de serveur où les envoyer. Chacun voit dans le plugin les rapports de ses groupes ; cette page les montre tous.</p>
+  <ul>
+    <li>Recherchez, ou filtrez la liste par type et par état.</li>
+    <li><strong>Détails</strong> montre ce qui a été rempli, avec les photos et autres pièces jointes ; <strong>Télécharger</strong> récupère le rapport tel que le plugin l'envoie (un zip).</li>
+    <li><strong>Afficher sur la carte</strong> indique où il a eu lieu ; la couche <em>Rapports</em> de la carte les montre tous.</li>
+    <li><strong>Supprimer</strong> le retire du serveur et de la recherche du plugin ; les copies déjà sur les appareils restent.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-maps" data-group="Données" data-tab="maps" data-title="Cartes : dessins et cartes hors ligne">
   <h2>Cartes : dessins et cartes hors ligne</h2>
   <h3>Dessins</h3>
@@ -209,6 +220,16 @@
   <h2>Journal du chat</h2>
   <p>Désactivé par défaut. Une fois activé, il enregistre le chat qui passe par le serveur (All Chat Rooms, chats d'équipe et de groupe, messages individuels) pour les retours d'expérience.</p>
   <p>Recherchez-y, filtrez par conversation, expéditeur et date, et exportez en CSV ou JSON. La durée de conservation des messages se règle sous <a data-goto="settings">Paramètres → Conservation des données</a>.</p>
+</article>
+
+<article class="help-topic" id="help-cot" data-group="Messages" data-tab="cot" data-title="Historique CoT">
+  <h2>Historique CoT</h2>
+  <p>Désactivé par défaut. Une fois activé, il enregistre chaque événement qui passe par le serveur : marqueurs, formes, itinéraires, chat, alertes, vidéo et suppressions, venant des appareils, des serveurs fédérés, du pont maillé et des extensions. Les positions envoyées par chaque appareil sont gardées environ une fois par minute ; les flux ADS-B et AIS ne sont pas enregistrés. Choisissez combien de jours les garder (7 par défaut).</p>
+  <ul>
+    <li>Recherchez par texte (indicatifs, UID, utilisateurs, remarques), type (hostile, chat, dessins… ou tout préfixe de type comme <code>a-h-G</code>), période, et <strong>Seulement dans la vue de la carte</strong> pour une zone : déplacez ou zoomez la carte et les résultats suivent.</li>
+    <li><strong>Détails</strong> montre le XML de l'événement ; <strong>Afficher les résultats sur la carte</strong> les place, colorés selon l'affiliation.</li>
+    <li>Exportez en CSV, KML (Google Earth) ou JSON, ou en <strong>Paquet de données</strong> qu'ATAK importe, avec la dernière version de chaque marqueur, forme et itinéraire.</li>
+  </ul>
 </article>
 
 <article class="help-topic" id="help-connect" data-group="Serveur" data-tab="connect" data-title="Connecter des appareils">
@@ -297,6 +318,7 @@
     <li>Une clé peut faire tout ce que son utilisateur peut faire : tout, pour un administrateur. Une clé en lecture seule ne peut que lire.</li>
     <li>Elle cesse de fonctionner quand vous la supprimez, quand elle expire, ou quand son utilisateur est supprimé ou désactivé.</li>
     <li>La liste indique quand et d'où chaque clé a servi pour la dernière fois, et le <a data-goto="audit">journal d'audit</a> nomme la clé derrière chaque modification.</li>
+    <li><strong>Prometheus :</strong> les métriques d'EdgeTAK (appareils, trafic CoT, utilisateurs, alertes, fédération, CPU, mémoire, disque) sont à l'adresse <code>/metrics</code>. Donnez à Prometheus une clé en lecture seule d'un administrateur ; la carte en bas de cette page fournit une tâche de collecte prête et le certificat de l'AC.</li>
   </ul>
 </article>
 

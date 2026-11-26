@@ -195,6 +195,8 @@ type db struct {
 
 	ChatLog ChatLogSettings `json:"chat_log"`
 
+	CoTLog CoTLogSettings `json:"cot_log"`
+
 	VideoRecording RecordingSettings `json:"video_recording"`
 
 	Emergencies []*Emergency `json:"emergencies"` // oldest first, the last maxEmergencies
@@ -402,6 +404,13 @@ const DefaultRecordingDays = 7
 // ChatLogSettings controls recording of GeoChat messages (off by default).
 type ChatLogSettings struct {
 	Enabled bool `json:"enabled"`
+}
+
+// CoTLogSettings controls recording of every CoT event for the CoT history
+// search (off by default), and how many days are kept (0 = the default, 7).
+type CoTLogSettings struct {
+	Enabled  bool `json:"enabled"`
+	KeepDays int  `json:"keep_days"`
 }
 
 // VideoSettings controls publishing to the server's media server without
@@ -846,6 +855,19 @@ func (s *Store) SetChatLogSettings(c ChatLogSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.ChatLog = c
+	return s.save()
+}
+
+func (s *Store) CoTLogSettings() CoTLogSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.CoTLog
+}
+
+func (s *Store) SetCoTLogSettings(c CoTLogSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.CoTLog = c
 	return s.save()
 }
 

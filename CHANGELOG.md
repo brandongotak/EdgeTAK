@@ -10,6 +10,31 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.17.0 (2026-11-26)
+
+**Reports page.** Data → Reports lists every report from the ATAK Reports
+plugin: search, filter by type and status, and open one to see what was
+filled in, its photos and other attachments. Show a report on the map
+(there's a Reports layer too), download its zip, or delete it.
+
+**CoT history search.** Messages → CoT history records every event that
+passes through EdgeTAK (markers, shapes, routes, chat, alerts, video and
+deletions, from devices, federated servers, the mesh bridge and
+extensions) for the number of days you choose (7 by default). It's off
+until you tick *Record events*. Devices' own position reports are kept
+about once a minute, and ADS-B and AIS feed tracks aren't recorded. Search
+by text, type or type prefix, time, and the area on the map; see each
+event's XML; plot the results on the map; and export them as CSV, KML,
+JSON or an ATAK data package with the last version of each marker, shape
+and route. Backups include it when *Position and CoT history* is ticked.
+
+**Prometheus metrics.** `/metrics` on the console port reports connected
+clients, CoT traffic, users, certificates, data packages, missions,
+reports, open alerts, federation, history sizes, and EdgeTAK's and the
+machine's CPU, memory and disk, for Prometheus and Grafana. Scraping needs
+an administrator's API key (read-only is enough); Server → API keys has a
+ready scrape job and the CA certificate to download.
+
 ## v1.16.1 (2026-11-25)
 
 **Fix: quitting ATAK raised a lost contact alert.** Quitting ATAK can reset

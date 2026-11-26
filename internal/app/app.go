@@ -21,6 +21,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/chatlog"
 	"github.com/brandongotak/EdgeTAK/internal/config"
 	"github.com/brandongotak/EdgeTAK/internal/cot"
+	"github.com/brandongotak/EdgeTAK/internal/eventlog"
 	"github.com/brandongotak/EdgeTAK/internal/extension"
 	"github.com/brandongotak/EdgeTAK/internal/federation"
 	"github.com/brandongotak/EdgeTAK/internal/feeds"
@@ -52,6 +53,7 @@ type App struct {
 	Missions *mission.Service
 	Public   *publiccert.Provider // nil unless public_cert is configured
 	History  *history.Recorder
+	CoTLog   *eventlog.Log
 	Chat     *chatlog.Log
 
 	// Addrs holds the bound address of each listener after Start.
@@ -132,6 +134,11 @@ func New(cfg config.Config, dataDir, version string, log *slog.Logger) (*App, er
 	hs := a.Store.HistorySettings()
 	a.History.Configure(hs.Enabled, time.Duration(hs.RetentionHours)*time.Hour)
 	a.Router.AddHook(a.recordHistory)
+	if a.CoTLog, err = eventlog.Open(filepath.Join(dataDir, "events"), log); err != nil {
+		return nil, fmt.Errorf("open CoT log: %w", err)
+	}
+	cs := a.Store.CoTLogSettings()
+	a.CoTLog.Configure(cs.Enabled, cs.KeepDays)
 	if a.Chat, err = chatlog.Open(filepath.Join(dataDir, "chat"), log); err != nil {
 		return nil, fmt.Errorf("open chat log: %w", err)
 	}
@@ -232,7 +239,7 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		ServerUID:   "EdgeTAK-" + a.nodeID, Version: "EdgeTAK " + a.Version,
 	}
 	ws := &web.Server{
-		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, History: a.History, Chat: a.Chat, Audit: a.Audit, Log: a.Log,
+		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, History: a.History, CoTLog: a.CoTLog, Chat: a.Chat, Audit: a.Audit, Log: a.Log,
 		PackageDir: filepath.Join(a.DataDir, "packages"), NodeID: a.nodeID, Version: a.Version, Started: time.Now(),
 		DataDir: a.DataDir, ConfigPath: a.ConfigPath, Restart: a.Restart, Maps: &maps.Library{Dir: filepath.Join(a.DataDir, "maps")},
 	}
@@ -400,6 +407,8 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 	go func() { defer wg.Done(); a.Missions.FlushLoop(ctx.Done()) }()
 	wg.Add(1)
 	go func() { defer wg.Done(); a.History.Run(ctx) }()
+	wg.Add(1)
+	go func() { defer wg.Done(); a.CoTLog.Run(ctx) }()
 	wg.Add(1)
 	go func() { defer wg.Done(); <-ctx.Done(); a.Chat.Close(); a.Audit.Close() }()
 	wg.Add(1)

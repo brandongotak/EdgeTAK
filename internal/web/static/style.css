@@ -384,6 +384,9 @@ label.inline-label { flex-direction: row; align-items: center; gap: 6px; }
 .chat-filter select { flex: 0 1 220px; min-width: 0; }
 .chat-custom { display: contents; }
 .chat-custom[hidden] { display: none; }
+.chat-filter label.check { flex: 0 0 auto; }
+.cot-remarks { max-width: 32em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cot-xml { max-height: 40vh; overflow: auto; white-space: pre-wrap; word-break: break-all; font-size: 12px; background: var(--panel-2); padding: 10px; border-radius: 6px; }
 .chat-list { border-top: 1px solid var(--line); }
 .chat-day { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; padding: 10px 0 4px; border-bottom: 1px solid var(--line); }
 .chat-msg { display: flex; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--line); }
@@ -401,6 +404,8 @@ button.pill.chat-room.direct { border-style: dashed; }
 @media (max-width: 700px) {
   .chat-msg { flex-direction: column; gap: 2px; }
   .chat-filter select, .chat-filter input { flex: 1 1 100%; }
+  .chat-filter input[type=checkbox] { flex: 0 0 auto; }
+  .chat-filter label.check { flex: 1 1 100%; }
 }
 .cert-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0 4px; }
 #cert-tiles .stat.alert { border-color: var(--warn); }
@@ -521,3 +526,10 @@ ol.steps > li { margin: 10px 0; line-height: 1.6; }
 ol.steps .inline-form { margin-top: 8px; }
 .tt-update { margin-top: 12px; }
 .tt-update summary { cursor: pointer; color: var(--muted); }
+
+/* Reports */
+.report-fields th { text-align: left; padding-top: 10px; }
+.report-fields td:first-child { width: 40%; }
+.report-files { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.report-files img { max-width: 160px; max-height: 120px; border-radius: 6px; border: 1px solid var(--line); display: block; }
+pre.uri { white-space: pre; overflow-x: auto; word-break: normal; font: 12px/1.45 var(--mono); background: var(--panel-2); padding: 10px; border-radius: 6px; }

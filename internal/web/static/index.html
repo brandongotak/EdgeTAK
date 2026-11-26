@@ -45,6 +45,7 @@
       <button data-tab="certs" data-section="people">Certificates</button>
       <button data-tab="packages" data-section="data">Data Packages</button>
       <button data-tab="missions" data-section="data">Missions</button>
+      <button data-tab="reports" data-section="data">Reports</button>
       <button data-tab="maps" data-section="data">Maps</button>
       <button data-tab="overlays" data-section="data">Overlays</button>
       <button data-tab="plugins" data-section="data">Plugins</button>
@@ -52,6 +53,7 @@
       <button data-tab="terratak" data-section="data">TerraTAK</button>
       <button data-tab="send" data-section="messages">Send</button>
       <button data-tab="chat" data-section="messages">Chat log</button>
+      <button data-tab="cot" data-section="messages">CoT history</button>
       <button data-tab="connect" data-section="server">Connect</button>
       <button data-tab="federation" data-section="server">Federation</button>
       <button data-tab="settings" data-section="server">Settings</button>
@@ -283,6 +285,13 @@
           <thead><tr><th>Key</th><th>Last used</th></tr></thead>
           <tbody></tbody>
         </table></div>
+      </div>
+      <div class="card">
+        <h2>Prometheus metrics</h2>
+        <p class="muted">Monitor EdgeTAK with Prometheus and Grafana: connected devices, CoT traffic, users, data packages, missions, open alerts, federation, CPU, memory and disk, at <code>/metrics</code>.</p>
+        <p class="muted">Make a read-only key for an administrator above, download this server's CA certificate for Prometheus to trust, and add a scrape job like this one:</p>
+        <pre class="uri" id="metrics-config" data-no-i18n></pre>
+        <div class="inline-form"><a class="button small" href="/metrics" target="_blank" rel="noopener">See the metrics</a> <a class="button small" href="api/ca.pem" download="edgetak-ca.pem">Download CA certificate</a></div>
       </div>
     </section>
 
@@ -566,7 +575,7 @@
         <div class="card-head"><h2>Backup and restore</h2><span id="backup-state"></span></div>
         <p class="muted">A backup holds everything needed to bring this server back: users, groups, the CA and certificates (so devices reconnect without enrolling again), settings, device profiles, federation, data packages, missions, plugins and the chat log. It includes the CA's private key and password hashes: keep it as safe as the server. Keep a copy somewhere other than this server.</p>
         <div class="inline-form">
-          <label class="check"><input type="checkbox" id="backup-history" checked> Position history</label>
+          <label class="check"><input type="checkbox" id="backup-history" checked> Position and CoT history</label>
           <label class="check"><input type="checkbox" id="backup-recordings"> Video recordings (can be large)</label>
           <label class="check"><input type="checkbox" id="backup-maps"> Offline maps (can be large)</label>
           <button class="primary" type="button" id="backup-download">Download a backup</button>
@@ -1098,6 +1107,28 @@
       </div>
     </section>
 
+    <section id="tab-reports" class="tab" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Reports</h2><span class="muted" id="report-count"></span></div>
+        <p class="muted">Reports made with the ATAK Reports plugin, with what was filled in, attachments and where they happened. People see their own groups' reports in the plugin; administrators see all of them here.</p>
+        <div class="inline-form" id="report-filters">
+          <input type="search" id="report-filter" placeholder="Search title, callsign or description" aria-label="Search reports">
+          <select id="report-type" aria-label="Report type"><option value="">All types</option></select>
+          <select id="report-status" aria-label="Status"><option value="">Any status</option></select>
+        </div>
+        <div class="table-wrap"><table id="report-table">
+          <thead><tr><th>Report</th><th>When</th><th>By</th><th>Status</th><th>Groups</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <dialog id="report-dialog" class="card dialog">
+        <form method="dialog" class="stack wide">
+          <div class="card-head"><h2 id="report-dialog-title" data-no-i18n>Report</h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
+          <div id="report-body" class="stack"></div>
+        </form>
+      </dialog>
+    </section>
+
     <section id="tab-video" class="tab" hidden>
       <div class="card" id="video-server"></div>
       <div class="card" id="anon-card" hidden>
@@ -1337,6 +1368,75 @@
         <div id="chat-list" class="chat-list"></div>
         <p><button type="button" id="chat-more" hidden>Show older messages</button></p>
       </div>
+    </section>
+
+    <section id="tab-cot" class="tab" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>CoT history</h2>
+          <div class="inline-form">
+            <label class="check"><input type="checkbox" id="cot-enabled"> Record events</label>
+            <label class="inline-label">Keep <input type="number" id="cot-days" min="1" max="365" step="1" class="days-input" aria-label="Days to keep"> days</label>
+            <button type="button" class="small danger" id="cot-clear">Clear history</button>
+          </div>
+        </div>
+        <p class="muted">Every event that passes through EdgeTAK: markers, shapes, routes, chat, alerts, video and deletions, from devices, federated servers, the mesh bridge, extensions and the server itself. Devices' own position reports are kept about once a minute (more often while moving). ADS-B and AIS feed tracks aren't recorded.</p>
+        <div class="issue info" id="cot-off" hidden><span class="status-icon info" aria-hidden="true">●</span> <span>Recording is off. Turn on <strong>Record events</strong> to keep events from now on; earlier events can't be recovered.</span></div>
+        <form id="cot-filter" class="chat-filter" autocomplete="off">
+          <input type="search" name="q" placeholder="Search callsigns, UIDs, users, types and remarks" aria-label="Search">
+          <select name="kind" aria-label="Type">
+            <option value="">All events</option>
+            <option value="a-">All units and markers</option>
+            <option value="a-f">Friendly</option>
+            <option value="a-h">Hostile</option>
+            <option value="a-n">Neutral</option>
+            <option value="a-u">Unknown</option>
+            <option value="b-m-p">Points and spots</option>
+            <option value="u-d">Drawings and shapes</option>
+            <option value="b-m-r">Routes</option>
+            <option value="b-t-f">Chat</option>
+            <option value="b-a">Alerts</option>
+            <option value="b-i">Video and images</option>
+            <option value="t-x-d-d">Deletions</option>
+            <option value="custom">Type starts with…</option>
+          </select>
+          <input name="type" placeholder="a-h-G, b-m-p-s-m" aria-label="Type starts with" hidden>
+          <select name="range" aria-label="Time range">
+            <option value="1">Last hour</option>
+            <option value="24" selected>Last 24 hours</option>
+            <option value="168">Last 7 days</option>
+            <option value="720">Last 30 days</option>
+            <option value="0">All time</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <span class="chat-custom" hidden>
+            <input type="datetime-local" name="since" aria-label="From">
+            <input type="datetime-local" name="until" aria-label="Until">
+          </span>
+          <label class="check"><input type="checkbox" name="area"> Only in the map view</label>
+          <label class="check"><input type="checkbox" name="positions"> Include position reports</label>
+        </form>
+        <div class="inline-form">
+          <span class="muted" id="cot-count"></span>
+          <span class="spacer"></span>
+          <button type="button" class="small" id="cot-map">Show results on map</button>
+          <a class="button small" id="cot-export-csv" href="#" download>CSV</a>
+          <a class="button small" id="cot-export-kml" href="#" download>KML</a>
+          <a class="button small" id="cot-export-json" href="#" download>JSON</a>
+          <a class="button small" id="cot-export-zip" href="#" download title="The last version of each marker, shape and route, for ATAK">Data package</a>
+        </div>
+        <div class="table-wrap"><table id="cot-table">
+          <thead><tr><th>Time</th><th>Type</th><th>Item</th><th>Sent by</th><th>Position</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p><button type="button" id="cot-more" hidden>Show older events</button></p>
+      </div>
+      <dialog id="cot-dialog" class="card dialog">
+        <form method="dialog" class="stack wide">
+          <div class="card-head"><h2 id="cot-dialog-title" data-no-i18n>Event</h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
+          <div id="cot-body" class="stack"></div>
+        </form>
+      </dialog>
     </section>
 
     <section id="tab-connect" class="tab" hidden>

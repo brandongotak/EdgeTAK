@@ -136,6 +136,17 @@
   </ul>
 </article>
 
+<article class="help-topic" id="help-reports" data-group="Dati" data-tab="reports" data-title="Rapporti">
+  <h2>Rapporti</h2>
+  <p>I rapporti creati con il plugin <strong>Reports</strong> di ATAK (moduli per incidenti e osservazioni) sono conservati su questo server; senza di esso il plugin non ha un server a cui inviarli. Nel plugin ognuno vede i rapporti dei propri gruppi; questa pagina li mostra tutti.</p>
+  <ul>
+    <li>Cerca, o restringi l'elenco per tipo e stato.</li>
+    <li><strong>Dettagli</strong> mostra quanto compilato, con foto e altri allegati; <strong>Scarica</strong> ottiene il rapporto come lo invia il plugin (uno zip).</li>
+    <li><strong>Mostra sulla mappa</strong> indica dove è accaduto; il livello <em>Rapporti</em> della mappa li mostra tutti.</li>
+    <li><strong>Elimina</strong> lo toglie dal server e dalla ricerca del plugin; le copie già sui dispositivi restano.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-maps" data-group="Dati" data-tab="maps" data-title="Mappe: disegni e mappe offline">
   <h2>Mappe: disegni e mappe offline</h2>
   <h3>Disegni</h3>
@@ -209,6 +220,16 @@
   <h2>Registro chat</h2>
   <p>Disattivato per impostazione predefinita. Quando è attivo, registra la chat inviata tramite il server (All Chat Rooms, chat di squadra e di gruppo, messaggi diretti) per le revisioni a posteriori.</p>
   <p>Puoi cercarvi, filtrare per conversazione, mittente e periodo, ed esportare in CSV o JSON. Per quanto tempo si conservano i messaggi si imposta in <a data-goto="settings">Impostazioni → Conservazione dei dati</a>.</p>
+</article>
+
+<article class="help-topic" id="help-cot" data-group="Messaggi" data-tab="cot" data-title="Cronologia CoT">
+  <h2>Cronologia CoT</h2>
+  <p>Disattivata per impostazione predefinita. Se attiva, registra ogni evento che passa per il server: indicatori, forme, percorsi, chat, avvisi, video ed eliminazioni, da dispositivi, server federati, il ponte mesh e le estensioni. Le posizioni inviate da ogni dispositivo vengono conservate circa una volta al minuto; i feed ADS-B e AIS non vengono registrati. Scegli quanti giorni conservarli (7 se non lo cambi).</p>
+  <ul>
+    <li>Cerca per testo (nominativi, UID, utenti, note), tipo (ostile, chat, disegni… o qualsiasi prefisso di tipo come <code>a-h-G</code>), periodo, e con <strong>Solo nella vista della mappa</strong> per zona: sposta o ingrandisci la mappa e i risultati la seguono.</li>
+    <li><strong>Dettagli</strong> mostra l'XML dell'evento; <strong>Mostra i risultati sulla mappa</strong> li disegna, colorati per affiliazione.</li>
+    <li>Esporta in CSV, KML (Google Earth) o JSON, oppure come <strong>Pacchetto dati</strong> che ATAK importa, con l'ultima versione di ogni indicatore, forma e percorso.</li>
+  </ul>
 </article>
 
 <article class="help-topic" id="help-connect" data-group="Server" data-tab="connect" data-title="Connettere i dispositivi">
@@ -297,6 +318,7 @@
     <li>Una chiave può fare tutto ciò che può il suo utente: tutto, per un amministratore. Una chiave in sola lettura può solo leggere.</li>
     <li>Smette di funzionare quando la elimini, quando scade o quando il suo utente viene eliminato o disattivato.</li>
     <li>L'elenco mostra quando e da dove ogni chiave è stata usata l'ultima volta, e il <a data-goto="audit">registro di controllo</a> indica la chiave dietro ogni modifica.</li>
+    <li><strong>Prometheus:</strong> le metriche di EdgeTAK (dispositivi, traffico CoT, utenti, avvisi, federazione, CPU, memoria, disco) sono all'indirizzo <code>/metrics</code>. Dai a Prometheus una chiave di sola lettura di un amministratore; la scheda in fondo a questa pagina ha un job di raccolta pronto e il certificato della CA.</li>
   </ul>
 </article>
 

@@ -79,7 +79,7 @@ func skipped(name string, opt Options) bool {
 	switch name {
 	case "db.json", "mediamtx", "mediamtx.yml", "frpc-bin", "update", "initial-admin-password.txt", BackupsDir, stagingDir, previousDir, pendingFile:
 		return true
-	case "history":
+	case "history", "events": // position history and CoT history
 		return !opt.History
 	case "recordings":
 		return !opt.Recordings
@@ -371,7 +371,7 @@ func ApplyPending(dataDir, configPath string) (bool, error) {
 		switch name {
 		case stagingDir, previousDir, pendingFile, BackupsDir, "mediamtx", "frpc-bin", "update":
 			continue // never replaced
-		case "history", "recordings", "maps":
+		case "history", "events", "recordings", "maps":
 			if !incoming[name] {
 				continue // not in this backup: keep the current ones
 			}

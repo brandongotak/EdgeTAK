@@ -49,7 +49,8 @@ Guide: [People](#people) · [Data and maps](#data-and-maps) · [Messages](#messa
 
 **Messages and alerts**
 - Send chat and data packages to devices, now or on a schedule; the server
-  as a direct-message contact; a searchable chat log.
+  as a direct-message contact; a searchable chat log; CoT history search
+  with CSV, KML and ATAK data package export.
 - Emergency, lost contact and geofence alerts in the console, and webhooks
   to Discord, Slack, Microsoft Teams, ntfy or any URL.
 
@@ -59,8 +60,9 @@ Guide: [People](#people) · [Data and maps](#data-and-maps) · [Messages](#messa
   read server data and add a page to the console.
 - A **mesh bridge** between ATAK's multicast network (Wi-Fi or MANET
   radios) and EdgeTAK's groups.
-- Health graphs, certificate status, data retention, backup and restore,
-  updates from the console, and a load-testing simulator.
+- Health graphs, Prometheus metrics, certificate status, data retention,
+  backup and restore, updates from the console, and a load-testing
+  simulator.
 - The admin console installs as an app on phones and desktops; its libraries
   are built in, so it works offline (only online base maps and weather need
   the internet).
@@ -328,7 +330,7 @@ into the ☰ menu):
 | Dashboard | Dashboard, Health |
 | People | Users, Groups, Events, Sign-ups, Certificates |
 | Data | Data Packages, Missions, Maps, Overlays, Plugins, Video |
-| Messages | Send, Chat log |
+| Messages | Send, Chat log, CoT history |
 | Server | Connect, Federation, Settings, Webhooks, Audit log, Simulator |
 | Help | A guide to every page, with search; opening it from a page shows that page's topic |
 
@@ -483,6 +485,8 @@ certificates last is set on the same page.
 - **ATAK Reports plugin:** reports uploaded from the plugin are kept on the
   server (TAK Server's CITRAP API), and the plugin can search, download,
   update and delete them. Reports are shared with the uploader's groups.
+  The console's **Reports** page lists every report with what was filled in,
+  photos and other attachments, and a Reports layer on the map.
 
 ### The map
 
@@ -792,6 +796,16 @@ messages and the console's own), with search, filters by conversation,
 sender and time, and CSV or JSON export for after-action reviews. How long
 messages are kept is a data retention rule.
 
+**CoT history** (optional, off by default): records every event that passes
+through the server (markers, shapes, routes, chat, alerts, video and
+deletions, from devices, federated servers, the mesh bridge and
+extensions) for a set number of days (7 by default). Devices' own position
+reports are kept about once a minute; ADS-B and AIS feeds aren't recorded.
+Search by type or type prefix, time, text and the map view, see each
+event's XML, plot the results on the map, and export them as CSV, KML, JSON
+or an ATAK data package with the last version of each marker, shape and
+route.
+
 ## Alerts
 
 **Emergency alerts:** when someone presses ATAK's emergency button (911
@@ -946,6 +960,26 @@ video bandwidth, with warnings for a full disk, overheating or dropped
 messages. A device table lists each device's battery (with history and drain
 rate), last report, GPS fix and connection, worst problems first. System
 figures need Linux; elsewhere only EdgeTAK's own are shown.
+
+**Prometheus metrics** are at `/metrics` on the console port, for
+Prometheus and Grafana: connected clients, CoT received, sent and dropped,
+video traffic, users, certificates (and those expiring within 30 days),
+data packages, missions, reports, open alerts by kind, federation links by
+state, position and CoT history size, and EdgeTAK's and the machine's CPU,
+memory and disk. Scraping needs an administrator's API key (read-only is
+enough); **Server → API keys** shows a ready scrape job:
+
+```yaml
+scrape_configs:
+  - job_name: edgetak
+    scheme: https
+    authorization:
+      credentials: etk_...        # a read-only key for an administrator
+    tls_config:
+      ca_file: edgetak-ca.pem     # API keys → Download CA certificate
+    static_configs:
+      - targets: ['tak.example.com:8443']
+```
 
 ### Settings: data retention and backups
 
@@ -1249,8 +1283,8 @@ restored into it.
 everything needed to bring the server back: users, groups, the CA and
 certificates, settings, device profiles, federation, data packages,
 missions, plugins, overlays, the chat log and the audit log, plus the
-configuration; position history, video recordings and offline maps are
-optional. `certs/ca-key.pem` is the key every enrolled device trusts, so a
+configuration; position and CoT history, video recordings and offline maps
+are optional. `certs/ca-key.pem` is the key every enrolled device trusts, so a
 restored server is the same server to them: devices reconnect without
 enrolling again. The backup holds that key and password hashes: keep it as
 safe as the server, and somewhere else.

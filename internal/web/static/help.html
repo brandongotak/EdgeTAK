@@ -136,6 +136,17 @@
   </ul>
 </article>
 
+<article class="help-topic" id="help-reports" data-group="Data" data-tab="reports" data-title="Reports">
+  <h2>Reports</h2>
+  <p>Reports made with the ATAK <strong>Reports</strong> plugin (incident and observation forms) are kept on this server; the plugin finds no server to send them to without it. People see the reports of their own groups in the plugin; this page shows every report.</p>
+  <ul>
+    <li>Search, or narrow the list by type and status.</li>
+    <li><strong>Details</strong> shows what was filled in, with photos and other attachments; <strong>Download</strong> gets the report as the plugin sends it (a zip).</li>
+    <li><strong>Show on map</strong> marks where it happened; the map's <em>Reports</em> layer shows them all.</li>
+    <li><strong>Delete</strong> removes it from the server and the plugin's search; copies already on devices stay.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-maps" data-group="Data" data-tab="maps" data-title="Maps: drawings and offline maps">
   <h2>Maps: drawings and offline maps</h2>
   <h3>Drawings</h3>
@@ -209,6 +220,16 @@
   <h2>Chat log</h2>
   <p>Off by default. When on, it records chat sent through the server (All Chat Rooms, team and group chats, one-to-one messages) for after-action reviews.</p>
   <p>Search it, filter by conversation, sender and time, and export as CSV or JSON. How long messages are kept is set under <a data-goto="settings">Settings → Data retention</a>.</p>
+</article>
+
+<article class="help-topic" id="help-cot" data-group="Messages" data-tab="cot" data-title="CoT history">
+  <h2>CoT history</h2>
+  <p>Off by default. When on, it records every event that passes through the server: markers, shapes, routes, chat, alerts, video and deletions, from devices, federated servers, the mesh bridge and extensions. Devices' own position reports are kept about once a minute; ADS-B and AIS feeds aren't recorded. Choose how many days to keep (7 unless you change it).</p>
+  <ul>
+    <li>Search by text (callsigns, UIDs, users, remarks), type (hostile, chat, drawings… or any type prefix such as <code>a-h-G</code>), time, and <strong>Only in the map view</strong> for an area: pan or zoom the map and the results follow.</li>
+    <li><strong>Details</strong> shows the event's XML; <strong>Show results on map</strong> plots them, coloured by affiliation.</li>
+    <li>Export as CSV, KML (Google Earth) or JSON, or as a <strong>Data package</strong> ATAK imports, with the last version of each marker, shape and route.</li>
+  </ul>
 </article>
 
 <article class="help-topic" id="help-connect" data-group="Server" data-tab="connect" data-title="Connecting devices">
@@ -297,6 +318,7 @@
     <li>A key can do whatever its user can: everything, for an administrator. A read-only key can only read.</li>
     <li>It stops working when you delete it, when it expires, or when its user is deleted or disabled.</li>
     <li>The list shows when and from where each key was last used, and the <a data-goto="audit">audit log</a> names the key behind each change.</li>
+    <li><strong>Prometheus:</strong> EdgeTAK's metrics (devices, CoT traffic, users, alerts, federation, CPU, memory, disk) are at <code>/metrics</code>. Give Prometheus a read-only key for an administrator; the card at the bottom of this page has a ready scrape job and the CA certificate.</li>
   </ul>
 </article>
 

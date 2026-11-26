@@ -148,12 +148,14 @@ const loaders = {
   maps: () => Promise.all([loadDrawings(), loadOfflineMaps()]),
   overlays: loadOverlays,
   missions: loadMissions,
+  reports: loadReports,
   video: loadVideo,
   terratak: loadTerraTAK,
   send: loadSend,
   connect: loadConnect,
   help: loadHelp,
   chat: loadChat,
+  cot: loadCoT,
   federation: loadFederation,
   simulator: loadSim,
   webhooks: loadWebhooks,
@@ -968,6 +970,7 @@ let labelsLayer = null;
 let trailsLayer = null;
 let trailsTimer = null;
 let videoLayer = null;
+let reportLayer = null; // Reports plugin reports on the console map
 let fenceLayer = null; // geofences on the console map
 let aircraftLayer = null, shipLayer = null; // ADS-B and AIS feeds
 let drawingLayer = null; // drawings (markers, routes, areas, circles) on the console map
@@ -1026,6 +1029,8 @@ function initMap() {
   labelsLayer.on('remove', () => el.classList.add('no-labels'));
   videoLayer = L.layerGroup();
   videoLayer.on('add', () => loadVideoFeeds().catch(() => {}));
+  reportLayer = L.layerGroup();
+  reportLayer.on('add', () => { if (!reports.length) loadReportList().catch(() => {}); });
   weather = initWeather();
   fenceLayer = L.layerGroup();
   api('GET', 'api/geofences').then((r) => { geofences = r; drawFences(); }).catch(() => {});
@@ -1054,6 +1059,7 @@ function initMap() {
   map.on('moveend', () => {
     const c = map.getCenter();
     prefs.set('map.view', { lat: c.lat, lon: c.lng, zoom: map.getZoom() });
+    document.dispatchEvent(new Event('edgetak:mapmoved'));
   });
   map.on('baselayerchange', (e) => {
     if (rebuildingLayers) return;
@@ -1154,7 +1160,7 @@ function buildLayers() {
 
   baseLayers = {};
   for (const [name, def] of BASEMAPS) baseLayers[name] = buildBase(def);
-  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer, Geofences: fenceLayer, Drawings: drawingLayer,
+  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer, Reports: reportLayer, Geofences: fenceLayer, Drawings: drawingLayer,
     Aircraft: aircraftLayer, Ships: shipLayer, 'Weather radar': weather.radar, 'Weather radar (US, detailed)': weather.nexrad, Hillshade: weather.hillshade };
   for (const p of packageLayers.values()) overlayLayers[p.name] = p.layer;
   for (const m of offlineMaps) {
@@ -2589,6 +2595,194 @@ $('#chat-clear').addEventListener('click', guard(async () => {
   await api('DELETE', 'api/chat');
   toast('Chat log cleared');
   loadChat();
+}));
+
+// ---------- CoT history ----------
+//
+// Every event through the server (when recording is on), searched by type,
+// time, text and the map view, and exported.
+
+const COT_KINDS = [['t-x-d-d', 'Deletion'], ['b-t-f', 'Chat'], ['b-a-o-tbl', '911 alert'], ['b-a-o-can', 'Alert cancelled'], ['b-a-g', 'Geofence alert'], ['b-a', 'Alert'],
+  ['b-m-p-s-p-i', 'Point'], ['b-m-p-w', 'Waypoint'], ['b-m-p', 'Point'], ['b-m-r', 'Route'], ['u-d-c-c', 'Circle'], ['u-d-r', 'Rectangle'], ['u-d-f', 'Shape'], ['u-d-p', 'Point'],
+  ['u-d', 'Drawing'], ['u-rb-a', 'Range and bearing'], ['b-i-v', 'Video'], ['b-i-x-i', 'Image'], ['b-f-t-r', 'File'], ['a-f', 'Friendly'], ['a-h', 'Hostile'], ['a-n', 'Neutral'],
+  ['a-u', 'Unknown'], ['a-p', 'Pending'], ['a-', 'Unit']];
+const cotKind = (type) => (COT_KINDS.find(([p]) => type.startsWith(p)) || [, ''])[1];
+const cotColour = (type) => (type.startsWith('a-f') ? '#2f80ed' : type.startsWith('a-h') ? '#eb5757' : type.startsWith('a-n') ? '#27ae60' : type.startsWith('a-u') ? '#f2c94c' : '#7c4dff');
+let cotLimit = 500;
+let cotEvents = [];
+let cotTimer = null;
+let cotLayer = null;
+let cotSeq = 0;
+
+function cotParams() {
+  const f = $('#cot-filter');
+  const p = new URLSearchParams();
+  if (f.q.value.trim()) p.set('q', f.q.value.trim());
+  const kind = f.kind.value === 'custom' ? f.type.value.trim() : f.kind.value;
+  if (kind) p.set('types', kind);
+  const range = f.range.value;
+  if (range === 'custom') {
+    if (f.since.value) p.set('since', new Date(f.since.value).toISOString());
+    if (f.until.value) p.set('until', new Date(f.until.value).toISOString());
+  } else if (Number(range) > 0) {
+    p.set('since', new Date(Date.now() - Number(range) * 3600e3).toISOString().replace(/\.\d+Z$/, 'Z'));
+  }
+  if (f.positions.checked) p.set('positions', '1');
+  if (f.area.checked && map) {
+    const b = map.getBounds();
+    const w = Math.max(-180, b.getWest()), e = Math.min(180, b.getEast());
+    p.set('bbox', [w, Math.max(-90, b.getSouth()), e, Math.min(90, b.getNorth())].map((n) => n.toFixed(5)).join(','));
+  }
+  return p;
+}
+
+async function loadCoT() {
+  const st = await api('GET', 'api/cot-history/settings');
+  $('#cot-enabled').checked = st.enabled;
+  if (document.activeElement !== $('#cot-days')) $('#cot-days').value = st.keep_days;
+  $('#cot-off').hidden = st.enabled;
+  $('#cot-count').dataset.disk = st.bytes ? fmtSize(st.bytes) : '';
+  await searchCoT();
+}
+
+async function searchCoT() {
+  const seq = ++cotSeq;
+  const p = cotParams();
+  for (const fmt of ['csv', 'kml', 'json', 'zip']) {
+    const exp = new URLSearchParams(p);
+    exp.set('format', fmt);
+    $(`#cot-export-${fmt}`).href = 'api/cot-history/export?' + exp;
+  }
+  p.set('limit', cotLimit);
+  const res = await api('GET', 'api/cot-history?' + p);
+  if (seq !== cotSeq) return; // a newer search is on its way
+  cotEvents = res.events;
+  const disk = $('#cot-count').dataset.disk;
+  const count = !res.total ? 'No events' : res.events.length < res.total ? `${res.total} events, newest ${res.events.length} shown` : plural(res.total, 'event');
+  $('#cot-count').textContent = [count, disk && `${disk} on disk`].filter(Boolean).join(' · ');
+  $('#cot-more').hidden = res.events.length >= res.total || cotLimit >= 5000;
+  const pos = (e) => (e.lat != null ? `${e.lat.toFixed(5)}, ${e.lon.toFixed(5)}` : '');
+  $('#cot-table tbody').innerHTML = res.events.map((e, i) => {
+    const d = new Date(e.t);
+    // Chat has no callsign of its own: its text is what matters.
+    const name = e.callsign || (e.type.startsWith('b-t-f') ? '' : e.uid);
+    return `<tr>
+      <td title="${esc(d.toLocaleString())}">${esc(d.toLocaleTimeString())}<div class="muted">${esc(d.toLocaleDateString())}</div></td>
+      <td>${esc(cotKind(e.type))}<div class="muted mono">${esc(e.type)}</div></td>
+      <td><div data-no-i18n>${name ? `<strong>${esc(name)}</strong>` : ''}${e.remarks ? `<div class="${name ? 'muted ' : ''}cot-remarks">${esc(e.remarks)}</div>` : ''}</div>${e.position_report ? '<div><span class="pill">position report</span></div>' : ''}
+        <div class="row-actions"><button class="small" data-cot="${i}">Details</button>${e.lat != null ? `<button class="small" data-cot-map="${i}">Show on map</button>` : ''}</div></td>
+      <td data-no-i18n>${esc(e.from_callsign || '')}${e.username ? `<div class="muted">${esc(e.username)}</div>` : ''}${e.source !== 'device' ? `<div class="muted">${esc(e.source)}</div>` : ''}</td>
+      <td class="mono">${esc(pos(e))}</td></tr>`;
+  }).join('') || emptyRow(5, $('#cot-enabled').checked || res.total ? 'No events match' : 'No events recorded yet');
+}
+
+function cotMarker(e) {
+  return L.circleMarker([e.lat, e.lon], { radius: 7, weight: 2, color: '#fff', fillColor: cotColour(e.type), fillOpacity: 0.9 })
+    .bindTooltip(`<span data-no-i18n>${esc(e.callsign || e.uid)}</span> · ${esc(cotKind(e.type) || e.type)} · ${esc(new Date(e.t).toLocaleTimeString())}`, { direction: 'right' })
+    .on('click', () => showCoT(e));
+}
+
+function cotOnMap(list, fit) {
+  initMap();
+  if (!map) return;
+  if (!cotLayer) cotLayer = L.featureGroup();
+  cotLayer.clearLayers();
+  for (const e of list) if (e.lat != null) cotMarker(e).addTo(cotLayer);
+  cotLayer.addTo(map);
+  setMapVisible(true, false);
+  map.invalidateSize();
+  fittedOnce = true;
+  if (fit && cotLayer.getLayers().length) fitLayer(cotLayer);
+}
+
+async function showCoT(e) {
+  $('#cot-dialog-title').textContent = e.callsign || e.uid;
+  const row = (k, v) => (v ? `<dt>${esc(k)}</dt><dd data-no-i18n>${v}</dd>` : '');
+  const render = (x) => {
+    $('#cot-body').innerHTML = `<dl class="kv">
+        ${row('Time', esc(new Date(x.t).toLocaleString()))}
+        ${row('Type', `${esc(cotKind(x.type))} <span class="mono">${esc(x.type)}</span>`)}
+        ${row('UID', `<span class="mono">${esc(x.uid)}</span>`)}
+        ${row('Sent by', esc(x.from_callsign || '') + (x.username ? ` <span class="muted">${esc(x.username)}</span>` : '') + (x.from_uid ? ` <span class="muted mono">${esc(x.from_uid)}</span>` : ''))}
+        ${row('Source', esc(x.source))}
+        ${row('Position', x.lat != null ? `${x.lat.toFixed(6)}, ${x.lon.toFixed(6)}` : '')}
+        ${row('Remarks', esc(x.remarks || ''))}
+      </dl>
+      ${x.xml ? `<pre class="cot-xml" data-no-i18n>${esc(x.xml.replace(/></g, '>\n<'))}</pre>` : x.position_report ? '<p class="muted">Position reports are kept without their XML.</p>' : ''}`;
+  };
+  render(e);
+  const d = $('#cot-dialog');
+  if (!d.open) d.showModal();
+  if (!e.position_report) {
+    const full = await api('GET', `api/cot-history/event?t=${e.t}&uid=${encodeURIComponent(e.uid)}`).catch(() => null);
+    if (full && d.open) render(full);
+  }
+}
+
+const cotSearchSoon = (delay) => {
+  cotLimit = 500;
+  clearTimeout(cotTimer);
+  cotTimer = setTimeout(guard(searchCoT), delay);
+};
+$('#cot-filter').addEventListener('input', (e) => {
+  const f = e.currentTarget;
+  f.querySelector('.chat-custom').hidden = f.range.value !== 'custom';
+  f.type.hidden = f.kind.value !== 'custom';
+  if (e.target.name === 'area' && f.area.checked) {
+    initMap();
+    if (map) { setMapVisible(true, false); map.invalidateSize(); }
+  }
+  cotSearchSoon(e.target.name === 'q' || e.target.name === 'type' ? 400 : 0);
+});
+$('#cot-filter').addEventListener('submit', (e) => e.preventDefault());
+// Searching the map view follows the map.
+document.addEventListener('edgetak:mapmoved', () => { if (currentTab === 'cot' && $('#cot-filter').area.checked) cotSearchSoon(300); });
+
+$('#cot-table').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button');
+  if (!b) return;
+  if (b.dataset.cot) guard(() => showCoT(cotEvents[Number(b.dataset.cot)]))();
+  if (b.dataset.cotMap) {
+    const e = cotEvents[Number(b.dataset.cotMap)];
+    cotOnMap([e], false);
+    map?.setView([e.lat, e.lon], Math.max(map.getZoom(), 14));
+  }
+});
+$('#cot-map').addEventListener('click', () => {
+  const n = cotEvents.filter((e) => e.lat != null).length;
+  if (!n) return toast('None of these events has a position', true);
+  cotOnMap(cotEvents, true);
+});
+$('#cot-more').addEventListener('click', guard(async () => {
+  cotLimit = Math.min(cotLimit * 2, 5000);
+  await searchCoT();
+}));
+
+async function saveCoTSettings() {
+  const days = Math.round(Number($('#cot-days').value)) || 7;
+  await api('PUT', 'api/cot-history/settings', { enabled: $('#cot-enabled').checked, keep_days: days });
+}
+$('#cot-enabled').addEventListener('change', guard(async (e) => {
+  const on = e.target.checked;
+  if (on && !confirm('Record every CoT event? Admins can then search everything devices send through this server, including chat messages. Let your users know.')) {
+    e.target.checked = false;
+    return;
+  }
+  await saveCoTSettings();
+  toast(on ? 'CoT recording on' : 'CoT recording off');
+  loadCoT();
+}));
+$('#cot-days').addEventListener('change', guard(async () => {
+  await saveCoTSettings();
+  toast('Saved');
+  loadCoT();
+}));
+$('#cot-clear').addEventListener('click', guard(async () => {
+  if (!confirm('Delete every recorded CoT event? This cannot be undone. Export first if you need a copy.')) return;
+  await api('DELETE', 'api/cot-history');
+  cotLayer?.clearLayers();
+  toast('CoT history cleared');
+  loadCoT();
 }));
 
 // ---------- packages ----------
@@ -6193,6 +6387,16 @@ async function loadAPIKeys() {
   }
   if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
   renderAPIKeys(list);
+  $('#metrics-config').textContent = `scrape_configs:
+  - job_name: edgetak
+    scheme: https
+    metrics_path: /metrics
+    authorization:
+      credentials: etk_…   # the read-only key
+    tls_config:
+      ca_file: edgetak-ca.pem
+    static_configs:
+      - targets: ['${location.host}']`;
 }
 
 $('#apikey-form').addEventListener('submit', guard(async (e) => {
@@ -6527,6 +6731,138 @@ $('#lost-form').addEventListener('submit', guard(async (e) => {
   toast(f.on.checked ? 'Lost contact settings saved' : 'Lost contact alerts are off; any open ones have ended');
   pollEmergencies().catch(() => {}); // the ended alerts leave the banner and map
 }));
+
+// ---------- reports ----------
+//
+// The ATAK Reports plugin's reports: a filtered list, the details of each
+// (the form's answers and attachments), and a Reports layer on the map.
+
+let reports = [];
+
+async function loadReportList() {
+  reports = await api('GET', 'api/reports');
+  drawReports();
+  return reports;
+}
+
+async function loadReports() {
+  await loadReportList();
+  const fill = (sel, values, first) => {
+    const el = $(sel), cur = el.value;
+    const opts = [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    el.innerHTML = `<option value="">${esc(first)}</option>` + opts.map((v) => `<option>${esc(v)}</option>`).join('');
+    el.value = opts.includes(cur) ? cur : '';
+  };
+  fill('#report-type', reports.map((r) => r.type), 'All types');
+  fill('#report-status', reports.map((r) => r.status), 'Any status');
+  $('#report-filters').hidden = !reports.length;
+  renderReportRows();
+}
+
+function renderReportRows() {
+  const q = $('#report-filter').value.trim().toLowerCase(), type = $('#report-type').value, status = $('#report-status').value;
+  const shown = reports.filter((r) => (!type || r.type === type) && (!status || r.status === status) &&
+    (!q || [r.title, r.callsign, r.description, r.location_description, r.type, r.submitter, ...r.fields.map((f) => f.value)].some((v) => (v || '').toLowerCase().includes(q))));
+  $('#report-count').textContent = reports.length && shown.length !== reports.length ? `${shown.length} of ${reports.length} shown` : '';
+  $('#report-table tbody').innerHTML = shown.map((r) => `<tr>
+    <td><div data-no-i18n><strong>${esc(r.title || r.type || r.id)}</strong>${r.type && r.title ? `<div class="muted">${esc(r.type)}</div>` : ''}</div>
+      <div class="row-actions">
+        <button class="small" data-report="${esc(r.id)}">Details</button>
+        ${r.lat != null ? `<button class="small" data-report-map="${esc(r.id)}">Show on map</button>` : ''}
+        <a class="button small" href="/Marti/api/citrap/${encodeURIComponent(r.id)}" download>Download</a>
+        <button class="small danger" data-report-del="${esc(r.id)}">Delete</button>
+      </div></td>
+    <td>${esc(date(r.date_time))}${r.attachments.length ? `<div class="muted">📎 ${r.attachments.length}</div>` : ''}</td>
+    <td data-no-i18n>${esc(r.callsign)}${r.submitter && r.submitter !== r.callsign ? `<div class="muted">${esc(r.submitter)}</div>` : ''}</td>
+    <td data-no-i18n>${r.status ? `<span class="pill">${esc(r.status)}</span>` : ''}${r.importance ? `<div class="muted">${esc(r.importance)}</div>` : ''}</td>
+    <td>${groupPills(r.groups)}</td></tr>`).join('') || emptyRow(5, reports.length ? 'Nothing matches the filter' : 'No reports yet');
+}
+
+for (const id of ['#report-filter', '#report-type', '#report-status']) $(id).addEventListener('input', renderReportRows);
+
+function drawReports() {
+  if (!reportLayer) return;
+  reportLayer.clearLayers();
+  for (const r of reports) {
+    if (r.lat == null) continue;
+    L.circleMarker([r.lat, r.lon], { radius: 8, weight: 2, color: '#fff', fillColor: '#7c4dff', fillOpacity: 0.9 })
+      .bindTooltip(`<span data-no-i18n>📋 ${esc(r.title || r.type)}</span>`, { direction: 'right' })
+      .on('click', () => showReport(r.id))
+      .addTo(reportLayer);
+  }
+}
+
+function showReport(id) {
+  const r = reports.find((x) => x.id === id);
+  if (!r) return;
+  const url = (a) => `api/reports/${encodeURIComponent(r.id)}/files/${a.name.split('/').map(encodeURIComponent).join('/')}`;
+  const isImage = (n) => /\.(jpe?g|png|gif|webp|bmp)$/i.test(n);
+  const row = (k, v) => (v ? `<dt>${esc(k)}</dt><dd data-no-i18n>${v}</dd>` : '');
+  let section = null;
+  const fields = r.fields.map((f) => {
+    const head = f.section !== section ? `<tr><th colspan="2">${esc(f.section || '')}</th></tr>` : '';
+    section = f.section;
+    return `${head}<tr><td class="muted">${esc(f.title)}</td><td>${esc(f.value)}</td></tr>`;
+  }).join('');
+  $('#report-dialog-title').textContent = r.title || r.type || r.id;
+  $('#report-body').innerHTML = `<dl class="kv">
+      ${row('Type', esc(r.type))}
+      ${row('When', esc(date(r.date_time)) + (r.date_time_description ? ` <span class="muted">${esc(r.date_time_description)}</span>` : ''))}
+      ${row('Callsign', esc(r.callsign))}
+      ${row('Sent by', esc(r.submitter) + (r.creator_uid ? ` <span class="muted mono">${esc(r.creator_uid)}</span>` : ''))}
+      ${row('Location', (r.lat != null ? `${r.lat.toFixed(5)}, ${r.lon.toFixed(5)}` : esc(r.location)) + (r.location_description ? ` <span class="muted">${esc(r.location_description)}</span>` : ''))}
+      ${row('Scale', esc(r.event_scale))}
+      ${row('Importance', esc(r.importance))}
+      ${row('Status', esc(r.status))}
+      ${row('Groups', groupPills(r.groups))}
+      ${row('Changed', esc(date(r.updated)) + (r.versions > 1 ? ` <span class="muted">${r.versions} versions</span>` : ''))}
+    </dl>
+    ${r.description ? `<p data-no-i18n>${esc(r.description)}</p>` : ''}
+    ${fields ? `<div class="table-wrap" data-no-i18n><table class="report-fields"><tbody>${fields}</tbody></table></div>` : ''}
+    ${r.attachments.length ? `<h3>Attachments</h3><div class="report-files" data-no-i18n>${r.attachments.map((a) => isImage(a.name)
+      ? `<a href="${url(a)}" target="_blank" rel="noopener"><img src="${url(a)}" alt="${esc(a.name)}" loading="lazy"></a>`
+      : `<a class="button small" href="${url(a)}" download>${esc(a.name)} <span class="muted">${bytes(a.size)}</span></a>`).join('')}</div>` : ''}
+    <div class="inline-form">
+      ${r.lat != null ? `<button type="button" class="small" data-report-map="${esc(r.id)}">Show on map</button>` : ''}
+      <a class="button small" href="/Marti/api/citrap/${encodeURIComponent(r.id)}" download>Download</a>
+      <span class="spacer"></span>
+      <button type="button" class="small danger" data-report-del="${esc(r.id)}">Delete</button>
+    </div>`;
+  const d = $('#report-dialog');
+  if (!d.open) d.showModal();
+}
+
+function showReportOnMap(id) {
+  const r = reports.find((x) => x.id === id);
+  if (!r || r.lat == null) return;
+  initMap();
+  if (!map) return;
+  drawReports();
+  reportLayer.addTo(map);
+  setMapVisible(true, false);
+  map.invalidateSize();
+  fittedOnce = true;
+  map.setView([r.lat, r.lon], Math.max(map.getZoom(), 15));
+}
+
+const reportClick = guard(async (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.report) return showReport(b.dataset.report);
+  if (b.dataset.reportMap) {
+    $('#report-dialog').close();
+    return showReportOnMap(b.dataset.reportMap);
+  }
+  const id = b.dataset.reportDel;
+  const r = reports.find((x) => x.id === id);
+  if (!r || !confirm(`Delete the report "${r.title || r.type || r.id}"? It is removed from the server and from the plugin's search; copies already on devices stay.`)) return;
+  await api('DELETE', `api/reports/${encodeURIComponent(id)}`);
+  $('#report-dialog').close();
+  toast('Report deleted');
+  loadReports();
+});
+$('#report-table').addEventListener('click', reportClick);
+$('#report-body').addEventListener('click', reportClick);
 
 $('#lost-list').addEventListener('click', (e) => {
   const d = lostView.offline.find((x) => x.uid === e.target.dataset.lostMap);
