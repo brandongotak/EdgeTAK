@@ -39,6 +39,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/stream"
 	"github.com/brandongotak/EdgeTAK/internal/tlstrace"
 	"github.com/brandongotak/EdgeTAK/internal/web"
+	"github.com/brandongotak/EdgeTAK/internal/xmpp"
 )
 
 type App struct {
@@ -239,7 +240,8 @@ func (a *App) Start(ctx context.Context) (wait func(), err error) {
 		ServerUID:   "EdgeTAK-" + a.nodeID, Version: "EdgeTAK " + a.Version,
 	}
 	ws := &web.Server{
-		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, History: a.History, CoTLog: a.CoTLog, Chat: a.Chat, Audit: a.Audit, Log: a.Log,
+		Cfg: a.Cfg, Store: a.Store, CA: a.CA, Router: a.Router, Missions: a.Missions, Public: a.Public, History: a.History, CoTLog: a.CoTLog,
+		XMPP: &xmpp.Manager{Dir: filepath.Join(a.DataDir, "xmpp"), Log: a.Log.With("component", "prosody")}, Chat: a.Chat, Audit: a.Audit, Log: a.Log,
 		PackageDir: filepath.Join(a.DataDir, "packages"), NodeID: a.nodeID, Version: a.Version, Started: time.Now(),
 		DataDir: a.DataDir, ConfigPath: a.ConfigPath, Restart: a.Restart, Maps: &maps.Library{Dir: filepath.Join(a.DataDir, "maps")},
 	}

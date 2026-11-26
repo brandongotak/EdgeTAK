@@ -232,6 +232,18 @@
   </ul>
 </article>
 
+<article class="help-topic" id="help-xmpp" data-group="Messages" data-tab="xmpp" data-title="XMPP chat">
+  <h2>XMPP chat</h2>
+  <p>An XMPP chat server for the <strong>TAK Chat</strong> plugin and other XMPP apps: one-to-one and group chat with photos and files, kept on the server. EdgeTAK installs Prosody (on Debian, Ubuntu and Raspberry Pi OS, with <strong>Install Prosody</strong>) and runs it with its own settings.</p>
+  <ul>
+    <li>People sign in with their EdgeTAK username (in lower case) and password; disabled users are disconnected. They see the members of their groups as contacts.</li>
+    <li>In TAK Chat, turn on <strong>Use TAK Server Credentials</strong> and <strong>Use TAK Server TrustStore</strong>, and enter the server domain shown on the page.</li>
+    <li><strong>Chat rooms</strong> made here are always there; limit one to groups to keep others out. Choose whether people can make their own.</li>
+    <li>Set the file size limit and how long files and messages are kept. <strong>Online now</strong> shows who is connected; the Prosody log is at the bottom.</li>
+    <li>Devices need the chat port (5222) and file port (5281) open; the installer's helper opens them in ufw or firewalld.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-connect" data-group="Server" data-tab="connect" data-title="Connecting devices">
   <h2>Connecting devices</h2>
   <p>Ways to get a device onto the server, easiest first.</p>

@@ -10,6 +10,22 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.18.0-rc.1 (2026-11-26)
+
+**XMPP chat for TAK Chat.** Messages → XMPP chat installs Prosody (on
+Debian, Ubuntu and Raspberry Pi OS) and runs it as an XMPP chat server for
+the TAK Chat plugin and other XMPP apps: one-to-one and group chat with
+photos and files, and message history on the server. People sign in with
+their EdgeTAK username (in lower case) and password, and EdgeTAK's sign-in
+rules apply, including LDAP and login protection; disabled users are
+disconnected. Members of their groups are their contacts, and EdgeTAK's
+certificate means devices already trust the server. Rooms made on the page
+are permanent and can be limited to groups. The page sets the domain,
+ports (5222 for chat, 5281 for files), the file size limit and how long
+files and messages are kept, and shows who is online and Prosody's log. In
+TAK Chat, turn on *Use TAK Server Credentials* and *Use TAK Server
+TrustStore*. Not available in the Docker image.
+
 ## v1.17.0 (2026-11-26)
 
 **Reports page.** Data → Reports lists every report from the ATAK Reports

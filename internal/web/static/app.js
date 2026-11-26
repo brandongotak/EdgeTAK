@@ -156,6 +156,7 @@ const loaders = {
   help: loadHelp,
   chat: loadChat,
   cot: loadCoT,
+  xmpp: loadXMPP,
   federation: loadFederation,
   simulator: loadSim,
   webhooks: loadWebhooks,
@@ -245,6 +246,8 @@ function selectTab(name) {
     pollTimer = setInterval(guard(loadSendLive), 5000); // Inbox updates
   } else if (name === 'chat') {
     pollTimer = setInterval(() => loadChat().catch(() => {}), 5000); // new messages
+  } else if (name === 'xmpp') {
+    pollTimer = setInterval(() => api('GET', 'api/xmpp').then(renderXMPP).catch(() => {}), 5000); // who is online
   } else if (name === 'simulator') {
     pollTimer = setInterval(() => loadSim().catch(() => {}), 2000);
   } else if (name === 'connect') {
@@ -2783,6 +2786,131 @@ $('#cot-clear').addEventListener('click', guard(async () => {
   cotLayer?.clearLayers();
   toast('CoT history cleared');
   loadCoT();
+}));
+
+// ---------- XMPP chat ----------
+//
+// Prosody for TAK Chat: install, settings, rooms, who is online, its log.
+
+let xmppView = null;
+let xmppEditing = ''; // the room being edited
+
+async function loadXMPP() {
+  const [v, groups] = await Promise.all([api('GET', 'api/xmpp'), allGroups.length ? allGroups : api('GET', 'api/groups')]);
+  allGroups = groups;
+  renderXMPP(v);
+}
+
+function renderXMPP(v) {
+  const first = !xmppView;
+  xmppView = v;
+  const st = v.status, set = v.settings, inst = v.install || {};
+  const installing = inst.state === 'running';
+  $('#xmpp-state').innerHTML = !st.installed ? '<span class="pill">not installed</span>'
+    : st.running ? '<span class="pill ok">running</span>' : set.enabled ? '<span class="pill warn">starting</span>' : '<span class="pill">off</span>';
+  $('#xmpp-install').hidden = st.installed;
+  $('#xmpp-install-text').textContent = v.can_install ? 'Prosody is not installed yet. EdgeTAK installs it from this system\'s packages and then runs it; this takes a minute or two.' : v.install_note;
+  $('#xmpp-install-btn').hidden = !v.can_install;
+  $('#xmpp-install-btn').disabled = installing;
+  $('#xmpp-install-state').textContent = inst.message ? `${inst.state === 'error' ? 'Failed: ' : ''}${inst.message}` : '';
+  $('#xmpp-install-state').className = inst.state === 'error' ? 'error' : 'muted';
+  for (const id of ['#xmpp-form', '#xmpp-connect-card', '#xmpp-rooms-card']) $(id).hidden = !st.installed;
+  $('#xmpp-online-card').hidden = $('#xmpp-log-card').hidden = !st.installed || !set.enabled;
+
+  const f = $('#xmpp-form');
+  if (first || !f.contains(document.activeElement)) {
+    f.enabled.checked = set.enabled;
+    f.domain.value = set.domain;
+    f.domain.placeholder = v.public_host || 'this server\'s address';
+    for (const k of ['port', 'upload_port', 'upload_mb', 'upload_days', 'history_days']) f[k].value = set[k];
+    f.user_rooms.checked = set.user_rooms;
+  }
+  const warn = [];
+  if (v.cert_covers_domain === false) warn.push(`This server's certificate doesn't cover ${v.domain}, so devices won't trust the chat server. Use this server's address as the domain, or set EdgeTAK's public host to it.`);
+  if (v.skipped_users.length) warn.push(`These users can't use XMPP chat (an XMPP name can't have @, and names differing only in capitals clash): ${v.skipped_users.join(', ')}`);
+  if (st.last_exit) warn.push(`Prosody stopped unexpectedly (${st.last_exit}); see its log below.`);
+  $('#xmpp-warnings').innerHTML = warn.map((w) => `<div class="issue warning"><span class="status-icon warning" aria-hidden="true">●</span> <span>${esc(w)}</span></div>`).join('');
+  $('#xmpp-restart').hidden = !st.running;
+
+  $('#xmpp-details').innerHTML = `<dt>${esc(t('Server domain'))}</dt><dd>${esc(v.domain)}</dd>
+    ${v.public_host && v.public_host !== v.domain ? `<dt>${esc(t('Custom host'))}</dt><dd>${esc(v.public_host)}</dd>` : ''}<dt>${esc(t('Port'))}</dt><dd>${set.port}</dd>
+    <dt>${esc(t('Username'))}</dt><dd>${esc(t('the EdgeTAK username, in lower case'))}</dd><dt>${esc(t('Password'))}</dt><dd>${esc(t('the EdgeTAK password'))}</dd>`;
+  $('#xmpp-jid-example').textContent = `username@${v.domain}`;
+
+  if (!$('#xmpp-room-groups').children.length) renderChips('#xmpp-room-groups', []);
+  const occ = Object.fromEntries(st.rooms.map((r) => [r.jid, r.occupants]));
+  const conf = `conference.${v.domain}`;
+  $('#xmpp-rooms tbody').innerHTML = v.rooms.map((r) => `<tr>
+    <td><strong data-no-i18n>${esc(r.name)}</strong>${r.description ? `<div class="muted" data-no-i18n>${esc(r.description)}</div>` : ''}<div class="muted mono">${esc(r.node)}@${esc(conf)}</div></td>
+    <td>${r.groups && r.groups.length ? groupPills(r.groups) : '<span class="muted">everyone</span>'}</td>
+    <td>${st.running ? (occ[`${r.node}@${conf}`] || 0) : ''}</td>
+    <td class="actions"><button class="small" data-xmpp-edit="${esc(r.node)}">Edit</button> <button class="small danger" data-xmpp-del="${esc(r.node)}">Delete</button></td></tr>`).join('')
+    || emptyRow(4, 'No rooms yet');
+  const others = st.rooms.filter((r) => !v.rooms.some((m) => `${m.node}@${conf}` === r.jid));
+  $('#xmpp-user-rooms').textContent = others.length ? `Rooms people made: ${others.map((r) => `${r.name || r.jid} (${r.occupants})`).join(', ')}` : '';
+
+  $('#xmpp-online tbody').innerHTML = st.sessions.map((s) => `<tr>
+    <td data-no-i18n><strong>${esc(s.user)}</strong>${s.show && s.show !== 'online' ? ` <span class="pill">${esc(s.show)}</span>` : ''}</td>
+    <td class="mono" data-no-i18n>${esc(s.resource)}</td><td class="mono">${esc(s.ip)}</td>
+    <td>${s.since ? esc(new Date(s.since * 1000).toLocaleString()) : ''}</td></tr>`).join('') || emptyRow(4, 'Nobody is connected');
+  $('#xmpp-version').textContent = st.running ? `Prosody ${st.version || ''}${st.restarts ? ` · restarted ${st.restarts}×` : ''}` : '';
+  const log = $('#xmpp-log');
+  const atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+  log.textContent = st.log.join('\n') || '—';
+  if (atEnd) log.scrollTop = log.scrollHeight;
+}
+
+$('#xmpp-install-btn').addEventListener('click', guard(async () => {
+  renderXMPP(await api('POST', 'api/xmpp/install'));
+  toast('Installing Prosody…');
+}));
+
+$('#xmpp-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const n = (k) => Number(f[k].value) || 0;
+  renderXMPP(await api('PUT', 'api/xmpp/settings', { enabled: f.enabled.checked, domain: f.domain.value.trim(), port: n('port'), upload_port: n('upload_port'),
+    upload_mb: n('upload_mb'), upload_days: n('upload_days'), history_days: n('history_days'), user_rooms: f.user_rooms.checked }));
+  toast(f.enabled.checked ? 'XMPP chat settings saved' : 'XMPP chat is off');
+}));
+
+$('#xmpp-restart').addEventListener('click', guard(async () => {
+  if (!confirm('Restart Prosody? Connected apps reconnect by themselves within a few seconds.')) return;
+  renderXMPP(await api('POST', 'api/xmpp/restart'));
+  toast('Prosody restarted');
+}));
+
+function xmppRoomForm(room) {
+  xmppEditing = room ? room.node : '';
+  const f = $('#xmpp-room-form');
+  f.name.value = room ? room.name : '';
+  f.description.value = room ? room.description || '' : '';
+  renderChips('#xmpp-room-groups', room ? room.groups || [] : []);
+  $('#xmpp-room-save').textContent = room ? t('Save room') : t('Add room');
+  $('#xmpp-room-cancel').hidden = !room;
+  if (room) f.name.focus();
+}
+
+$('#xmpp-room-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const body = { name: f.name.value.trim(), description: f.description.value.trim(), groups: checkedIn('#xmpp-room-groups') };
+  const v = xmppEditing ? await api('PUT', `api/xmpp/rooms/${encodeURIComponent(xmppEditing)}`, body) : await api('POST', 'api/xmpp/rooms', body);
+  toast(xmppEditing ? 'Room saved' : 'Room added');
+  xmppRoomForm(null);
+  renderXMPP(v);
+}));
+$('#xmpp-room-cancel').addEventListener('click', () => xmppRoomForm(null));
+
+$('#xmpp-rooms').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const room = xmppView.rooms.find((r) => r.node === (b.dataset.xmppEdit || b.dataset.xmppDel));
+  if (!room) return;
+  if (b.dataset.xmppEdit) return xmppRoomForm(room);
+  if (!confirm(`Delete the room "${room.name}"? Its messages are deleted and anyone in it is removed.`)) return;
+  renderXMPP(await api('DELETE', `api/xmpp/rooms/${encodeURIComponent(room.node)}`));
+  toast('Room deleted');
 }));
 
 // ---------- packages ----------

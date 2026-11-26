@@ -54,6 +54,7 @@
       <button data-tab="send" data-section="messages">Send</button>
       <button data-tab="chat" data-section="messages">Chat log</button>
       <button data-tab="cot" data-section="messages">CoT history</button>
+      <button data-tab="xmpp" data-section="messages">XMPP chat</button>
       <button data-tab="connect" data-section="server">Connect</button>
       <button data-tab="federation" data-section="server">Federation</button>
       <button data-tab="settings" data-section="server">Settings</button>
@@ -1367,6 +1368,72 @@
         <p class="muted" id="chat-count"></p>
         <div id="chat-list" class="chat-list"></div>
         <p><button type="button" id="chat-more" hidden>Show older messages</button></p>
+      </div>
+    </section>
+
+    <section id="tab-xmpp" class="tab" hidden>
+      <div class="card">
+        <div class="card-head"><h2>XMPP chat</h2><span id="xmpp-state"></span></div>
+        <p class="muted">An XMPP chat server for the TAK Chat plugin and other XMPP apps: one-to-one and group chat with photos and files, and message history kept on the server. People sign in with their EdgeTAK username and password, see the members of their groups as contacts, and EdgeTAK's certificate means devices already trust it. EdgeTAK runs Prosody, a widely used XMPP server, and manages it from here.</p>
+        <div id="xmpp-install" class="stack" hidden>
+          <p id="xmpp-install-text"></p>
+          <div class="inline-form"><button type="button" class="primary" id="xmpp-install-btn">Install Prosody</button> <span class="muted" id="xmpp-install-state"></span></div>
+        </div>
+        <form id="xmpp-form" class="stack" hidden>
+          <label class="check"><input type="checkbox" name="enabled"> Run the XMPP chat server</label>
+          <div class="inline-form">
+            <label>Domain <input name="domain" maxlength="253" placeholder="this server's address" autocomplete="off"></label>
+            <label>Chat port <input type="number" name="port" min="1" max="65535" class="days-input"></label>
+            <label>File port <input type="number" name="upload_port" min="1" max="65535" class="days-input"></label>
+          </div>
+          <div class="inline-form">
+            <label class="inline-label">Files up to <input type="number" name="upload_mb" min="1" max="2048" class="days-input"> MB</label>
+            <label class="inline-label">Keep files <input type="number" name="upload_days" min="1" max="3650" class="days-input"> days</label>
+            <label class="inline-label">Keep messages <input type="number" name="history_days" min="1" max="3650" class="days-input"> days</label>
+          </div>
+          <label class="check"><input type="checkbox" name="user_rooms"> People can make their own chat rooms</label>
+          <div id="xmpp-warnings" class="stack"></div>
+          <div class="inline-form"><button class="primary" type="submit">Save</button> <span class="spacer"></span><button type="button" class="small" id="xmpp-restart">Restart Prosody</button></div>
+        </form>
+      </div>
+      <div class="card" id="xmpp-connect-card" hidden>
+        <h2>Connecting TAK Chat</h2>
+        <ol class="stack">
+          <li>Install the TAK Chat plugin in ATAK (Plugins tab, or tak.gov).</li>
+          <li>In TAK Chat's settings, turn on <strong>Use TAK Server Credentials</strong> and <strong>Use TAK Server TrustStore</strong>: it signs in with the username and password the device uses for this server, and trusts this server's certificate.</li>
+          <li>Enter the server domain below. If devices reach this server at another address, put that in <strong>Chat Server Custom Host</strong>.</li>
+        </ol>
+        <dl class="kv" id="xmpp-details" data-no-i18n></dl>
+        <p class="muted">Other XMPP apps (Conversations, Gajim, Monal) work too: sign in as <span class="mono" id="xmpp-jid-example"></span> and trust this server's CA certificate (Server → API keys → Download CA certificate). Open the chat and file ports in any firewall between devices and this server.</p>
+      </div>
+      <div class="card" id="xmpp-rooms-card" hidden>
+        <h2>Chat rooms</h2>
+        <p class="muted">Rooms made here are always there and listed in TAK Chat. A room limited to groups is only open to their members; with no group chosen, everyone can join.</p>
+        <form id="xmpp-room-form" class="stack" autocomplete="off">
+          <div class="inline-form">
+            <label>Name <input name="name" required maxlength="80" placeholder="Operations"></label>
+            <label>Description <input name="description" maxlength="300"></label>
+          </div>
+          <div class="muted picker-label">Open to these groups (none selected = everyone)</div>
+          <div id="xmpp-room-groups" class="group-picker"></div>
+          <div class="inline-form"><button class="primary" type="submit" id="xmpp-room-save">Add room</button> <button type="button" class="ghost" id="xmpp-room-cancel" hidden>Cancel</button></div>
+        </form>
+        <div class="table-wrap"><table id="xmpp-rooms">
+          <thead><tr><th>Room</th><th>Open to</th><th>In the room</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p class="muted" id="xmpp-user-rooms"></p>
+      </div>
+      <div class="card" id="xmpp-online-card" hidden>
+        <h2>Online now</h2>
+        <div class="table-wrap"><table id="xmpp-online">
+          <thead><tr><th>User</th><th>Device</th><th>Address</th><th>Since</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <div class="card" id="xmpp-log-card" hidden>
+        <div class="card-head"><h2>Prosody</h2><span class="muted" id="xmpp-version"></span></div>
+        <pre class="notes" id="xmpp-log" data-no-i18n></pre>
       </div>
     </section>
 

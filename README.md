@@ -50,7 +50,8 @@ Guide: [People](#people) · [Data and maps](#data-and-maps) · [Messages](#messa
 **Messages and alerts**
 - Send chat and data packages to devices, now or on a schedule; the server
   as a direct-message contact; a searchable chat log; CoT history search
-  with CSV, KML and ATAK data package export.
+  with CSV, KML and ATAK data package export; an XMPP chat server (Prosody)
+  for the TAK Chat plugin.
 - Emergency, lost contact and geofence alerts in the console, and webhooks
   to Discord, Slack, Microsoft Teams, ntfy or any URL.
 
@@ -330,7 +331,7 @@ into the ☰ menu):
 | Dashboard | Dashboard, Health |
 | People | Users, Groups, Events, Sign-ups, Certificates |
 | Data | Data Packages, Missions, Maps, Overlays, Plugins, Video |
-| Messages | Send, Chat log, CoT history |
+| Messages | Send, Chat log, CoT history, XMPP chat |
 | Server | Connect, Federation, Settings, Webhooks, Audit log, Simulator |
 | Help | A guide to every page, with search; opening it from a page shows that page's topic |
 
@@ -805,6 +806,21 @@ Search by type or type prefix, time, text and the map view, see each
 event's XML, plot the results on the map, and export them as CSV, KML, JSON
 or an ATAK data package with the last version of each marker, shape and
 route.
+
+**XMPP chat** (optional, Linux): an XMPP server for the TAK Chat plugin
+and other XMPP apps, with one-to-one and group chat, photos and files, and
+message history on the server. **Install Prosody** on the XMPP chat page
+installs the system's `prosody` package through a root helper (Debian,
+Ubuntu, Raspberry Pi OS); EdgeTAK then runs Prosody itself, from
+`/var/lib/edgetak/xmpp`, with EdgeTAK's server certificate. People sign in
+with their EdgeTAK username (in lower case) and password, the same checks
+and login protection apply, and disabled users are disconnected; the
+members of their groups are their contacts. Rooms made on the page are
+persistent and can be limited to groups. The page sets the domain (the
+server's address by default), the chat port (5222) and file port (5281),
+the file size limit and how long files and messages are kept, and shows
+who is online and Prosody's log. In TAK Chat, turn on *Use TAK Server
+Credentials* and *Use TAK Server TrustStore*.
 
 ## Alerts
 

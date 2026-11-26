@@ -57,6 +57,14 @@ ZT_STATE=/var/lib/edgetak-zerotier
 ZT_PATH_UNIT=/etc/systemd/system/edgetak-zerotier.path
 ZT_SVC_UNIT=/etc/systemd/system/edgetak-zerotier.service
 
+# XMPP chat from the admin console: EdgeTAK writes "install" into
+# $DATA_DIR/xmpp/request; the path unit runs the root-owned XMPP_HELPER,
+# which installs the system's prosody package. EdgeTAK runs Prosody itself.
+XMPP_HELPER=/usr/local/lib/edgetak/edgetak-xmpp.sh
+XMPP_STATE=/var/lib/edgetak-xmpp
+XMPP_PATH_UNIT=/etc/systemd/system/edgetak-xmpp.path
+XMPP_SVC_UNIT=/etc/systemd/system/edgetak-xmpp.service
+
 # TerraTAK from the admin console and --terratak: EdgeTAK writes a request
 # word into $DATA_DIR/terratak/request; the path unit runs the root-owned
 # TT_HELPER, which installs Docker, loads the TerraTAK image and runs it as
@@ -238,6 +246,9 @@ do_uninstall() {
 	systemctl disable --now edgetak-zerotier.path >/dev/null 2>&1 || true
 	rm -f "$ZT_PATH_UNIT" "$ZT_SVC_UNIT" "$ZT_HELPER"
 	rm -rf "$ZT_STATE" # ZeroTier itself stays installed
+	systemctl disable --now edgetak-xmpp.path >/dev/null 2>&1 || true
+	rm -f "$XMPP_PATH_UNIT" "$XMPP_SVC_UNIT" "$XMPP_HELPER"
+	rm -rf "$XMPP_STATE" # Prosody itself stays installed (EdgeTAK stopped it)
 	if [ -f "$TT_HELPER" ] && [ -f "$TT_APP_UNIT" ]; then
 		PORTS="$PORTS $TT_PORT"
 		mkdir -p "$DATA_DIR/terratak"
@@ -565,6 +576,93 @@ EOF
 	if [ -s /var/lib/zerotier-one/authtoken.secret ]; then
 		install -o "$SVC_USER" -g "$SVC_USER" -m 0600 /var/lib/zerotier-one/authtoken.secret "$DATA_DIR/zerotier/authtoken"
 	fi
+}
+
+# write_xmpp_helper installs the root-owned helper that installs Prosody
+# when the admin console asks for XMPP chat, and the units that run it.
+write_xmpp_helper() {
+	mkdir -p "$(dirname "$XMPP_HELPER")" "$XMPP_STATE"
+	chmod 0755 "$XMPP_STATE"
+	install -d -o "$SVC_USER" -g "$SVC_USER" -m 0750 "$DATA_DIR/xmpp"
+	cat >"$XMPP_HELPER.tmp" <<'XMPPEOF'
+#!/bin/sh
+# EdgeTAK XMPP chat helper, installed by the EdgeTAK installer.
+# edgetak-xmpp.service runs it as root when the admin console asks for XMPP
+# chat. The only input it takes from EdgeTAK is the word "install". It
+# installs the system's prosody package (verified by apt as usual), turns
+# off the system's own Prosody service, since EdgeTAK runs Prosody itself
+# with its own configuration, and opens the chat ports in the firewall.
+set -eu
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+REQUEST=/var/lib/edgetak/xmpp/request
+STATE=/var/lib/edgetak-xmpp
+PORTS="5222 5281"
+
+status() { # state message
+	printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >"$STATE/status.tmp"
+	mv -f "$STATE/status.tmp" "$STATE/status"
+	echo "$1: $2"
+}
+fail() { status error "$*"; exit 1; }
+
+open_ports() {
+	if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
+		for p in $PORTS; do ufw allow "$p/tcp" comment "EdgeTAK XMPP" >/dev/null || true; done
+	elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+		for p in $PORTS; do firewall-cmd -q --permanent --add-port="$p/tcp" || true; done
+		firewall-cmd -q --reload || true
+	fi
+}
+
+mkdir -p "$STATE"
+[ -f "$REQUEST" ] && [ ! -L "$REQUEST" ] || exit 0
+req=$(head -c 16 "$REQUEST" | tr -d '\r\n ')
+[ "$req" = install ] || fail "unknown request"
+
+if command -v prosody >/dev/null 2>&1; then
+	status running "Prosody is already installed"
+else
+	command -v apt-get >/dev/null 2>&1 || fail "installing Prosody from the console works on Debian, Ubuntu and Raspberry Pi OS; install it yourself (prosody.im/download)"
+	tmp=$(mktemp)
+	trap 'rm -f "$tmp"' EXIT INT TERM
+	status running "downloading the package list"
+	DEBIAN_FRONTEND=noninteractive apt-get update >"$tmp" 2>&1 ||
+		fail "the package list couldn't be downloaded: $(tail -n1 "$tmp" | cut -c1-200)"
+	status running "installing Prosody"
+	DEBIAN_FRONTEND=noninteractive apt-get install -y prosody >"$tmp" 2>&1 ||
+		fail "installing prosody failed: $(grep -i 'e:' "$tmp" | tail -n1 | cut -c1-200)"
+fi
+# EdgeTAK runs its own Prosody; the system's would hold the same ports.
+systemctl disable --now prosody >/dev/null 2>&1 || true
+open_ports
+status done "Prosody is installed; EdgeTAK runs it when XMPP chat is on"
+XMPPEOF
+	chmod 0755 "$XMPP_HELPER.tmp"
+	mv -f "$XMPP_HELPER.tmp" "$XMPP_HELPER"
+
+	cat >"$XMPP_PATH_UNIT" <<EOF
+# Installed by the EdgeTAK installer: runs edgetak-xmpp.service when the
+# admin console asks for XMPP chat.
+[Unit]
+Description=Watch for XMPP chat requests from the EdgeTAK admin console
+
+[Path]
+PathChanged=$DATA_DIR/xmpp/request
+Unit=edgetak-xmpp.service
+
+[Install]
+WantedBy=multi-user.target
+EOF
+	cat >"$XMPP_SVC_UNIT" <<EOF
+# Installed by the EdgeTAK installer. Runs as root: it installs Prosody.
+[Unit]
+Description=Install Prosody for EdgeTAK XMPP chat (requested from the admin console)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh $XMPP_HELPER
+TimeoutStartSec=15min
+EOF
 }
 
 # write_terratak_helper installs the root-owned TerraTAK helper and the
@@ -1055,6 +1153,7 @@ do_install() {
 	write_unit
 	write_updater
 	write_zerotier_helper
+	write_xmpp_helper
 	write_terratak_helper
 	if [ -n "$TERRATAK_FILE" ]; then
 		setup_terratak
@@ -1072,6 +1171,7 @@ do_install() {
 	systemctl enable edgetak.service >/dev/null 2>&1
 	systemctl enable --now edgetak-update.path >/dev/null 2>&1 || warn "could not enable updates from the console (edgetak-update.path)"
 	systemctl enable --now edgetak-zerotier.path >/dev/null 2>&1 || warn "could not enable installing ZeroTier from the console (edgetak-zerotier.path)"
+	systemctl enable --now edgetak-xmpp.path >/dev/null 2>&1 || warn "could not enable XMPP chat from the console (edgetak-xmpp.path)"
 	systemctl enable --now edgetak-terratak.path >/dev/null 2>&1 || warn "could not enable TerraTAK from the console (edgetak-terratak.path)"
 	firewall open
 	systemctl restart edgetak.service

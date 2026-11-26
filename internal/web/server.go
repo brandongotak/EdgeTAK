@@ -36,6 +36,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/publiccert"
 	"github.com/brandongotak/EdgeTAK/internal/router"
 	"github.com/brandongotak/EdgeTAK/internal/store"
+	"github.com/brandongotak/EdgeTAK/internal/xmpp"
 )
 
 //go:embed static
@@ -50,6 +51,7 @@ type Server struct {
 	Public     *publiccert.Provider // nil unless a public certificate is configured
 	History    *history.Recorder
 	CoTLog     *eventlog.Log
+	XMPP       *xmpp.Manager // Prosody, for XMPP chat
 	Chat       *chatlog.Log
 	Federation *federation.Manager
 	// PlainTCP turns the plain TCP streaming port on and off; nil when it
@@ -103,7 +105,8 @@ type Server struct {
 	// SimDial connects simulated devices (tests use an in-memory network).
 	SimDial func(ctx context.Context, network, addr string) (net.Conn, error)
 
-	history       sendHistory  // admin "send to devices" log
+	history       sendHistory // admin "send to devices" log
+	xmpp          xmppState
 	signupLimiter *rateLimiter // public sign-up attempts per address
 	video         videoState
 	selfUpdate    selfUpdateState
@@ -179,6 +182,7 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.chatRoutes(mux)
 	s.cotLogRoutes(mux)
 	s.metricsRoutes(mux)
+	s.xmppRoutes(mux)
 	s.recordingRoutes(mux)
 	s.emergencyRoutes(mux)
 	s.profileRoutes(mux)

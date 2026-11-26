@@ -197,6 +197,8 @@ type db struct {
 
 	CoTLog CoTLogSettings `json:"cot_log"`
 
+	XMPP XMPPSettings `json:"xmpp"`
+
 	VideoRecording RecordingSettings `json:"video_recording"`
 
 	Emergencies []*Emergency `json:"emergencies"` // oldest first, the last maxEmergencies
@@ -404,6 +406,30 @@ const DefaultRecordingDays = 7
 // ChatLogSettings controls recording of GeoChat messages (off by default).
 type ChatLogSettings struct {
 	Enabled bool `json:"enabled"`
+}
+
+// XMPPSettings are the Prosody XMPP server's settings, for TAK Chat. Zero
+// values mean the defaults (see the web package).
+type XMPPSettings struct {
+	Enabled     bool       `json:"enabled"`
+	Domain      string     `json:"domain,omitempty"` // "" = the server's public address
+	Port        int        `json:"port,omitempty"`
+	UploadPort  int        `json:"upload_port,omitempty"`
+	UploadMB    int        `json:"upload_mb,omitempty"`
+	UploadDays  int        `json:"upload_days,omitempty"`
+	HistoryDays int        `json:"history_days,omitempty"`
+	NoUserRooms bool       `json:"no_user_rooms,omitempty"` // only the console makes rooms
+	Secret      string     `json:"secret,omitempty"`        // between EdgeTAK and Prosody
+	Rooms       []XMPPRoom `json:"rooms,omitempty"`
+}
+
+// XMPPRoom is a chat room made in the console; Groups limits it to those
+// groups' users (none: everyone).
+type XMPPRoom struct {
+	Node        string   `json:"node"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Groups      []string `json:"groups,omitempty"`
 }
 
 // CoTLogSettings controls recording of every CoT event for the CoT history
@@ -856,6 +882,35 @@ func (s *Store) SetChatLogSettings(c ChatLogSettings) error {
 	defer s.mu.Unlock()
 	s.db.ChatLog = c
 	return s.save()
+}
+
+func (s *Store) XMPP() XMPPSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	x := s.db.XMPP
+	x.Rooms = slices.Clone(x.Rooms)
+	for i := range x.Rooms {
+		x.Rooms[i].Groups = slices.Clone(x.Rooms[i].Groups)
+	}
+	return x
+}
+
+// UpdateXMPP changes the XMPP settings; fn may refuse with an error.
+func (s *Store) UpdateXMPP(fn func(*XMPPSettings) error) (XMPPSettings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	x := s.db.XMPP
+	x.Rooms = slices.Clone(x.Rooms)
+	if err := fn(&x); err != nil {
+		return XMPPSettings{}, err
+	}
+	old := s.db.XMPP
+	s.db.XMPP = x
+	if err := s.save(); err != nil {
+		s.db.XMPP = old
+		return XMPPSettings{}, err
+	}
+	return x, nil
 }
 
 func (s *Store) CoTLogSettings() CoTLogSettings {
