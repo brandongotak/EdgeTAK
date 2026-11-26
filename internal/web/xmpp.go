@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/brandongotak/EdgeTAK/internal/pki"
 	"github.com/brandongotak/EdgeTAK/internal/store"
 	"github.com/brandongotak/EdgeTAK/internal/xmpp"
 )
@@ -142,13 +143,17 @@ func (s *Server) xmppApply(restart bool) error {
 	if err := s.xmppWriteCert(certFile, keyFile); err != nil {
 		return err
 	}
+	caFile := filepath.Join(dir, "certs", "ca.pem")
+	if err := writeFileAtomic(caFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.CA.Cert.Raw}), 0o640); err != nil {
+		return err
+	}
 	s.xmpp.mu.Lock()
 	authAddr := s.xmpp.authAddr
 	s.xmpp.mu.Unlock()
 	c := xmpp.Config{Domain: s.xmppDomain(x), PublicHost: firstNonEmpty(s.Cfg.PublicHost, s.xmppDomain(x)), Port: x.Port,
 		HTTPSPort: x.UploadPort, HTTPPort: xmppDefaultLocalPort, UploadMB: x.UploadMB, UploadDays: x.UploadDays,
 		HistoryDays: x.HistoryDays, UserRooms: !x.NoUserRooms, AuthURL: "http://" + authAddr + "/auth", Secret: x.Secret,
-		CertFile: certFile, KeyFile: keyFile}
+		CertFile: certFile, KeyFile: keyFile, CAFile: caFile}
 	if err := s.XMPP.Configure(c); err != nil {
 		return err
 	}
@@ -248,10 +253,15 @@ func (s *Server) xmppAuth(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
+		Cert     string `json:"cert"` // PEM: sign-in with the device's certificate
 		IP       string `json:"ip"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10)).Decode(&req); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if req.Cert != "" {
+		s.xmppCertAuth(w, req.Cert, req.IP)
 		return
 	}
 	// Prosody lowercases names: find the EdgeTAK user it means.
@@ -271,6 +281,43 @@ func (s *Server) xmppAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+// xmppCertAuth checks a device certificate the way the streaming port
+// does (EdgeTAK's CA, not revoked, an enabled user) and answers with the
+// XMPP name it signs in as.
+func (s *Server) xmppCertAuth(w http.ResponseWriter, certPEM, ip string) {
+	refuse := func(why string) {
+		s.Log.Info("XMPP chat certificate sign-in refused", "ip", ip, "why", why)
+		http.Error(w, "not authorized", http.StatusUnauthorized)
+	}
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil {
+		refuse("no certificate")
+		return
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		refuse("unreadable certificate")
+		return
+	}
+	pool := x509.NewCertPool()
+	pool.AddCert(s.CA.Cert)
+	if _, err := cert.Verify(x509.VerifyOptions{Roots: pool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}); err != nil {
+		refuse("not signed by this server's CA: " + err.Error())
+		return
+	}
+	if s.Store.IsRevoked(pki.SerialHex(cert)) {
+		refuse("revoked certificate")
+		return
+	}
+	u, ok := s.Store.User(cert.Subject.CommonName)
+	lp := xmppLocalpart(cert.Subject.CommonName)
+	if !ok || u.Disabled || lp == "" {
+		refuse("no such user, or disabled: " + cert.Subject.CommonName)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"username": lp})
 }
 
 // xmppCanInstall reports whether the console can install Prosody here.

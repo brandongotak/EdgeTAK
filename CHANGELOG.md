@@ -10,6 +10,16 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.18.0-rc.2 (2026-11-26)
+
+**Fix: TAK Chat stayed on "Waiting to connect" with Use TAK Server
+Credentials.** With that setting TAK Chat signs in with the device's
+EdgeTAK certificate rather than a password, which Prosody didn't offer, so
+TAK Chat gave up after connecting. XMPP chat now accepts the device
+certificate: EdgeTAK checks it as it does on the streaming port (signed by
+its CA, not revoked, an enabled user). Typing the username and password
+into TAK Chat keeps working.
+
 ## v1.18.0-rc.1 (2026-11-26)
 
 **XMPP chat for TAK Chat.** Messages → XMPP chat installs Prosody (on

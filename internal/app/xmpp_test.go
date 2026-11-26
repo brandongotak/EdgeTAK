@@ -1,7 +1,9 @@
 package app
 
 import (
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -140,6 +142,43 @@ func TestXMPPChat(t *testing.T) {
 			t.Errorf("%s: %d, want %d", name, got, c.want)
 		}
 	}
+	// Sign-in with a device certificate (TAK Chat's "Use TAK Server
+	// Credentials"): EdgeTAK says which user it is, until it is revoked.
+	device := enroll(t, a, "alice", "password-alice")
+	certPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: device.Certificate[0]}))
+	checkCert := func(pemText string) (int, string) {
+		t.Helper()
+		req, _ := http.NewRequest("POST", authURL, strings.NewReader(mustJSON(map[string]string{"cert": pemText, "ip": "10.1.2.3"})))
+		req.Header.Set("Authorization", "Bearer "+secret)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var out struct{ Username string }
+		json.NewDecoder(resp.Body).Decode(&out)
+		return resp.StatusCode, out.Username
+	}
+	if st, user := checkCert(certPEM); st != 200 || user != "alice" {
+		t.Errorf("certificate sign-in = %d %q", st, user)
+	}
+	if st, _ := checkCert(string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: a.CA.Cert.Raw}))); st != 401 {
+		t.Errorf("the CA's own certificate = %d", st)
+	}
+	if st, _ := checkCert("junk"); st != 401 {
+		t.Errorf("junk certificate = %d", st)
+	}
+	leaf, _ := x509.ParseCertificate(device.Certificate[0])
+	if st, _ := call("POST", "/admin/api/certs/"+leaf.SerialNumber.Text(16)+"/revoke", nil); st != 204 && st != 200 {
+		t.Fatalf("revoke = %d", st)
+	}
+	if st, _ := checkCert(certPEM); st != 401 {
+		t.Errorf("revoked certificate = %d", st)
+	}
+	if !strings.Contains(string(cfg), `verify = { "peer", "client_once" }`) {
+		t.Error("Prosody doesn't ask for device certificates")
+	}
+
 	// A disabled user can't sign in, and leaves Prosody's list.
 	if st, _ := call("PATCH", "/admin/api/users/carol", map[string]any{"disabled": true}); st != 200 {
 		t.Fatalf("disable = %d", st)

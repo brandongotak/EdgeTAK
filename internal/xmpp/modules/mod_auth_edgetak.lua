@@ -1,9 +1,11 @@
 -- mod_auth_edgetak: written by EdgeTAK, which overwrites it when it starts.
 --
--- Users sign in with their EdgeTAK username and password: Prosody asks
--- EdgeTAK (on a local address, with a shared secret), so disabled users,
--- LDAP accounts and EdgeTAK's login protection all apply. Accounts are made
--- and changed in EdgeTAK, never here.
+-- Users sign in with their EdgeTAK username and password, or with their
+-- device's EdgeTAK certificate (SASL EXTERNAL, what TAK Chat does with "Use
+-- TAK Server Credentials"): Prosody asks EdgeTAK (on a local address, with a
+-- shared secret), so disabled users, revoked certificates, LDAP accounts and
+-- EdgeTAK's login protection all apply. Accounts are made and changed in
+-- EdgeTAK, never here.
 
 local function want(name)
 	local ok, m = pcall(require, "prosody." .. name);
@@ -40,21 +42,42 @@ local function current_users()
 	return users;
 end
 
-local function ask(username, password, ip)
+local function call(body)
 	if not async.ready() then
-		module:log("warn", "password check outside an async context for %s", username);
+		module:log("warn", "sign-in check outside an async context");
 		return nil;
 	end
 	local res, err = async.wait_for(http.request(auth_url, {
 		method = "POST";
-		body = json.encode({ username = username; password = password; ip = ip or "" });
+		body = json.encode(body);
 		headers = { ["Content-Type"] = "application/json"; ["Authorization"] = "Bearer " .. secret };
 	}));
 	if not res then
-		module:log("error", "EdgeTAK did not answer a password check: %s", tostring(err));
-		return nil;
+		module:log("error", "EdgeTAK did not answer a sign-in check: %s", tostring(err));
 	end
-	return res.code == 200;
+	return res;
+end
+
+local function ask(username, password, ip)
+	local res = call({ username = username; password = password; ip = ip or "" });
+	return res and res.code == 200;
+end
+
+-- The certificate the client presented, as PEM, if any.
+local function peer_cert(session)
+	local conn = session and session.conn;
+	if not (conn and conn.ssl_peercertificate) then return nil; end
+	local ok, cert = pcall(conn.ssl_peercertificate, conn);
+	if ok and cert and cert.pem then return cert:pem(); end
+	return nil;
+end
+
+-- Which user a certificate signs in as, according to EdgeTAK.
+local function ask_cert(pem, ip)
+	local res = call({ cert = pem; ip = ip or "" });
+	if not (res and res.code == 200) then return nil; end
+	local data = json.decode(res.body or "");
+	return type(data) == "table" and data.username or nil;
 end
 
 local provider = {};
@@ -88,11 +111,25 @@ end
 
 function provider.get_sasl_handler(session)
 	local ip = session and session.ip;
-	return new_sasl(module.host, {
+	local profile = {
 		plain_test = function(_, username, password)
 			return ask(username, password, ip), true;
 		end;
-	});
+	};
+	-- EXTERNAL is offered only to a client that presented a certificate.
+	local pem = peer_cert(session);
+	if pem then
+		profile.external = function(authzid)
+			local user = ask_cert(pem, ip);
+			if not user then return nil, nil; end
+			if authzid and authzid ~= "" and authzid ~= user and authzid ~= user .. "@" .. module.host then
+				module:log("info", "Certificate for %s used to sign in as %s: refused", user, authzid);
+				return nil, nil;
+			end
+			return user, true;
+		end;
+	end
+	return new_sasl(module.host, profile);
 end
 
 module:provides("auth", provider);

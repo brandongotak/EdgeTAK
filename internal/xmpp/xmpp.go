@@ -51,6 +51,7 @@ type Config struct {
 	Secret      string
 	CertFile    string
 	KeyFile     string
+	CAFile      string // devices' certificates are signed by it (certificate sign-in)
 }
 
 // State is what Prosody needs to know about EdgeTAK's users.
@@ -201,7 +202,14 @@ func (m *Manager) config(c Config) string {
 	w(`storage = "internal"`)
 	w("archive_expires_after = %s", lua(fmt.Sprintf("%dd", max(c.HistoryDays, 1))))
 	w(`default_archive_policy = true`)
-	w("ssl = { certificate = %s; key = %s }", lua(c.CertFile), lua(c.KeyFile))
+	// Devices may present their EdgeTAK certificate (TAK Chat does with "Use
+	// TAK Server Credentials"); it is optional, and EdgeTAK checks it.
+	if c.CAFile != "" {
+		w(`ssl = { certificate = %s; key = %s; cafile = %s; verify = { "peer", "client_once" }; verifyext = { "lsec_continue", "lsec_ignore_purpose" } }`,
+			lua(c.CertFile), lua(c.KeyFile), lua(c.CAFile))
+	} else {
+		w("ssl = { certificate = %s; key = %s }", lua(c.CertFile), lua(c.KeyFile))
+	}
 	w("https_ssl = { certificate = %s; key = %s }", lua(c.CertFile), lua(c.KeyFile))
 	w("edgetak_auth_url = %s", lua(c.AuthURL))
 	w("edgetak_secret = %s", lua(c.Secret))
