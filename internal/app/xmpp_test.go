@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -177,6 +178,32 @@ func TestXMPPChat(t *testing.T) {
 	}
 	if !strings.Contains(string(cfg), `verify = { "peer", "client_once" }`) {
 		t.Error("Prosody doesn't ask for device certificates")
+	}
+
+	// A quick-connect QR code: ATAK keeps its token as the password, and
+	// TAK Chat signs in with that. Only once it has set up a device, and
+	// until the code is deleted.
+	st, qr := call("POST", "/admin/api/enroll-codes", map[string]any{"username": "Bob", "hours": 24})
+	if st != 201 {
+		t.Fatalf("make code = %d %v", st, qr)
+	}
+	link, _ := url.Parse(qr["link"].(string))
+	token := link.Query().Get("token")
+	if got := check(secret, "bob", token); got != 401 {
+		t.Errorf("unused QR code = %d", got)
+	}
+	enroll(t, a, "Bob", token)
+	if got := check(secret, "bob", token); got != 200 {
+		t.Errorf("QR code that set up a device = %d", got)
+	}
+	if got := check(secret, "alice", token); got != 401 {
+		t.Errorf("Bob's QR code for alice = %d", got)
+	}
+	if st, _ := call("DELETE", "/admin/api/enroll-codes/"+qr["id"].(string), nil); st != 200 {
+		t.Fatalf("delete code = %d", st)
+	}
+	if got := check(secret, "bob", token); got != 401 {
+		t.Errorf("deleted QR code = %d", got)
 	}
 
 	// A disabled user can't sign in, and leaves Prosody's list.

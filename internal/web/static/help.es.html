@@ -236,7 +236,7 @@
   <h2>Chat XMPP</h2>
   <p>Un servidor de chat XMPP para el plugin <strong>TAK Chat</strong> y otras apps XMPP: chat individual y en grupo con fotos y archivos, guardado en el servidor. EdgeTAK instala Prosody (en Debian, Ubuntu y Raspberry Pi OS, con <strong>Instalar Prosody</strong>) y lo ejecuta con su propia configuración.</p>
   <ul>
-    <li>Cada persona inicia sesión con su usuario de EdgeTAK (en minúsculas) y su contraseña, o con el certificado EdgeTAK del dispositivo (TAK Chat lo hace con Use TAK Server Credentials); los usuarios desactivados y los certificados revocados se rechazan. Ven a los miembros de sus grupos como contactos.</li>
+    <li>Cada persona inicia sesión con su usuario de EdgeTAK (en minúsculas) y su contraseña; con Use TAK Server Credentials, TAK Chat usa los que el teléfono guarda para EdgeTAK. Un teléfono configurado con un código QR de conexión rápida guarda ese código en su lugar, e inicia sesión con él hasta que borres el código de la lista de códigos QR. Otras apps XMPP también pueden iniciar sesión con el certificado EdgeTAK del dispositivo. Los usuarios desactivados y los certificados revocados se rechazan. Cada persona ve a los miembros de sus grupos como contactos.</li>
     <li>En TAK Chat, activa <strong>Use TAK Server Credentials</strong> y <strong>Use TAK Server TrustStore</strong>, e introduce el dominio del servidor que muestra la página.</li>
     <li>Las <strong>salas de chat</strong> creadas aquí siempre existen; limita una a grupos para dejar fuera al resto. Elige si la gente puede crear las suyas.</li>
     <li>Fija el tamaño máximo de los archivos y cuánto se conservan archivos y mensajes. <strong>Conectados ahora</strong> muestra quién está conectado; el registro de Prosody está al final.</li>

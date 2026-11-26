@@ -2375,5 +2375,6 @@
  "Restarted Prosody": "Prosody redémarré",
  "Added XMPP chat room": "Salon XMPP ajouté",
  "Changed XMPP chat room": "Salon XMPP modifié",
- "Deleted XMPP chat room": "Salon XMPP supprimé"
+ "Deleted XMPP chat room": "Salon XMPP supprimé",
+ "A code that set up a phone stays listed: ATAK keeps it as the phone's password for this server, and TAK Chat (XMPP chat, with Use TAK Server Credentials) signs in with it. Deleting the code ends that chat sign-in; the phone's connection to EdgeTAK keeps working.": "Un code qui a configuré un téléphone reste dans la liste : ATAK le garde comme mot de passe du téléphone pour ce serveur, et TAK Chat (chat XMPP, avec Use TAK Server Credentials) s'y connecte avec. Supprimer le code met fin à cette connexion au chat ; la connexion du téléphone à EdgeTAK continue de fonctionner."
 }

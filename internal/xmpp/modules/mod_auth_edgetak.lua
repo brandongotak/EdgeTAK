@@ -1,8 +1,9 @@
 -- mod_auth_edgetak: written by EdgeTAK, which overwrites it when it starts.
 --
--- Users sign in with their EdgeTAK username and password, or with their
--- device's EdgeTAK certificate (SASL EXTERNAL, what TAK Chat does with "Use
--- TAK Server Credentials"): Prosody asks EdgeTAK (on a local address, with a
+-- Users sign in with their EdgeTAK username and password (TAK Chat's "Use
+-- TAK Server Credentials" reuses the ones ATAK keeps, which after a
+-- quick-connect QR code is the code), or with their device's EdgeTAK
+-- certificate (SASL EXTERNAL, for apps that do it): Prosody asks EdgeTAK (on a local address, with a
 -- shared secret), so disabled users, revoked certificates, LDAP accounts and
 -- EdgeTAK's login protection all apply. Accounts are made and changed in
 -- EdgeTAK, never here.

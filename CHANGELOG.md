@@ -10,6 +10,19 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.18.0-rc.3 (2026-11-26)
+
+**TAK Chat on phones set up from a QR code.** TAK Chat's *Use TAK Server
+Credentials* signs in with the username and password ATAK keeps for
+EdgeTAK, and a quick-connect QR code leaves ATAK with the code as that
+password. XMPP chat now accepts a QR code that has set up one of the
+user's devices (for chat only), so those phones connect without typing a
+password. Such codes now stay in the QR code list until an admin deletes
+them; deleting one ends that chat sign-in, and the phone's connection to
+EdgeTAK keeps working. Phones enrolled with a username and password
+already worked. (Certificate sign-in, added in rc.2, isn't what TAK Chat
+uses; other XMPP apps can.)
+
 ## v1.18.0-rc.2 (2026-11-26)
 
 **Fix: TAK Chat stayed on "Waiting to connect" with Use TAK Server

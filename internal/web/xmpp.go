@@ -275,12 +275,35 @@ func (s *Server) xmppAuth(w http.ResponseWriter, r *http.Request) {
 	if net.ParseIP(req.IP) == nil {
 		req.IP = ""
 	}
+	if !s.passwordBlocked(req.IP) && s.xmppCodeSignIn(name, req.Password) {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	if _, err := s.passwordSignInFrom(req.IP, name, req.Password); err != nil {
 		s.Log.Info("XMPP chat sign-in refused", "user", req.Username, "ip", req.IP, "err", err)
 		http.Error(w, "not authorized", http.StatusUnauthorized)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+// xmppCodeSignIn reports whether password is a quick-connect QR code that
+// set up one of name's devices. ATAK keeps the code as the server's password
+// after enrolling with it, and TAK Chat's "Use TAK Server Credentials" signs
+// in with it, so such a code also signs its user in to chat (only chat),
+// until an admin deletes it from the QR code list.
+func (s *Server) xmppCodeSignIn(name, password string) bool {
+	u, ok := s.Store.User(name)
+	if !ok || u.Disabled || password == "" {
+		return false
+	}
+	want := hashCode(password)
+	for _, c := range s.Store.EnrollCodes() {
+		if c.Username == u.Username && !c.Used.IsZero() && subtle.ConstantTimeCompare([]byte(c.Hash), []byte(want)) == 1 {
+			return true
+		}
+	}
+	return false
 }
 
 // xmppCertAuth checks a device certificate the way the streaming port

@@ -2316,11 +2316,15 @@ func (s *Store) EnrollCodes() []EnrollCode {
 	return slices.Clone(s.db.EnrollCodes)
 }
 
-// AddEnrollCode saves a code, dropping ones that ended over a week ago.
+// AddEnrollCode saves a code, dropping unused ones that ended over a week
+// ago. Codes that set up a device stay until an admin deletes them: ATAK
+// keeps the code as the server's password, and TAK Chat signs in with it.
 func (s *Store) AddEnrollCode(c EnrollCode, now time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.db.EnrollCodes = slices.DeleteFunc(s.db.EnrollCodes, func(o EnrollCode) bool { return now.Sub(o.Expires) > 7*24*time.Hour })
+	s.db.EnrollCodes = slices.DeleteFunc(s.db.EnrollCodes, func(o EnrollCode) bool {
+		return o.Used.IsZero() && now.Sub(o.Expires) > 7*24*time.Hour
+	})
 	s.db.EnrollCodes = append(s.db.EnrollCodes, c)
 	return s.save()
 }

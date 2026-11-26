@@ -813,10 +813,13 @@ message history on the server. **Install Prosody** on the XMPP chat page
 installs the system's `prosody` package through a root helper (Debian,
 Ubuntu, Raspberry Pi OS); EdgeTAK then runs Prosody itself, from
 `/var/lib/edgetak/xmpp`, with EdgeTAK's server certificate. People sign in
-with their EdgeTAK username (in lower case) and password, or with the
-device's EdgeTAK certificate (what TAK Chat does with *Use TAK Server
-Credentials*); the same checks and login protection apply, revoked
-certificates are refused, and disabled users are disconnected; the
+with their EdgeTAK username (in lower case) and password (TAK Chat's *Use
+TAK Server Credentials* reuses the ones ATAK keeps for EdgeTAK); a phone
+set up from a quick-connect QR code signs in with that code, which ATAK
+keeps as its password, until the code is deleted from the QR code list.
+Other XMPP apps can also use the device's EdgeTAK certificate. The same
+checks and login protection apply, revoked certificates are refused, and
+disabled users are disconnected; the
 members of their groups are their contacts. Rooms made on the page are
 persistent and can be limited to groups. The page sets the domain (the
 server's address by default), the chat port (5222) and file port (5281),
