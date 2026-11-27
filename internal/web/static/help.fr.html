@@ -39,6 +39,16 @@
   <p>Le tableau <strong>Appareils</strong> liste pour chaque appareil sa batterie (et la vitesse à laquelle elle se vide), son dernier rapport, son fix GPS et sa connexion, les pires problèmes en premier. Servez-vous-en pour repérer un téléphone presque à plat avant qu'il ne décroche.</p>
 </article>
 
+<article class="help-topic" id="help-medevac" data-group="Tableau de bord" data-tab="medevac" data-title="MEDEVAC">
+  <h2>MEDEVAC</h2>
+  <p>Les demandes MEDEVAC en 9 lignes envoyées avec l'outil MedLine d'ATAK s'affichent ici, les plus récentes d'abord, dès qu'un appareil en envoie une ; l'onglet MEDEVAC indique combien sont actives, et la console prévient quand une nouvelle arrive.</p>
+  <ul>
+    <li>Chaque demande montre les patients par priorité (A urgent, B urgent chirurgical, C prioritaire…), sur brancard et valides, et le point d'enlèvement en MGRS et latitude/longitude. <strong>Détails</strong> présente les neuf lignes, les remarques, le ZMIST de chaque patient et l'historique.</li>
+    <li>Indiquez l'état au fil du traitement : demandée, prise en compte, en route, terminée ou annulée. L'état est gardé sur ce serveur et ne change rien sur les appareils ; une demande retirée sur l'appareil est signalée.</li>
+    <li>Les demandes actives sont sur la couche MEDEVAC de la carte. Ajoutez les demandes MEDEVAC à un webhook (page Webhooks) pour être prévenu des nouvelles console fermée.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-users" data-group="Personnes" data-tab="users" data-title="Utilisateurs">
   <h2>Utilisateurs</h2>
   <p>Tous ceux qui se connectent : les appareils des personnes, la console et la page de compte.</p>
@@ -133,6 +143,7 @@
     <li>Consultez les abonnés et leurs rôles, les éléments et fichiers, l'historique des changements et les invitations.</li>
     <li><strong>Afficher sur la carte</strong> dessine les éléments d'une mission ; <strong>Exporter</strong> la télécharge.</li>
     <li>Une mission est visible par les groupes pour lesquels elle a été créée. Un <a data-goto="events">événement</a> peut en créer une pour son groupe.</li>
+    <li><strong>Enregistrer comme modèle</strong> garde les réglages, fichiers et éléments de carte d'une mission ; <strong>Nouvelle mission</strong> sous Modèles de mission en crée une copie neuve (avec ses propres éléments de carte), en invitant si vous le voulez les appareils de ses groupes.</li>
   </ul>
 </article>
 
@@ -158,6 +169,26 @@
     <li>Il devient un fond de carte dans la console, et les appareils ATAK le reçoivent comme source de carte à leur connexion : les cartes fonctionnent sans internet.</li>
   </ol>
   <p>Vos propres sources de tuiles (et les fichiers <code>.xml</code> de sources de cartes ATAK) sont sous <em>Sources de cartes</em> sur la carte elle-même ; cochez <em>Envoyer aux appareils ATAK</em> pour en ajouter une à la liste de cartes des appareils.</p>
+</article>
+
+<article class="help-topic" id="help-elevation" data-group="Données" data-tab="elevation" data-title="Élévation">
+  <h2>Élévation</h2>
+  <p>Tuiles d'élévation DTED pour la ligne de vue, la hauteur au-dessus du sol, les profils d'élévation et l'ombrage du relief d'ATAK. Envoyez des fichiers .dt0, .dt1 ou .dt2, ou des zips qui en contiennent (téléchargements par hémisphère de tak.gov, USGS EarthExplorer) ; chaque tuile est rangée d'après son contenu.</p>
+  <ul>
+    <li><strong>Téléchargements automatiques :</strong> ATAK récupère lui-même les tuiles de niveau 0 au fil des déplacements de la carte, normalement depuis tak.gov. Cochez <em>Les appareils téléchargent l'élévation depuis ce serveur</em> et les appareils les obtiennent d'EdgeTAK, sans autre accès à internet. Il faut Let's Encrypt (Réglages), car ATAK ne télécharge l'élévation que depuis des serveurs auxquels le téléphone fait lui-même confiance. Les appareils reçoivent le réglage à leur prochaine connexion ; décocher les renvoie vers tak.gov.</li>
+    <li><strong>Envoyer des tuiles aux appareils :</strong> les niveaux 1 et 2 (ou 0) partent sous forme de paquet de données qu'ATAK importe comme élévation, vers les groupes choisis et, si vous le voulez, seulement pour la zone de la vue de la carte. Cela fonctionne sur tout serveur et reste dans Paquets de données pour les appareils éteints.</li>
+    <li><strong>Afficher la couverture sur la carte</strong> entoure les tuiles détenues (violet niveau 0, bleu niveau 1, vert niveau 2).</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-share" data-group="Données" data-tab="share" data-title="Partager la carte">
+  <h2>Partager la carte</h2>
+  <p>Un lien vers une carte en direct, en lecture seule, pour quelqu'un sans appli TAK : un commandant des opérations, une agence partenaire, la famille. Elle s'ouvre dans n'importe quel navigateur sans compte et montre les appareils des groupes choisis (indicatifs et positions seulement, ou simples points), mise à jour toutes les quelques secondes.</p>
+  <ul>
+    <li>Donnez un nom à la carte (le visiteur le voit), choisissez les groupes et la durée du lien (1 heure à 30 jours), puis <strong>Créer le lien</strong> et envoyez-le, ou montrez son code QR.</li>
+    <li>Toute personne ayant le lien peut regarder jusqu'à sa fin : faites-le court, et <strong>Supprimez</strong>-le une fois terminé ; il cesse aussitôt de fonctionner.</li>
+    <li>La liste montre combien de fois chaque lien a été ouvert et quand. Le lien utilise le port d'enrôlement, donc avec Let's Encrypt activé il s'ouvre sans avertissement de certificat.</li>
+  </ul>
 </article>
 
 <article class="help-topic" id="help-overlays" data-group="Données" data-tab="overlays" data-title="Calques">
@@ -312,7 +343,7 @@
   <p>Envoyez des alertes vers Discord, Slack, Microsoft Teams, ntfy (notifications sur téléphone) ou n'importe quelle URL, pour que les gens soient prévenus même console fermée.</p>
   <ol>
     <li>Obtenez une URL de webhook auprès du service (la page donne les étapes pour chacun).</li>
-    <li><strong>Ajouter un webhook</strong>, choisissez le service, collez l'URL et choisissez les alertes : urgences, géobarrières, perte de contact, inscriptions, changements d'administration, état du serveur, connexions bloquées.</li>
+    <li><strong>Ajouter un webhook</strong>, choisissez le service, collez l'URL et choisissez les alertes : urgences, demandes MEDEVAC, géobarrières, perte de contact, inscriptions, changements d'administration, état du serveur, connexions bloquées.</li>
     <li>Enregistrez et appuyez sur <strong>Envoyer un test</strong>.</li>
   </ol>
   <p>Limitez un webhook à des groupes pour n'être prévenu que des appareils de ces utilisateurs.</p>

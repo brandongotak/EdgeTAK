@@ -39,6 +39,16 @@
   <p>La tabla <strong>Dispositivos</strong> lista la batería de cada dispositivo (con lo rápido que se gasta), su último informe, el fix de GPS y la conexión, con los peores problemas primero. Úsala para ver un teléfono a punto de quedarse sin batería antes de que se caiga.</p>
 </article>
 
+<article class="help-topic" id="help-medevac" data-group="Panel" data-tab="medevac" data-title="MEDEVAC">
+  <h2>MEDEVAC</h2>
+  <p>Las solicitudes MEDEVAC de 9 líneas enviadas con la herramienta MedLine de ATAK aparecen aquí, las más recientes primero, en cuanto un dispositivo envía una; la pestaña MEDEVAC muestra cuántas están activas, y la consola avisa cuando llega una nueva.</p>
+  <ul>
+    <li>Cada solicitud muestra los pacientes por prioridad (A urgente, B urgente quirúrgico, C prioritario…), en camilla y ambulantes, y el punto de recogida en MGRS y latitud/longitud. <strong>Detalles</strong> muestra las nueve líneas, las observaciones, el ZMIST de cada paciente y el historial.</li>
+    <li>Fija el estado según se atiende: solicitada, recibida, en camino, completada o cancelada. El estado se guarda en este servidor y no cambia nada en los dispositivos; una solicitud quitada en el dispositivo queda marcada.</li>
+    <li>Las solicitudes activas están en la capa MEDEVAC del mapa. Añade las solicitudes MEDEVAC a un webhook (página Webhooks) para enterarte de las nuevas con la consola cerrada.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-users" data-group="Personas" data-tab="users" data-title="Usuarios">
   <h2>Usuarios</h2>
   <p>Todos los que inician sesión: los dispositivos de las personas, la consola y la página de cuenta.</p>
@@ -133,6 +143,7 @@
     <li>Consulta los suscriptores y sus roles, los elementos y archivos, el registro de cambios y las invitaciones.</li>
     <li><strong>Mostrar en el mapa</strong> dibuja los elementos de una misión; <strong>Exportar</strong> la descarga.</li>
     <li>Una misión es visible para los grupos para los que se creó. Un <a data-goto="events">evento</a> puede crear una para su grupo.</li>
+    <li><strong>Guardar como plantilla</strong> conserva la configuración, los archivos y los elementos del mapa de una misión; <strong>Nueva misión</strong> en Plantillas de misión crea una copia nueva (con sus propios elementos del mapa) y, si quieres, invita a los dispositivos de sus grupos.</li>
   </ul>
 </article>
 
@@ -158,6 +169,26 @@
     <li>Se convierte en un mapa base en la consola, y los dispositivos ATAK lo reciben como fuente de mapa al conectarse, así que los mapas funcionan sin internet.</li>
   </ol>
   <p>Tus propias fuentes de teselas (y los archivos <code>.xml</code> de fuentes de mapa de ATAK) están en <em>Fuentes de mapas</em>, en el propio mapa; marca <em>Enviar a los dispositivos ATAK</em> para añadir una a las listas de mapas de los dispositivos.</p>
+</article>
+
+<article class="help-topic" id="help-elevation" data-group="Datos" data-tab="elevation" data-title="Elevación">
+  <h2>Elevación</h2>
+  <p>Teselas de elevación DTED para la línea de visión, la altura sobre el terreno, los perfiles de elevación y el sombreado del terreno de ATAK. Sube archivos .dt0, .dt1 o .dt2, o zips con ellos (las descargas por hemisferio de tak.gov, USGS EarthExplorer); cada tesela se coloca según su contenido.</p>
+  <ul>
+    <li><strong>Descargas automáticas:</strong> ATAK descarga por sí mismo teselas de nivel 0 a medida que se mueve el mapa, normalmente desde tak.gov. Marca <em>Los dispositivos descargan la elevación de este servidor</em> y las obtendrán de EdgeTAK, sin otro acceso a internet. Necesita Let's Encrypt activado (Ajustes), porque ATAK solo descarga elevación de servidores en los que el propio teléfono confía. Los dispositivos reciben el ajuste la próxima vez que se conecten; al desmarcarlo vuelven a tak.gov.</li>
+    <li><strong>Enviar teselas a los dispositivos:</strong> los niveles 1 y 2 (o 0) salen como un paquete de datos que ATAK importa como elevación, a los grupos elegidos y, si quieres, solo para la zona de la vista del mapa. Funciona en cualquier servidor y queda en Paquetes de datos para los dispositivos que estaban apagados.</li>
+    <li><strong>Mostrar cobertura en el mapa</strong> marca las teselas guardadas (morado nivel 0, azul nivel 1, verde nivel 2).</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-share" data-group="Datos" data-tab="share" data-title="Compartir mapa">
+  <h2>Compartir mapa</h2>
+  <p>Un enlace a un mapa en vivo, de solo lectura, para alguien sin app TAK: un mando del incidente, una agencia asociada, la familia. Se abre en cualquier navegador sin cuenta y muestra los dispositivos de los grupos elegidos (solo indicativos y posiciones, o solo puntos), actualizándose cada pocos segundos.</p>
+  <ul>
+    <li>Pon un nombre al mapa (quien lo vea lo verá), elige los grupos y cuánto dura el enlace (de 1 hora a 30 días), luego <strong>Crear enlace</strong> y envíalo, o muestra su código QR.</li>
+    <li>Cualquiera con el enlace puede verlo hasta que termine: que dure poco, y <strong>Bórralo</strong> cuando acabes; deja de funcionar al instante.</li>
+    <li>La lista muestra cuántas veces se abrió cada enlace y cuándo. El enlace usa el puerto de inscripción, así que con Let's Encrypt activado se abre sin aviso de certificado.</li>
+  </ul>
 </article>
 
 <article class="help-topic" id="help-overlays" data-group="Datos" data-tab="overlays" data-title="Capas">
@@ -312,7 +343,7 @@
   <p>Envía alertas a Discord, Slack, Microsoft Teams, ntfy (notificaciones en el teléfono) o cualquier URL, para que la gente se entere con la consola cerrada.</p>
   <ol>
     <li>Obtén una URL de webhook del servicio (la página tiene los pasos para cada uno).</li>
-    <li><strong>Añadir webhook</strong>, elige el servicio, pega la URL y elige las alertas: emergencias, geocercas, pérdida de contacto, registros, cambios de administración, estado del servidor, inicios de sesión bloqueados.</li>
+    <li><strong>Añadir webhook</strong>, elige el servicio, pega la URL y elige las alertas: emergencias, solicitudes MEDEVAC, geocercas, pérdida de contacto, registros, cambios de administración, estado del servidor, inicios de sesión bloqueados.</li>
     <li>Guarda y pulsa <strong>Enviar prueba</strong>.</li>
   </ol>
   <p>Limita un webhook a ciertos grupos para enterarte solo de los dispositivos de esos usuarios.</p>

@@ -82,6 +82,9 @@ func (s *Server) applyRetention(r store.RetentionSettings, dry bool) retentionRe
 		if s.Missions != nil {
 			inUse = s.Missions.ReferencedHashes()
 		}
+		for h := range s.templateFiles() { // mission templates' files
+			inUse[h] = true
+		}
 		n := 0
 		var err error
 		for _, p := range s.Store.Packages() {

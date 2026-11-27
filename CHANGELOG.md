@@ -10,6 +10,41 @@ new features bump the minor number, fixes the patch number, and while below
 with an **Upgrading** section. Releases up to v0.2.24 bumped only the patch
 number.
 
+## v1.19.0-rc.1 (2026-11-27)
+
+**Share map.** Data → Share map makes a link to a live, read-only map for
+someone without a TAK app: an incident commander, a partner agency,
+family. It opens in any browser with no account, shows the chosen groups'
+devices (callsigns and positions, or only dots) updated every 5 seconds,
+and ends after the time you choose (1 hour to 30 days) or when you delete
+it. The list shows how often each link was opened. Links use the
+enrollment port, so with Let's Encrypt on they open without a warning.
+
+**Elevation.** Data → Elevation keeps DTED tiles (.dt0, .dt1, .dt2, or
+zips of them such as tak.gov's hemisphere downloads) for ATAK's line of
+sight, height above ground and terrain tools. ATAK's automatic elevation
+downloads, normally from tak.gov, can come from EdgeTAK instead (device
+profiles point devices at it; needs Let's Encrypt, as ATAK only trusts the
+phone's own CAs for them), and higher-resolution tiles go to chosen groups
+as a data package ATAK imports as elevation. Backups include tiles with
+the offline maps option.
+
+**Mission templates.** Save a mission as a template (its settings, groups,
+roles, files and map items) and make new missions from it on the Missions
+page. Each new mission gets its own copies of the map items, with routes
+still linked to their points, and can invite the devices in its groups
+straight away.
+
+**MEDEVAC board.** Overview → MEDEVAC lists the 9-line MEDEVAC requests
+ATAK users send with MedLine, with every line decoded, the pick-up site in
+MGRS, each patient's ZMIST and the remarks. Track each request's status
+(requested, acknowledged, en route, complete, cancelled); active requests
+show on the map's MEDEVAC layer and as a count on the tab, and each new
+request raises a new MEDEVAC webhook alert.
+
+**Fixes.** Group names that are English words (a group called "Search")
+were translated in group pickers and pills; they're shown as written now.
+
 ## v1.18.0 (2026-11-26)
 
 **XMPP chat for TAK Chat.** Messages → XMPP chat installs Prosody (on

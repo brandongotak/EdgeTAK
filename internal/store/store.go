@@ -246,6 +246,14 @@ type db struct {
 
 	APIKeys []APIKey `json:"api_keys,omitempty"`
 
+	ShareLinks []ShareLink `json:"share_links,omitempty"`
+
+	Elevation ElevationSettings `json:"elevation"`
+
+	MissionTemplates []MissionTemplate `json:"mission_templates,omitempty"`
+
+	Medevacs []*Medevac `json:"medevacs,omitempty"` // oldest first, the last maxMedevacs
+
 	// PlainTCPOff turns off the plain TCP streaming port (8087), which is
 	// on by default; PlainTCPOn turns it on where the configuration has no
 	// tcp_addr (installed with --no-plaintext).
@@ -2368,6 +2376,293 @@ func (s *Store) DeleteEnrollCode(id string) error {
 		}
 	}
 	return ErrNotFound
+}
+
+// ---- MEDEVAC requests ----
+
+const maxMedevacs = 500
+
+// Medevac is a 9-line MEDEVAC request from ATAK (a b-r-f-h-c marker with a
+// _medevac_ detail), tracked on the console's board. ID is the marker's UID.
+type Medevac struct {
+	ID           string            `json:"id"`
+	Title        string            `json:"title"`
+	Lat          float64           `json:"lat"`
+	Lon          float64           `json:"lon"`
+	Hae          float64           `json:"hae"`
+	Fields       map[string]string `json:"fields"` // the _medevac_ attributes as ATAK sends them
+	ZMists       []ZMist           `json:"zmists,omitempty"`
+	FromUID      string            `json:"from_uid,omitempty"`
+	FromCallsign string            `json:"from_callsign,omitempty"`
+	Username     string            `json:"username,omitempty"`
+	Groups       []string          `json:"groups,omitempty"`
+	Status       string            `json:"status"` // open, acknowledged, en_route, complete, cancelled
+	StatusBy     string            `json:"status_by,omitempty"`
+	StatusAt     time.Time         `json:"status_at,omitzero"`
+	Removed      bool              `json:"removed,omitempty"` // deleted on the device
+	History      []MedevacEntry    `json:"history,omitempty"`
+	Created      time.Time         `json:"created"`
+	Updated      time.Time         `json:"updated"`
+}
+
+// ZMist is one patient's ZMIST line: Zap number, Mechanism of injury,
+// Injuries, Signs (vital signs), Treatment.
+type ZMist struct {
+	Title string `json:"title"`
+	Z     string `json:"z,omitempty"`
+	M     string `json:"m,omitempty"`
+	I     string `json:"i,omitempty"`
+	S     string `json:"s,omitempty"`
+	T     string `json:"t,omitempty"`
+}
+
+// MedevacEntry is one change on the board.
+type MedevacEntry struct {
+	At   time.Time `json:"at"`
+	What string    `json:"what"` // a status, "updated" or "removed on the device"
+	By   string    `json:"by,omitempty"`
+}
+
+func cloneMedevac(m *Medevac) *Medevac {
+	c := *m
+	c.Fields = maps.Clone(m.Fields)
+	c.ZMists, c.Groups, c.History = slices.Clone(m.ZMists), slices.Clone(m.Groups), slices.Clone(m.History)
+	return &c
+}
+
+// Medevacs lists the requests, newest first.
+func (s *Store) Medevacs() []*Medevac {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*Medevac, 0, len(s.db.Medevacs))
+	for i := len(s.db.Medevacs) - 1; i >= 0; i-- {
+		out = append(out, cloneMedevac(s.db.Medevacs[i]))
+	}
+	return out
+}
+
+func (s *Store) Medevac(id string) (*Medevac, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, m := range s.db.Medevacs {
+		if m.ID == id {
+			return cloneMedevac(m), true
+		}
+	}
+	return nil, false
+}
+
+// UpsertMedevac changes the request with id, or makes one (fn gets a new
+// record with only the ID set); created says which.
+func (s *Store) UpsertMedevac(id string, fn func(m *Medevac)) (m *Medevac, created bool, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := slices.IndexFunc(s.db.Medevacs, func(o *Medevac) bool { return o.ID == id })
+	var cur *Medevac
+	if i >= 0 {
+		cur = cloneMedevac(s.db.Medevacs[i])
+	} else {
+		cur, created = &Medevac{ID: id}, true
+	}
+	fn(cur)
+	if i >= 0 {
+		s.db.Medevacs[i] = cur
+	} else {
+		s.db.Medevacs = append(s.db.Medevacs, cur)
+		if len(s.db.Medevacs) > maxMedevacs {
+			s.db.Medevacs = s.db.Medevacs[len(s.db.Medevacs)-maxMedevacs:]
+		}
+	}
+	if err := s.save(); err != nil {
+		return nil, false, err
+	}
+	return cloneMedevac(cur), created, nil
+}
+
+func (s *Store) DeleteMedevac(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := slices.IndexFunc(s.db.Medevacs, func(o *Medevac) bool { return o.ID == id })
+	if i < 0 {
+		return ErrNotFound
+	}
+	s.db.Medevacs = slices.Delete(s.db.Medevacs, i, i+1)
+	return s.save()
+}
+
+// ---- mission templates ----
+
+// MissionTemplate is a mission to make again: its settings, files (data
+// package hashes) and map items (CoT XML), taken from a mission.
+type MissionTemplate struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Groups      []string  `json:"groups"`
+	DefaultRole string    `json:"default_role"`
+	InviteOnly  bool      `json:"invite_only,omitempty"`
+	Tool        string    `json:"tool,omitempty"`
+	Keywords    []string  `json:"keywords,omitempty"`
+	ChatRoom    string    `json:"chat_room,omitempty"`
+	BaseLayer   string    `json:"base_layer,omitempty"`
+	BBox        string    `json:"bbox,omitempty"`
+	Files       []string  `json:"files"`
+	Items       []string  `json:"items"`
+	From        string    `json:"from"` // the mission it was taken from
+	Created     time.Time `json:"created"`
+	CreatedBy   string    `json:"created_by"`
+	Updated     time.Time `json:"updated"`
+}
+
+func cloneTemplate(t MissionTemplate) MissionTemplate {
+	t.Groups, t.Keywords = slices.Clone(t.Groups), slices.Clone(t.Keywords)
+	t.Files, t.Items = slices.Clone(t.Files), slices.Clone(t.Items)
+	return t
+}
+
+func (s *Store) MissionTemplates() []MissionTemplate {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]MissionTemplate, 0, len(s.db.MissionTemplates))
+	for _, t := range s.db.MissionTemplates {
+		out = append(out, cloneTemplate(t))
+	}
+	return out
+}
+
+func (s *Store) MissionTemplate(id string) (MissionTemplate, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, t := range s.db.MissionTemplates {
+		if t.ID == id {
+			return cloneTemplate(t), true
+		}
+	}
+	return MissionTemplate{}, false
+}
+
+// PutMissionTemplate adds a template, or replaces the one with its ID.
+func (s *Store) PutMissionTemplate(t MissionTemplate) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t = cloneTemplate(t)
+	if i := slices.IndexFunc(s.db.MissionTemplates, func(o MissionTemplate) bool { return o.ID == t.ID }); i >= 0 {
+		s.db.MissionTemplates[i] = t
+	} else {
+		s.db.MissionTemplates = append(s.db.MissionTemplates, t)
+	}
+	return s.save()
+}
+
+func (s *Store) DeleteMissionTemplate(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := slices.IndexFunc(s.db.MissionTemplates, func(o MissionTemplate) bool { return o.ID == id })
+	if i < 0 {
+		return ErrNotFound
+	}
+	s.db.MissionTemplates = slices.Delete(s.db.MissionTemplates, i, i+1)
+	return s.save()
+}
+
+// ---- elevation ----
+
+// ElevationSettings: Stream points devices at this server for ATAK's
+// automatic elevation downloads (instead of tak.gov). Configured records
+// that it was ever on, so turning it off points devices back.
+type ElevationSettings struct {
+	Stream     bool      `json:"stream"`
+	Configured bool      `json:"configured,omitempty"`
+	Updated    time.Time `json:"updated,omitzero"`
+}
+
+func (s *Store) Elevation() ElevationSettings {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.db.Elevation
+}
+
+func (s *Store) SetElevation(e ElevationSettings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Elevation = e
+	return s.save()
+}
+
+// ---- shared map links ----
+
+// ShareLink is a read-only live map anyone with the link can open, until it
+// expires or is deleted: the positions of devices in Groups (none: every
+// device). Token is the secret part of the link.
+type ShareLink struct {
+	ID         string    `json:"id"`
+	Token      string    `json:"token"`
+	Name       string    `json:"name"`
+	Groups     []string  `json:"groups,omitempty"`
+	Callsigns  bool      `json:"callsigns"` // show callsigns (otherwise only dots)
+	Expires    time.Time `json:"expires"`
+	Created    time.Time `json:"created"`
+	CreatedBy  string    `json:"created_by"`
+	Views      int       `json:"views"`
+	LastViewed time.Time `json:"last_viewed,omitzero"`
+}
+
+func (s *Store) ShareLinks() []ShareLink {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := slices.Clone(s.db.ShareLinks)
+	for i := range out {
+		out[i].Groups = slices.Clone(out[i].Groups)
+	}
+	return out
+}
+
+// ShareLinkByToken finds a link by its secret.
+func (s *Store) ShareLinkByToken(token string) (ShareLink, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, l := range s.db.ShareLinks {
+		if l.Token == token {
+			l.Groups = slices.Clone(l.Groups)
+			return l, true
+		}
+	}
+	return ShareLink{}, false
+}
+
+// AddShareLink saves a link, dropping ones that ended over a week ago.
+func (s *Store) AddShareLink(l ShareLink) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.ShareLinks = slices.DeleteFunc(s.db.ShareLinks, func(o ShareLink) bool { return time.Since(o.Expires) > 7*24*time.Hour })
+	s.db.ShareLinks = append(s.db.ShareLinks, l)
+	return s.save()
+}
+
+func (s *Store) DeleteShareLink(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.ShareLinks {
+		if s.db.ShareLinks[i].ID == id {
+			s.db.ShareLinks = slices.Delete(s.db.ShareLinks, i, i+1)
+			return s.save()
+		}
+	}
+	return ErrNotFound
+}
+
+// ViewShareLink counts an opening of a link.
+func (s *Store) ViewShareLink(id string, at time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.db.ShareLinks {
+		if s.db.ShareLinks[i].ID == id {
+			s.db.ShareLinks[i].Views++
+			s.db.ShareLinks[i].LastViewed = at
+			s.save()
+			return
+		}
+	}
 }
 
 // ---- API keys ----

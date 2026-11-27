@@ -88,7 +88,7 @@ function duration(sec) {
   const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
   return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
 }
-const groupPills = (gs) => (gs && gs.length ? gs : ['__ANON__']).map((g) => `<span class="pill">${esc(g)}</span>`).join('');
+const groupPills = (gs) => (gs && gs.length ? gs : ['__ANON__']).map((g) => `<span class="pill" data-no-i18n>${esc(g)}</span>`).join('');
 const emptyRow = (cols, text) => `<tr class="empty"><td colspan="${cols}">${esc(text)}</td></tr>`;
 
 // ---------- auth ----------
@@ -138,6 +138,7 @@ $('#logout').addEventListener('click', async () => {
 const loaders = {
   dashboard: loadDashboard,
   health: loadHealth,
+  medevac: loadMedevac,
   users: () => Promise.all([loadUsers(), loadLDAP()]),
   events: loadEvents,
   groups: () => Promise.all([loadGroups(), loadProfiles()]),
@@ -146,6 +147,8 @@ const loaders = {
   packages: loadPackages,
   plugins: () => Promise.all([loadApps(), loadTakGov()]),
   maps: () => Promise.all([loadDrawings(), loadOfflineMaps()]),
+  share: loadShare,
+  elevation: loadElevation,
   overlays: loadOverlays,
   missions: loadMissions,
   reports: loadReports,
@@ -246,6 +249,8 @@ function selectTab(name) {
     pollTimer = setInterval(guard(loadSendLive), 5000); // Inbox updates
   } else if (name === 'chat') {
     pollTimer = setInterval(() => loadChat().catch(() => {}), 5000); // new messages
+  } else if (name === 'medevac') {
+    pollTimer = setInterval(() => loadMedevac().catch(() => {}), 5000);
   } else if (name === 'xmpp') {
     pollTimer = setInterval(() => api('GET', 'api/xmpp').then(renderXMPP).catch(() => {}), 5000); // who is online
   } else if (name === 'simulator') {
@@ -974,6 +979,7 @@ let trailsLayer = null;
 let trailsTimer = null;
 let videoLayer = null;
 let reportLayer = null; // Reports plugin reports on the console map
+let medevacLayer = null; // active MEDEVAC requests on the console map
 let fenceLayer = null; // geofences on the console map
 let aircraftLayer = null, shipLayer = null; // ADS-B and AIS feeds
 let drawingLayer = null; // drawings (markers, routes, areas, circles) on the console map
@@ -1033,6 +1039,8 @@ function initMap() {
   videoLayer = L.layerGroup();
   videoLayer.on('add', () => loadVideoFeeds().catch(() => {}));
   reportLayer = L.layerGroup();
+  medevacLayer = L.layerGroup().addTo(map); // on by default: requests are urgent
+  drawMedevacs(); // requests the MEDEVAC page loaded before the map existed
   reportLayer.on('add', () => { if (!reports.length) loadReportList().catch(() => {}); });
   weather = initWeather();
   fenceLayer = L.layerGroup();
@@ -1154,7 +1162,18 @@ function initWeather() {
 function buildLayers() {
   if (!map) return;
   const activeBase = prefs.get('map.base', 'Streets');
-  const activeOverlays = new Set(prefs.get('map.overlays', ['Devices', 'Callsigns', 'Server contact', 'Video', 'Geofences', 'Drawings', 'Aircraft', 'Ships']));
+  const activeOverlays = new Set(prefs.get('map.overlays', ['Devices', 'Callsigns', 'Server contact', 'Video', 'Geofences', 'Drawings', 'Aircraft', 'Ships', 'MEDEVAC']));
+  // Layers added in a later version that should start on (urgent ones) are
+  // turned on the first time this browser sees them; turning them off sticks.
+  const seen = new Set(prefs.get('map.overlaysSeen', []));
+  for (const name of ['MEDEVAC']) {
+    if (!seen.has(name)) {
+      activeOverlays.add(name);
+      seen.add(name);
+    }
+  }
+  prefs.set('map.overlaysSeen', [...seen]);
+  prefs.set('map.overlays', [...activeOverlays]);
   // Detach the switcher first, or removing the old layers would be saved as
   // the viewer turning them off.
   rebuildingLayers = true;
@@ -1163,7 +1182,7 @@ function buildLayers() {
 
   baseLayers = {};
   for (const [name, def] of BASEMAPS) baseLayers[name] = buildBase(def);
-  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer, Reports: reportLayer, Geofences: fenceLayer, Drawings: drawingLayer,
+  overlayLayers = { Devices: devicesLayer, Callsigns: labelsLayer, 'Server contact': contactLayer, Trails: trailsLayer, Video: videoLayer, Reports: reportLayer, MEDEVAC: medevacLayer, Geofences: fenceLayer, Drawings: drawingLayer,
     Aircraft: aircraftLayer, Ships: shipLayer, 'Weather radar': weather.radar, 'Weather radar (US, detailed)': weather.nexrad, Hillshade: weather.hillshade };
   for (const p of packageLayers.values()) overlayLayers[p.name] = p.layer;
   for (const m of offlineMaps) {
@@ -2144,7 +2163,7 @@ $('#users-table').addEventListener('click', guard(async (e) => {
 function renderChips(sel, selected) {
   const on = new Set(selected);
   $(sel).innerHTML = allGroups.map((g) => `<label class="chip" title="${esc(g.description)}">
-      <input type="checkbox" name="g" value="${esc(g.name)}"${on.has(g.name) ? ' checked' : ''}>${esc(g.name)}</label>`).join('')
+      <input type="checkbox" name="g" value="${esc(g.name)}"${on.has(g.name) ? ' checked' : ''}><span data-no-i18n>${esc(g.name)}</span></label>`).join('')
     || '<span class="muted">No groups yet; create them in the Groups tab.</span>';
 }
 
@@ -2911,6 +2930,199 @@ $('#xmpp-rooms').addEventListener('click', guard(async (e) => {
   if (!confirm(`Delete the room "${room.name}"? Its messages are deleted and anyone in it is removed.`)) return;
   renderXMPP(await api('DELETE', `api/xmpp/rooms/${encodeURIComponent(room.node)}`));
   toast('Room deleted');
+}));
+
+// ---------- shared map links ----------
+
+let shareLinks = [];
+
+async function loadShare() {
+  const [links, groups] = await Promise.all([api('GET', 'api/share-links'), allGroups.length ? allGroups : api('GET', 'api/groups')]);
+  allGroups = groups;
+  if (!$('#share-groups').children.length) renderChips('#share-groups', []);
+  renderShareLinks(links);
+}
+
+function renderShareLinks(links) {
+  shareLinks = links;
+  $('#share-table tbody').innerHTML = links.map((l) => `<tr${l.state === 'expired' ? ' class="muted"' : ''}>
+    <td><strong data-no-i18n>${esc(l.name)}</strong><div class="muted">${esc(l.created_by)} · ${esc(date(l.created))}</div>
+      ${l.state === 'active' ? `<div class="row-actions"><button class="small" data-share-copy="${esc(l.id)}">Copy link</button> <a class="button small" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">Open</a> <button class="small" data-share-qr="${esc(l.id)}">QR code</button></div>` : ''}</td>
+    <td>${l.groups && l.groups.length ? groupPills(l.groups) : '<span class="muted">every device</span>'}${l.callsigns ? '' : '<div class="muted">no callsigns</div>'}</td>
+    <td>${l.state === 'expired' ? '<span class="pill">ended</span>' : esc(date(l.expires))}</td>
+    <td>${l.views ? `${l.views}×<div class="muted">${esc(date(l.last_viewed))}</div>` : '<span class="muted">not yet</span>'}</td>
+    <td class="actions"><button class="small danger" data-share-del="${esc(l.id)}">Delete</button></td></tr>`).join('')
+    || emptyRow(5, 'No shared maps yet');
+}
+
+function showShareLink(l) {
+  $('#share-new').hidden = false;
+  $('#share-url').textContent = l.url;
+  $('#share-open').href = l.url;
+  const box = $('#share-qr');
+  box.innerHTML = '';
+  if (window.QRCode) new QRCode(box, { text: l.url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+  $('#share-new').scrollIntoView({ block: 'nearest' });
+}
+
+$('#share-form').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const r = await api('POST', 'api/share-links', { name: f.name.value.trim(), hours: Number(f.hours.value), groups: checkedIn('#share-groups'), callsigns: f.callsigns.checked });
+  renderShareLinks(r.links);
+  showShareLink(r.link);
+  f.name.value = '';
+  toast('Link made');
+}));
+$('#share-copy').addEventListener('click', guard(async () => {
+  await navigator.clipboard.writeText($('#share-url').textContent);
+  toast('Link copied');
+}));
+$('#share-done').addEventListener('click', () => { $('#share-new').hidden = true; });
+
+$('#share-table').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const l = shareLinks.find((x) => x.id === (b.dataset.shareCopy || b.dataset.shareQr || b.dataset.shareDel));
+  if (!l) return;
+  if (b.dataset.shareCopy) {
+    await navigator.clipboard.writeText(l.url);
+    return toast('Link copied');
+  }
+  if (b.dataset.shareQr) return showShareLink(l);
+  if (!confirm(`Delete the shared map "${l.name}"? The link stops working at once for everyone who has it.`)) return;
+  renderShareLinks(await api('DELETE', `api/share-links/${encodeURIComponent(l.id)}`));
+  if ($('#share-url').textContent === l.url) $('#share-new').hidden = true;
+  toast('Link deleted');
+}));
+
+// ---------- elevation ----------
+
+let elevView = null;
+let elevLayer = null;
+const ELEV_RES = { 0: '~900 m (30″)', 1: '~90 m (3″)', 2: '~30 m (1″)' };
+const ELEV_COLOURS = { 0: '#7c4dff', 1: '#2f80ed', 2: '#27ae60' };
+
+async function loadElevation() {
+  const [v, groups] = await Promise.all([api('GET', 'api/elevation'), allGroups.length ? allGroups : api('GET', 'api/groups')]);
+  allGroups = groups;
+  if (!$('#elev-groups').children.length) renderChips('#elev-groups', []);
+  renderElevation(v);
+}
+
+function renderElevation(v) {
+  elevView = v;
+  const total = v.levels.reduce((n, l) => n + l.tiles, 0);
+  $('#elev-summary').textContent = total ? `${plural(total, 'tile')} · ${fmtSize(v.levels.reduce((n, l) => n + l.bytes, 0))}` : '';
+  $('#elev-levels tbody').innerHTML = v.levels.map((l) => `<tr>
+    <td>DTED ${l.level}</td><td>${esc(ELEV_RES[l.level])}</td><td>${l.tiles || '<span class="muted">none</span>'}</td>
+    <td>${l.tiles ? esc(fmtSize(l.bytes)) : ''}</td>
+    <td class="actions">${l.tiles ? `<button class="small danger" data-elev-del="${l.level}">Delete</button>` : ''}</td></tr>`).join('');
+  $('#elev-map').hidden = !total;
+  const s = $('#elev-stream');
+  s.checked = v.stream;
+  s.disabled = !v.stream && !v.stream_host;
+  $('#elev-stream-note').textContent = v.stream_host
+    ? `${t('Devices use')} ${v.stream_host}${v.levels[0].tiles ? '' : ` — ${t('upload level 0 tiles for it to have anything to give')}`}. ${t('They get the setting when they next connect.')}`
+    : `${t('Not available:')} ${t(v.stream_note)}`;
+  if (elevLayer && map?.hasLayer(elevLayer)) drawElevation();
+}
+
+function drawElevation() {
+  initMap();
+  if (!map) return;
+  if (!elevLayer) elevLayer = L.featureGroup();
+  elevLayer.clearLayers();
+  const renderer = L.canvas({ padding: 0.2 });
+  // Higher levels on top.
+  for (const [level, lat, lon] of [...elevView.tiles].sort((a, b) => a[0] - b[0])) {
+    L.rectangle([[lat, lon], [lat + 1, lon + 1]], { renderer, weight: 1, color: ELEV_COLOURS[level], fillOpacity: 0.15, interactive: false }).addTo(elevLayer);
+  }
+  elevLayer.addTo(map);
+}
+
+$('#elev-map').addEventListener('click', () => {
+  drawElevation();
+  if (!map) return;
+  setMapVisible(true, false);
+  map.invalidateSize();
+  fittedOnce = true;
+  if (elevLayer.getLayers().length) fitLayer(elevLayer);
+});
+
+$('#elev-upload').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const fd = new FormData();
+  for (const file of f.files.files) fd.append('files', file);
+  const btn = f.querySelector('button');
+  btn.disabled = true;
+  try {
+    const r = await new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open('POST', 'api/elevation');
+      x.setRequestHeader('X-EdgeTAK', '1');
+      x.upload.onprogress = (ev) => { if (ev.lengthComputable) $('#elev-progress').textContent = `${Math.floor((ev.loaded / ev.total) * 100)}%`; };
+      x.upload.onload = () => { $('#elev-progress').textContent = t('Importing…'); };
+      x.onload = () => {
+        let body = null;
+        try { body = JSON.parse(x.responseText); } catch { /* not JSON */ }
+        if (x.status >= 200 && x.status < 300) resolve(body);
+        else reject(new Error((body && body.error) || x.statusText));
+      };
+      x.onerror = () => reject(new Error('Upload failed'));
+      x.send(fd);
+    });
+    renderElevation(r);
+    f.reset();
+    $('#elev-progress').textContent = '';
+    toast(`${plural(r.added, 'tile')} added` + (r.skipped.length ? ` · ${r.skipped.length} skipped` : ''), r.added === 0);
+    if (r.skipped.length) alert(`${t('Skipped:')}\n${r.skipped.slice(0, 20).join('\n')}${r.skipped.length > 20 ? '\n…' : ''}`);
+  } finally {
+    btn.disabled = false;
+    if ($('#elev-progress').textContent.endsWith('%') || $('#elev-progress').textContent === t('Importing…')) $('#elev-progress').textContent = '';
+  }
+}));
+
+$('#elev-levels').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('[data-elev-del]');
+  if (!b) return;
+  if (!confirm(`Delete every DTED level ${b.dataset.elevDel} tile from this server? Devices keep the tiles they already have.`)) return;
+  renderElevation(await api('DELETE', `api/elevation/levels/${b.dataset.elevDel}`));
+  toast('Tiles deleted');
+}));
+
+$('#elev-stream').addEventListener('change', guard(async (e) => {
+  try {
+    renderElevation(await api('PUT', 'api/elevation/settings', { stream: e.target.checked }));
+    toast(e.target.checked ? 'Devices will download elevation from this server' : 'Devices will download elevation from tak.gov');
+  } catch (err) {
+    e.target.checked = !e.target.checked;
+    throw err;
+  }
+}));
+
+$('#elev-send').addEventListener('submit', guard(async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const levels = [0, 1, 2].filter((l) => f[`l${l}`].checked);
+  if (!levels.length) return toast('Choose at least one level', true);
+  let bbox = null;
+  if (f.area.checked) {
+    initMap();
+    if (!map) return;
+    const b = map.getBounds();
+    bbox = [Math.max(-180, b.getWest()), Math.max(-90, b.getSouth()), Math.min(180, b.getEast()), Math.min(90, b.getNorth())];
+  }
+  $('#elev-send-state').textContent = t('Packing tiles…');
+  try {
+    const r = await api('POST', 'api/elevation/send', { levels, groups: checkedIn('#elev-groups'), bbox });
+    $('#elev-send-state').textContent = '';
+    toast(`${plural(r.tiles, 'tile')} · ${fmtSize(r.bytes)} · sent to ${plural(r.delivered, 'device')}`);
+  } catch (err) {
+    $('#elev-send-state').textContent = '';
+    throw err;
+  }
 }));
 
 // ---------- packages ----------
@@ -4016,10 +4228,12 @@ async function loadMissions() {
       <td>${m.logs}</td>
       <td title="${esc(date(m.last_edited))}">${ago(m.last_edited)}</td>
       <td class="actions">
+        <button class="small" data-tpl-from="${esc(m.name)}">Save as template</button>
         <a class="button small" href="/Marti/api/missions/${encodeURIComponent(m.name)}/archive">Export</a>
         <button class="small danger" data-del-mission="${esc(m.name)}">Delete</button>
       </td></tr>`;
   }).join('') || emptyRow(10, 'No missions yet. Create one from Data Sync in ATAK.');
+  loadTemplates().catch(() => {});
 }
 
 // ---- missions on the map ----
@@ -4087,12 +4301,233 @@ $('#missions-table').addEventListener('click', guard(async (e) => {
     loadMissions();
     return;
   }
+  const from = e.target.dataset.tplFrom;
+  if (from) {
+    const name = prompt(t('Name the template:'), from);
+    if (!name || !name.trim()) return;
+    renderTemplates(await api('POST', 'api/mission-templates', { mission: from, name: name.trim() }));
+    toast('Template saved');
+    return;
+  }
   const name = e.target.dataset.delMission;
   if (!name || !confirm(`Delete mission "${name}"? Subscribers are notified and its change history is lost. Files stay on the Data Packages tab.`)) return;
   await api('DELETE', `api/missions/${encodeURIComponent(name)}`);
   toast('Mission deleted');
   loadMissions();
 }));
+
+// ---- mission templates ----
+
+let missionTemplates = [];
+
+async function loadTemplates() {
+  renderTemplates(await api('GET', 'api/mission-templates'));
+}
+
+function renderTemplates(list) {
+  missionTemplates = list;
+  $('#tpl-table tbody').innerHTML = list.map((tp) => `<tr>
+    <td><strong data-no-i18n>${esc(tp.name)}</strong>${tp.description ? `<div class="muted" data-no-i18n>${esc(tp.description)}</div>` : ''}
+      <div class="muted">${esc(tp.from ? `${t('from')} ${tp.from}` : '')} · ${esc(tp.created_by)} · ${esc(date(tp.created))}</div></td>
+    <td>${groupPills(tp.groups)}<div class="muted">${esc(ROLE_LABELS[tp.default_role] || tp.default_role)}${tp.invite_only ? ` · ${esc(t('invite only'))}` : ''}</div></td>
+    <td>${plural(tp.items, 'map item')} · ${plural(tp.files, 'file')}${tp.missing_files ? `<div class="error">${esc(`${tp.missing_files} ${t('file(s) were deleted from Data Packages')}`)}</div>` : ''}</td>
+    <td class="actions"><button class="small primary" data-tpl-new="${esc(tp.id)}">New mission</button> <button class="small" data-tpl-edit="${esc(tp.id)}">Edit</button> <button class="small danger" data-tpl-del="${esc(tp.id)}">Delete</button></td></tr>`).join('')
+    || emptyRow(4, 'No templates yet');
+}
+
+$('#tpl-table').addEventListener('click', guard(async (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const tpl = missionTemplates.find((x) => x.id === (b.dataset.tplNew || b.dataset.tplEdit || b.dataset.tplDel));
+  if (!tpl) return;
+  if (b.dataset.tplNew) {
+    const f = $('#tpl-new-form');
+    f.reset();
+    f.dataset.id = tpl.id;
+    $('#tpl-new-name').textContent = tpl.name;
+    f.name.value = `${tpl.name} ${new Date().toISOString().slice(0, 10)}`;
+    $('#tpl-new').showModal();
+  } else if (b.dataset.tplEdit) {
+    const f = $('#tpl-edit-form');
+    f.dataset.id = tpl.id;
+    f.name.value = tpl.name;
+    f.description.value = tpl.description || '';
+    f.default_role.value = tpl.default_role || 'MISSION_SUBSCRIBER';
+    f.invite_only.checked = tpl.invite_only;
+    if (!allGroups.length) allGroups = await api('GET', 'api/groups');
+    renderChips('#tpl-edit-groups', tpl.groups);
+    $('#tpl-edit').showModal();
+  } else if (confirm(`Delete the template "${tpl.name}"? Missions made from it stay.`)) {
+    renderTemplates(await api('DELETE', `api/mission-templates/${encodeURIComponent(tpl.id)}`));
+    toast('Template deleted');
+  }
+}));
+
+$('#tpl-new').addEventListener('close', guard(async () => {
+  const d = $('#tpl-new');
+  if (d.returnValue !== 'create') return;
+  const f = $('#tpl-new-form');
+  const r = await api('POST', `api/mission-templates/${encodeURIComponent(f.dataset.id)}/create`,
+    { name: f.name.value.trim(), password: f.password.value, invite: f.invite.checked });
+  toast(`Mission ${r.mission} made · ${plural(r.items, 'map item')} · ${plural(r.files, 'file')}${r.invited ? ` · ${plural(r.invited, 'device')} invited` : ''}`);
+  if (r.missing_files) toast(`${r.missing_files} ${t('file(s) were deleted from Data Packages')}`, true);
+  loadMissions();
+}));
+
+$('#tpl-edit').addEventListener('close', guard(async () => {
+  const d = $('#tpl-edit');
+  if (d.returnValue !== 'save') return;
+  const f = $('#tpl-edit-form');
+  renderTemplates(await api('PUT', `api/mission-templates/${encodeURIComponent(f.dataset.id)}`, {
+    name: f.name.value.trim(), description: f.description.value.trim(), default_role: f.default_role.value,
+    invite_only: f.invite_only.checked, groups: checkedIn('#tpl-edit-groups'),
+  }));
+  toast('Template saved');
+}));
+
+// ---------- MEDEVAC ----------
+//
+// 9-line MEDEVAC requests from ATAK's MedLine tool: a board with each line
+// decoded, a status the console tracks, and markers on the map.
+
+let medevacs = [];
+let medevacNewest = null; // the newest request seen, to notice new ones
+const MEDEVAC_STATUS = { open: 'Requested', acknowledged: 'Acknowledged', en_route: 'En route', complete: 'Complete', cancelled: 'Cancelled' };
+const MEDEVAC_PREC = [['urgent', 'A', 'Urgent'], ['urgent_surgical', 'B', 'Urgent surgical'], ['priority', 'C', 'Priority'], ['routine', 'D', 'Routine'], ['convenience', 'E', 'Convenience']];
+const MEDEVAC_SECURITY = { 0: 'N - No enemy troops in area', 1: 'P - Possible enemy troops in area', 2: 'E - Enemy troops, approach with caution', 3: 'X - Enemy troops, armed escort required' };
+const MEDEVAC_MARKING = { 0: 'A - Panels', 1: 'B - Pyrotechnic signal', 2: 'C - Smoke', 3: 'D - None', 4: 'E - Other' };
+const num = (v) => Number(v) || 0;
+
+async function loadMedevac() {
+  medevacs = await api('GET', 'api/medevac');
+  renderMedevac();
+}
+
+function medevacPatients(m) {
+  const f = m.fields || {};
+  return MEDEVAC_PREC.filter(([k]) => num(f[k])).map(([k, l, name]) => `<span class="pill${k.startsWith('urgent') ? ' bad' : k === 'priority' ? ' warn' : ''}" title="${esc(name)}">${num(f[k])} ${esc(l)}</span>`).join(' ');
+}
+
+function renderMedevac() {
+  const all = $('#medevac-filter').value === 'all';
+  const list = medevacs.filter((m) => all || (m.status !== 'complete' && m.status !== 'cancelled'));
+  $('#medevac-table tbody').innerHTML = list.map((m) => {
+    const f = m.fields || {};
+    const type = [num(f.litter) ? `${num(f.litter)} ${t('litter')}` : '', num(f.ambulatory) ? `${num(f.ambulatory)} ${t('ambulatory')}` : ''].filter(Boolean).join(', ');
+    return `<tr${m.status === 'open' ? ' class="medevac-open"' : ''}>
+      <td><strong data-no-i18n>${esc(m.title)}</strong>
+        <div class="muted"><span data-no-i18n>${esc(m.from_callsign || '')}</span>${m.username ? ` · <span data-no-i18n>${esc(m.username)}</span>` : ''} · ${esc(ago(m.created))}${m.removed ? ` · <span class="pill">${esc(t('removed on the device'))}</span>` : ''}</div>
+        <div class="row-actions"><button class="small" data-medevac="${esc(m.id)}">Details</button> <button class="small" data-medevac-map="${esc(m.id)}">Show on map</button></div></td>
+      <td>${medevacPatients(m) || '<span class="muted">—</span>'}${type ? `<div class="muted">${esc(type)}</div>` : ''}</td>
+      <td><span class="mono" data-no-i18n>${esc(m.mgrs || '')}</span><div class="muted mono">${m.lat.toFixed(5)}, ${m.lon.toFixed(5)}</div></td>
+      <td><select data-medevac-status="${esc(m.id)}" aria-label="Status">${Object.entries(MEDEVAC_STATUS).map(([k, v]) => `<option value="${k}"${m.status === k ? ' selected' : ''}>${esc(t(v))}</option>`).join('')}</select>
+        ${m.status_by ? `<div class="muted">${esc(m.status_by)} · ${esc(ago(m.status_at))}</div>` : ''}</td></tr>`;
+  }).join('') || emptyRow(4, all ? 'No MEDEVAC requests yet' : 'No active MEDEVAC requests');
+  drawMedevacs();
+}
+
+function drawMedevacs() {
+  if (!medevacLayer) return;
+  medevacLayer.clearLayers();
+  for (const m of medevacs) {
+    if (m.status === 'complete' || m.status === 'cancelled') continue;
+    const icon = L.divIcon({ className: 'medevac-icon', html: '<span>✚</span>', iconSize: [26, 26], iconAnchor: [13, 13] });
+    L.marker([m.lat, m.lon], { icon }).bindTooltip(`<span data-no-i18n>${esc(m.title)}</span>`, { direction: 'right', offset: [12, 0] })
+      .on('click', () => showMedevac(m.id)).addTo(medevacLayer);
+  }
+}
+
+function showMedevac(id) {
+  const m = medevacs.find((x) => x.id === id);
+  if (!m) return;
+  const f = m.fields || {};
+  const yes = (k) => f[k] === 'true';
+  const line = (n, label, value) => `<tr><td class="muted">${n}</td><td class="muted">${esc(t(label))}</td><td data-no-i18n>${value || '<span class="muted">—</span>'}</td></tr>`;
+  const counts = (pairs) => pairs.filter(([k]) => num(f[k])).map(([k, l]) => `${num(f[k])} × ${esc(t(l))}`).join('<br>');
+  const equipment = [['equipment_none', 'None'], ['hoist', 'Hoist'], ['extraction_equipment', 'Extraction equipment'], ['ventilator', 'Ventilator'], ['equipment_other', 'Other']]
+    .filter(([k]) => yes(k)).map(([, l]) => esc(t(l))).join(', ') + (f.equipment_detail ? `: ${esc(f.equipment_detail)}` : '');
+  const terrain = [['terrain_none', 'None'], ['terrain_slope', 'Slope'], ['terrain_rough', 'Rough'], ['terrain_loose', 'Loose'], ['terrain_other', 'Other']]
+    .filter(([k]) => yes(k)).map(([k, l]) => esc(t(l)) + (k === 'terrain_slope' && f.terrain_slope_dir ? ` (${esc(f.terrain_slope_dir)})` : '')).join(', ')
+    + (f.terrain_other_detail ? `: ${esc(f.terrain_other_detail)}` : '') + (f.obstacles ? `<div>${esc(t('Obstacles'))}: ${esc(f.obstacles)}</div>` : '');
+  const marking = f.hlz_marking === '4' && f.hlz_other ? `E - ${esc(f.hlz_other)}` : esc(t(MEDEVAC_MARKING[f.hlz_marking] || ''));
+  $('#medevac-dialog-title').textContent = m.title;
+  $('#medevac-body').innerHTML = `
+    <p class="muted"><span data-no-i18n>${esc(m.from_callsign || '')}</span>${m.username ? ` · <span data-no-i18n>${esc(m.username)}</span>` : ''} · ${esc(date(m.created))} · ${esc(t(MEDEVAC_STATUS[m.status] || m.status))}</p>
+    <div class="table-wrap"><table class="medevac-lines"><tbody>
+      ${line(1, 'Location', `${esc(m.mgrs || '')}<div class="muted mono">${m.lat.toFixed(6)}, ${m.lon.toFixed(6)}</div>`)}
+      ${line(2, 'Frequency and callsign', [esc(f.freq || ''), esc(m.title)].filter(Boolean).join(' · '))}
+      ${line(3, 'Patients by precedence', counts(MEDEVAC_PREC.map(([k, l, name]) => [k, `${l} - ${name}`])))}
+      ${line(4, 'Special equipment', equipment)}
+      ${line(5, 'Patients by type', counts([['litter', 'Litter'], ['ambulatory', 'Ambulatory']]))}
+      ${line(6, 'Security at pick-up site', esc(t(MEDEVAC_SECURITY[f.security] || '')))}
+      ${line(7, 'Marking of pick-up site', marking)}
+      ${line(8, 'Patient nationality and status', counts([['us_military', 'US military'], ['us_civilian', 'US civilian'], ['nonus_military', 'Non-US military'], ['nonus_civilian', 'Non-US civilian'], ['epw', 'EPW'], ['child', 'Child']]))}
+      ${line(9, 'Terrain and obstacles', terrain)}
+    </tbody></table></div>
+    ${f.medline_remarks ? `<p data-no-i18n>${esc(f.medline_remarks)}</p>` : ''}
+    ${m.zmists && m.zmists.length ? `<h3>ZMIST</h3><div class="table-wrap"><table><thead><tr><th>${esc(t('Patient'))}</th><th>Z</th><th>M</th><th>I</th><th>S</th><th>T</th></tr></thead><tbody data-no-i18n>
+      ${m.zmists.map((z) => `<tr><td>${esc(z.title)}</td><td>${esc(z.z || '')}</td><td>${esc(z.m || '')}</td><td>${esc(z.i || '')}</td><td>${esc(z.s || '')}</td><td>${esc(z.t || '')}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    <h3>${esc(t('History'))}</h3>
+    <ul class="medevac-history">${(m.history || []).map((h) => `<li>${esc(date(h.at))} · ${esc(t(MEDEVAC_STATUS[h.what] || h.what))}${h.by ? ` · <span data-no-i18n>${esc(h.by)}</span>` : ''}</li>`).join('')}</ul>
+    <div class="inline-form"><button type="button" class="small" data-medevac-map="${esc(m.id)}">Show on map</button><span class="spacer"></span><button type="button" class="small danger" data-medevac-del="${esc(m.id)}">Remove from board</button></div>`;
+  const d = $('#medevac-dialog');
+  if (!d.open) d.showModal();
+}
+
+function showMedevacOnMap(id) {
+  const m = medevacs.find((x) => x.id === id);
+  if (!m) return;
+  initMap();
+  if (!map) return;
+  drawMedevacs();
+  setMapVisible(true, false);
+  map.invalidateSize();
+  fittedOnce = true;
+  map.setView([m.lat, m.lon], Math.max(map.getZoom(), 15));
+}
+
+const medevacClick = guard(async (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.medevac) return showMedevac(b.dataset.medevac);
+  if (b.dataset.medevacMap) {
+    $('#medevac-dialog').close();
+    return showMedevacOnMap(b.dataset.medevacMap);
+  }
+  const id = b.dataset.medevacDel;
+  const m = medevacs.find((x) => x.id === id);
+  if (!m || !confirm(`Remove "${m.title}" from the board? It stays on devices.`)) return;
+  medevacs = await api('DELETE', `api/medevac/${encodeURIComponent(id)}`);
+  $('#medevac-dialog').close();
+  renderMedevac();
+  toast('Removed from the board');
+});
+$('#medevac-table').addEventListener('click', medevacClick);
+$('#medevac-body').addEventListener('click', medevacClick);
+$('#medevac-filter').addEventListener('change', renderMedevac);
+$('#medevac-table').addEventListener('change', guard(async (e) => {
+  const id = e.target.dataset.medevacStatus;
+  if (!id) return;
+  medevacs = await api('PUT', `api/medevac/${encodeURIComponent(id)}/status`, { status: e.target.value });
+  renderMedevac();
+  toast('Status saved');
+}));
+
+// The tab's badge and a toast for new requests, wherever the console is.
+async function pollMedevac() {
+  const s = await api('GET', 'api/medevac?summary=1');
+  const badge = $('#medevac-badge');
+  badge.hidden = !s.active;
+  badge.textContent = s.active;
+  if (medevacNewest !== null && s.newest > medevacNewest) {
+    toast(t('New MEDEVAC request'), true);
+    if (currentTab === 'medevac') loadMedevac().catch(() => {});
+  }
+  if (medevacNewest === null || s.newest > medevacNewest) medevacNewest = s.newest;
+  if (s.active && map && !medevacs.length) loadMedevac().catch(() => {});
+}
+setInterval(() => pollMedevac().catch(() => {}), 10000);
+setTimeout(() => pollMedevac().catch(() => {}), 1500);
 
 // ---------- send to devices ----------
 
@@ -6330,7 +6765,7 @@ $('#audit-clear').addEventListener('click', guard(async () => {
 let webhooks = [];
 let editingHook = null;
 const HOOK_FORMATS = { discord: 'Discord', slack: 'Slack', teams: 'Teams', ntfy: 'ntfy', json: 'JSON' };
-const HOOK_EVENTS = { emergency: 'Emergencies', geofence: 'Geofence', lost_contact: 'Lost contact', ended: 'Ended', signup: 'Sign-ups', admin: 'Admin changes', server: 'Server health', security: 'Blocked sign-ins' };
+const HOOK_EVENTS = { emergency: 'Emergencies', medevac: 'MEDEVAC requests', geofence: 'Geofence', lost_contact: 'Lost contact', ended: 'Ended', signup: 'Sign-ups', admin: 'Admin changes', server: 'Server health', security: 'Blocked sign-ins' };
 // Setup steps for each service, shown on the page and in the dialog.
 const HOOK_GUIDE = {
   discord: {
@@ -6382,7 +6817,7 @@ const HOOK_GUIDE = {
     steps: [
       'For your own system or an automation tool (Node-RED, n8n, Zapier, Home Assistant, a script): create an endpoint that accepts a POST with a JSON body.',
       'In EdgeTAK: <strong>Add webhook</strong>, Sends to <strong>Any URL (JSON)</strong>, paste the endpoint\'s URL, and optionally set a <strong>signing secret</strong>.',
-      'Each alert is posted as JSON: <code>{"event":"emergency","title":"911 Alert","callsign":"ALPHA","username":"alpha","text":"","lat":39.74,"lon":-104.99,"map_url":"https://…","time":"2026-10-22T14:00:00Z","server":"EdgeTAK"}</code>. <code>event</code> is one of emergency, geofence, lost_contact, ended, signup, admin, server or test; the header <code>X-EdgeTAK-Event</code> repeats it.',
+      'Each alert is posted as JSON: <code>{"event":"emergency","title":"911 Alert","callsign":"ALPHA","username":"alpha","text":"","lat":39.74,"lon":-104.99,"map_url":"https://…","time":"2026-10-22T14:00:00Z","server":"EdgeTAK"}</code>. <code>event</code> is one of emergency, medevac, geofence, lost_contact, ended, signup, admin, server or test; the header <code>X-EdgeTAK-Event</code> repeats it.',
       'With a secret, check <code>X-EdgeTAK-Signature</code>: it is <code>sha256=</code> followed by the hex HMAC-SHA256 of the raw body, keyed with the secret. Reject requests where it doesn\'t match.',
       'Answer with any 2xx status. Other answers count as failures; 429 and 5xx are retried twice.',
     ],
@@ -6439,7 +6874,7 @@ function openHookDialog(h) {
   f.url.placeholder = h ? `${h.url} (leave blank to keep)` : 'https://';
   f.secret.value = '';
   f.secret.placeholder = h?.has_secret ? 'set (leave blank to keep)' : 'signs each body: X-EdgeTAK-Signature: sha256=…';
-  for (const c of $('#hook-events').querySelectorAll('input')) c.checked = h ? h.events.includes(c.value) : ['emergency', 'geofence', 'lost_contact'].includes(c.value);
+  for (const c of $('#hook-events').querySelectorAll('input')) c.checked = h ? h.events.includes(c.value) : ['emergency', 'medevac', 'geofence', 'lost_contact'].includes(c.value);
   renderChips('#hook-groups', h?.groups || []);
   $('#hook-error').textContent = '';
   hookFormatChanged();

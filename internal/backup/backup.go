@@ -83,7 +83,7 @@ func skipped(name string, opt Options) bool {
 		return !opt.History
 	case "recordings":
 		return !opt.Recordings
-	case "maps":
+	case "maps", "elevation": // offline maps and elevation tiles
 		return !opt.Maps
 	}
 	return strings.HasSuffix(name, ".tmp")
@@ -371,7 +371,7 @@ func ApplyPending(dataDir, configPath string) (bool, error) {
 		switch name {
 		case stagingDir, previousDir, pendingFile, BackupsDir, "mediamtx", "frpc-bin", "update":
 			continue // never replaced
-		case "history", "events", "recordings", "maps":
+		case "history", "events", "recordings", "maps", "elevation":
 			if !incoming[name] {
 				continue // not in this backup: keep the current ones
 			}

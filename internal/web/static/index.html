@@ -38,6 +38,7 @@
     <nav id="tabs" class="subtabs" role="tablist" aria-label="Pages">
       <button data-tab="dashboard" data-section="overview" class="active">Dashboard</button>
       <button data-tab="health" data-section="overview">Health</button>
+      <button data-tab="medevac" data-section="overview">MEDEVAC <span class="tab-badge" id="medevac-badge" hidden></span></button>
       <button data-tab="users" data-section="people">Users</button>
       <button data-tab="groups" data-section="people">Groups</button>
       <button data-tab="events" data-section="people">Events</button>
@@ -47,6 +48,8 @@
       <button data-tab="missions" data-section="data">Missions</button>
       <button data-tab="reports" data-section="data">Reports</button>
       <button data-tab="maps" data-section="data">Maps</button>
+      <button data-tab="elevation" data-section="data">Elevation</button>
+      <button data-tab="share" data-section="data">Share map</button>
       <button data-tab="overlays" data-section="data">Overlays</button>
       <button data-tab="plugins" data-section="data">Plugins</button>
       <button data-tab="video" data-section="data">Video</button>
@@ -246,6 +249,7 @@
           <div class="muted picker-label">Alerts</div>
           <div class="group-picker" id="hook-events">
             <label class="chip"><input type="checkbox" value="emergency" checked>Emergencies</label>
+            <label class="chip"><input type="checkbox" value="medevac" checked>MEDEVAC requests</label>
             <label class="chip"><input type="checkbox" value="geofence" checked>Geofence alerts</label>
             <label class="chip"><input type="checkbox" value="lost_contact" checked>Lost contact</label>
             <label class="chip"><input type="checkbox" value="ended">Alerts ending</label>
@@ -578,7 +582,7 @@
         <div class="inline-form">
           <label class="check"><input type="checkbox" id="backup-history" checked> Position and CoT history</label>
           <label class="check"><input type="checkbox" id="backup-recordings"> Video recordings (can be large)</label>
-          <label class="check"><input type="checkbox" id="backup-maps"> Offline maps (can be large)</label>
+          <label class="check"><input type="checkbox" id="backup-maps"> Offline maps and elevation (can be large)</label>
           <button class="primary" type="button" id="backup-download">Download a backup</button>
         </div>
         <h3>Automatic backups</h3>
@@ -1054,6 +1058,80 @@
       </dialog>
     </section>
 
+    <section id="tab-elevation" class="tab" hidden>
+      <div class="card">
+        <div class="card-head"><h2>Elevation data</h2><span class="muted" id="elev-summary"></span></div>
+        <p class="muted">DTED elevation tiles for ATAK: line of sight, height above ground, elevation profiles and terrain shading all need them. Upload DTED files (.dt0, .dt1, .dt2) or zips of them, such as the hemisphere downloads from tak.gov or tiles from USGS EarthExplorer. EdgeTAK files each tile by what's inside it, so any folder layout works.</p>
+        <form id="elev-upload" class="inline-form">
+          <input type="file" name="files" multiple accept=".zip,.dt0,.dt1,.dt2" required>
+          <button class="primary" type="submit">Upload</button>
+          <span class="muted" id="elev-progress"></span>
+        </form>
+        <div class="table-wrap"><table id="elev-levels">
+          <thead><tr><th>Level</th><th>Resolution</th><th>Tiles</th><th>Size</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <div class="inline-form"><button type="button" class="small" id="elev-map">Show coverage on map</button></div>
+      </div>
+      <div class="card" id="elev-devices">
+        <h2>Elevation on devices</h2>
+        <h3>Automatic downloads</h3>
+        <p class="muted">ATAK downloads level 0 tiles by itself as the map moves, from tak.gov unless told otherwise. Devices can get them from this server instead, which works with no internet access beyond EdgeTAK.</p>
+        <label class="check"><input type="checkbox" id="elev-stream"> Devices download elevation from this server</label>
+        <p class="muted" id="elev-stream-note"></p>
+        <h3>Send tiles to devices</h3>
+        <p class="muted">Higher-resolution tiles (levels 1 and 2) go to devices as a data package that ATAK imports as elevation data. Connected devices get it now; it stays in Data Packages for the others.</p>
+        <form id="elev-send" class="stack" autocomplete="off">
+          <div class="inline-form">
+            <label class="check"><input type="checkbox" name="l0"> Level 0</label>
+            <label class="check"><input type="checkbox" name="l1" checked> Level 1</label>
+            <label class="check"><input type="checkbox" name="l2" checked> Level 2</label>
+            <label class="check"><input type="checkbox" name="area"> Only tiles in the map view</label>
+          </div>
+          <div class="muted picker-label">Send to devices in these groups (none selected = every device)</div>
+          <div id="elev-groups" class="group-picker"></div>
+          <div class="inline-form"><button class="primary" type="submit">Send to devices</button> <span class="muted" id="elev-send-state"></span></div>
+        </form>
+      </div>
+    </section>
+
+    <section id="tab-share" class="tab" hidden>
+      <div class="card">
+        <h2>Share a live map</h2>
+        <p class="muted">Send a link to someone without a TAK app (an incident commander, a partner agency, family) and they see the chosen groups' positions live in any browser, with no account. Anyone with the link can watch until it ends, so make it last only as long as needed and delete it when you're done. It shows callsigns and positions only.</p>
+        <form id="share-form" class="stack" autocomplete="off">
+          <div class="inline-form">
+            <label>Name <input name="name" required maxlength="80" placeholder="Search team positions"></label>
+            <label>Ends after <select name="hours">
+              <option value="1">1 hour</option>
+              <option value="8">8 hours</option>
+              <option value="24" selected>24 hours</option>
+              <option value="72">3 days</option>
+              <option value="168">7 days</option>
+              <option value="720">30 days</option>
+            </select></label>
+          </div>
+          <div class="muted picker-label">Show devices in these groups (none selected = every device)</div>
+          <div id="share-groups" class="group-picker"></div>
+          <label class="check"><input type="checkbox" name="callsigns" checked> Show callsigns</label>
+          <div class="inline-form"><button class="primary" type="submit">Make link</button></div>
+        </form>
+        <div id="share-new" class="stack" hidden>
+          <p><strong>Send this link.</strong> It works in any browser until it ends.</p>
+          <code id="share-url" class="uri" data-no-i18n></code>
+          <div id="share-qr" class="qr"></div>
+          <div class="inline-form"><button type="button" id="share-copy">Copy link</button> <a class="button" id="share-open" target="_blank" rel="noopener noreferrer">Open</a> <button type="button" class="ghost" id="share-done">Done</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Shared map links</h2>
+        <div class="table-wrap"><table id="share-table">
+          <thead><tr><th>Map</th><th>Shows</th><th>Ends</th><th>Opened</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
     <section id="tab-maps" class="tab" hidden>
       <div class="card">
         <div class="card-head"><h2>Drawings</h2>
@@ -1106,6 +1184,39 @@
           <tbody></tbody>
         </table></div>
       </div>
+      <div class="card">
+        <h2>Mission templates</h2>
+        <p class="muted">Save a mission as a template (<strong>Save as template</strong> above) to start new ones the same way: its description, groups, roles, files and map items (rally points, search areas, routes). Each new mission gets its own copies of the items, so changing one mission doesn't change the others.</p>
+        <div class="table-wrap"><table id="tpl-table">
+          <thead><tr><th>Template</th><th>Groups</th><th>Contents</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <dialog id="tpl-new" class="card dialog">
+        <form method="dialog" class="stack" id="tpl-new-form">
+          <div class="card-head"><h2>New mission from <span id="tpl-new-name" data-no-i18n></span></h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
+          <label>Mission name <input name="name" required maxlength="256" autocomplete="off"></label>
+          <label>Password <input name="password" type="password" autocomplete="new-password" placeholder="none"></label>
+          <label class="check"><input type="checkbox" name="invite" checked> Invite connected devices in its groups</label>
+          <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="create">Create mission</button></div>
+        </form>
+      </dialog>
+      <dialog id="tpl-edit" class="card dialog">
+        <form method="dialog" class="stack" id="tpl-edit-form">
+          <div class="card-head"><h2>Edit template</h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
+          <label>Name <input name="name" required maxlength="80"></label>
+          <label>Description <input name="description" maxlength="500"></label>
+          <label>New subscribers are <select name="default_role">
+            <option value="MISSION_SUBSCRIBER">Subscribers (can edit)</option>
+            <option value="MISSION_READONLY_SUBSCRIBER">Read-only subscribers</option>
+            <option value="MISSION_OWNER">Owners</option>
+          </select></label>
+          <label class="check"><input type="checkbox" name="invite_only"> Invite only</label>
+          <div class="muted picker-label">Groups that see missions made from it</div>
+          <div id="tpl-edit-groups" class="group-picker"></div>
+          <div class="inline-form"><span class="spacer"></span><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
+        </form>
+      </dialog>
     </section>
 
     <section id="tab-reports" class="tab" hidden>
@@ -1435,6 +1546,24 @@
         <div class="card-head"><h2>Prosody</h2><span class="muted" id="xmpp-version"></span></div>
         <pre class="notes" id="xmpp-log" data-no-i18n></pre>
       </div>
+    </section>
+
+    <section id="tab-medevac" class="tab" hidden>
+      <div class="card">
+        <div class="card-head"><h2>MEDEVAC requests</h2>
+          <select id="medevac-filter" aria-label="Show"><option value="active">Active</option><option value="all">All</option></select></div>
+        <p class="muted">9-line MEDEVAC requests sent from ATAK (MedLine), newest first. Track each one here; the status is kept on this server and doesn't change anything on devices. New requests also raise a MEDEVAC webhook alert.</p>
+        <div class="table-wrap"><table id="medevac-table">
+          <thead><tr><th>Request</th><th>Patients</th><th>Location</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <dialog id="medevac-dialog" class="card dialog">
+        <form method="dialog" class="stack wide">
+          <div class="card-head"><h2 id="medevac-dialog-title" data-no-i18n>MEDEVAC</h2><button class="small ghost" value="cancel" formnovalidate title="Close">✕</button></div>
+          <div id="medevac-body" class="stack"></div>
+        </form>
+      </dialog>
     </section>
 
     <section id="tab-cot" class="tab" hidden>

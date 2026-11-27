@@ -533,3 +533,12 @@ ol.steps .inline-form { margin-top: 8px; }
 .report-files { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .report-files img { max-width: 160px; max-height: 120px; border-radius: 6px; border: 1px solid var(--line); display: block; }
 pre.uri { white-space: pre; overflow-x: auto; word-break: normal; font: 12px/1.45 var(--mono); background: var(--panel-2); padding: 10px; border-radius: 6px; }
+
+/* MEDEVAC */
+.tab-badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+.tab-badge[hidden] { display: none; }
+tr.medevac-open td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.medevac-lines td:first-child { width: 24px; text-align: right; }
+.medevac-lines td:nth-child(2) { width: 38%; }
+.medevac-history { margin: 0; padding-left: 18px; }
+.medevac-icon span { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: #fff; color: #d32f2f; border: 2px solid #d32f2f; font-weight: 700; font-size: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }

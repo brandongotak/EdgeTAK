@@ -21,6 +21,7 @@ import (
 	"github.com/brandongotak/EdgeTAK/internal/audit"
 	"github.com/brandongotak/EdgeTAK/internal/chatlog"
 	"github.com/brandongotak/EdgeTAK/internal/config"
+	"github.com/brandongotak/EdgeTAK/internal/elevation"
 	"github.com/brandongotak/EdgeTAK/internal/eventlog"
 	"github.com/brandongotak/EdgeTAK/internal/extension"
 	"github.com/brandongotak/EdgeTAK/internal/federation"
@@ -107,6 +108,8 @@ type Server struct {
 
 	history       sendHistory // admin "send to devices" log
 	xmpp          xmppState
+	elevOnce      sync.Once
+	elev          *elevation.Store
 	signupLimiter *rateLimiter // public sign-up attempts per address
 	video         videoState
 	selfUpdate    selfUpdateState
@@ -183,6 +186,10 @@ func (s *Server) Handler(tlsListener bool) http.Handler {
 	s.cotLogRoutes(mux)
 	s.metricsRoutes(mux)
 	s.xmppRoutes(mux)
+	s.shareRoutes(mux)
+	s.elevationRoutes(mux)
+	s.missionTemplateRoutes(mux)
+	s.medevacRoutes(mux)
 	s.recordingRoutes(mux)
 	s.emergencyRoutes(mux)
 	s.profileRoutes(mux)

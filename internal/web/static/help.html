@@ -39,6 +39,16 @@
   <p>The <strong>Devices</strong> table lists each device's battery (with how fast it drains), last report, GPS fix and connection, worst problems first. Use it to spot a phone about to go flat before it drops off.</p>
 </article>
 
+<article class="help-topic" id="help-medevac" data-group="Dashboard" data-tab="medevac" data-title="MEDEVAC">
+  <h2>MEDEVAC</h2>
+  <p>9-line MEDEVAC requests sent from ATAK's MedLine tool appear here, newest first, as soon as a device sends one; the MEDEVAC tab shows how many are active, and the console shows a notice when a new one arrives.</p>
+  <ul>
+    <li>Each request shows the patients by precedence (A urgent, B urgent surgical, C priority…), litter and ambulatory, and the pick-up site as MGRS and latitude/longitude. <strong>Details</strong> reads out all nine lines, the remarks, each patient's ZMIST and the history.</li>
+    <li>Set the status as it's handled: requested, acknowledged, en route, complete or cancelled. The status is kept on this server and doesn't change anything on devices; a request removed on the device is marked so.</li>
+    <li>Active requests are on the map's MEDEVAC layer. Add MEDEVAC requests to a webhook (Webhooks page) to hear about new ones with the console closed.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-users" data-group="People" data-tab="users" data-title="Users">
   <h2>Users</h2>
   <p>Everyone who signs in: people's devices, the console and the account page.</p>
@@ -133,6 +143,7 @@
     <li>See subscribers and their roles, the items and files, the change log and invitations.</li>
     <li><strong>Show on map</strong> draws a mission's items; <strong>Export</strong> downloads it.</li>
     <li>A mission is visible to the groups it was created for. An <a data-goto="events">event</a> can make one for its group.</li>
+    <li><strong>Save as template</strong> keeps a mission's settings, files and map items; <strong>New mission</strong> under Mission templates makes a fresh copy (its own map items), optionally inviting the devices in its groups.</li>
   </ul>
 </article>
 
@@ -158,6 +169,26 @@
     <li>It becomes a base map in the console, and ATAK devices get it as a map source when they connect, so maps work with no internet.</li>
   </ol>
   <p>Your own tile sources (and ATAK map source <code>.xml</code> files) are under <em>Map sources</em> on the map itself; tick <em>Send to ATAK devices</em> to add one to devices' map lists.</p>
+</article>
+
+<article class="help-topic" id="help-elevation" data-group="Data" data-tab="elevation" data-title="Elevation">
+  <h2>Elevation</h2>
+  <p>DTED elevation tiles for ATAK's line of sight, height above ground, elevation profiles and terrain shading. Upload .dt0, .dt1 or .dt2 files, or zips of them (tak.gov's hemisphere downloads, USGS EarthExplorer); each tile is filed by what's inside it.</p>
+  <ul>
+    <li><strong>Automatic downloads:</strong> ATAK fetches level 0 tiles by itself as the map moves, normally from tak.gov. Tick <em>Devices download elevation from this server</em> and devices get them from EdgeTAK instead, with no other internet access. It needs Let's Encrypt on (Settings), because ATAK only downloads elevation from servers the phone itself trusts. Devices get the setting when they next connect; unticking points them back at tak.gov.</li>
+    <li><strong>Send tiles to devices:</strong> levels 1 and 2 (or 0) go out as a data package ATAK imports as elevation data, to chosen groups and, if you like, only for the area in the map view. It works on any server, and stays in Data Packages for devices that were off.</li>
+    <li><strong>Show coverage on map</strong> outlines the tiles held (purple level 0, blue level 1, green level 2).</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-share" data-group="Data" data-tab="share" data-title="Share map">
+  <h2>Share map</h2>
+  <p>A link to a live, read-only map for someone without a TAK app: an incident commander, a partner agency, family. It opens in any browser with no account and shows the chosen groups' devices (callsigns and positions only, or just dots), updating every few seconds.</p>
+  <ul>
+    <li>Give the map a name (the viewer sees it), choose the groups and how long the link lasts (1 hour to 30 days), then <strong>Make link</strong> and send it, or show its QR code.</li>
+    <li>Anyone with the link can watch until it ends: keep it short, and <strong>Delete</strong> it when you're done; it stops working at once.</li>
+    <li>The list shows how often each link was opened and when. The link uses the enrollment port, so with Let's Encrypt on it opens without a certificate warning.</li>
+  </ul>
 </article>
 
 <article class="help-topic" id="help-overlays" data-group="Data" data-tab="overlays" data-title="Overlays">
@@ -312,7 +343,7 @@
   <p>Send alerts to Discord, Slack, Microsoft Teams, ntfy (phone notifications) or any URL, so people hear about them with the console closed.</p>
   <ol>
     <li>Get a webhook URL from the service (the page has the steps for each).</li>
-    <li><strong>Add webhook</strong>, choose the service, paste the URL and choose the alerts: emergencies, geofences, lost contact, sign-ups, admin changes, server health, blocked sign-ins.</li>
+    <li><strong>Add webhook</strong>, choose the service, paste the URL and choose the alerts: emergencies, MEDEVAC requests, geofences, lost contact, sign-ups, admin changes, server health, blocked sign-ins.</li>
     <li>Save and press <strong>Send test</strong>.</li>
   </ol>
   <p>Limit a webhook to groups to hear only about those users' devices.</p>

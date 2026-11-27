@@ -166,6 +166,9 @@ func (s *Server) deviceProfile(kind string) handlerFunc {
 				since = time.Now().Add(-time.Duration(secs) * time.Second)
 			}
 		}
+		if prefs := s.elevationPrefs(since); prefs != "" {
+			entries = append(entries, profileEntry{name: "elevation.pref", data: prefsXML(prefs)})
+		}
 		entries = append(entries, s.mapSourceEntries(host, since)...)
 		entries = append(entries, s.terratakEntries(host, since)...)
 		entries = append(entries, s.customMapSourceEntries(append(slices.Clone(id.Groups), id.OutGroups...), since)...)

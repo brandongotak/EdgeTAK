@@ -328,9 +328,9 @@ into the ☰ menu):
 
 | Section | Pages |
 |---|---|
-| Dashboard | Dashboard, Health |
+| Dashboard | Dashboard, Health, MEDEVAC |
 | People | Users, Groups, Events, Sign-ups, Certificates |
-| Data | Data Packages, Missions, Maps, Overlays, Plugins, Video |
+| Data | Data Packages, Missions, Reports, Maps, Elevation, Share map, Overlays, Plugins, Video, TerraTAK |
 | Messages | Send, Chat log, CoT history, XMPP chat |
 | Server | Connect, Federation, Settings, Webhooks, Audit log, Simulator |
 | Help | A guide to every page, with search; opening it from a page shows that page's topic |
@@ -482,7 +482,11 @@ certificates last is set on the same page.
 - **Data Sync (missions)** (Data → Missions): subscriptions and roles, map
   items and files, the change feed, logs, invitations and export, with
   changes pushed live to subscribers. **Show on map** draws a mission's map
-  items and the files in it the map can read as one layer.
+  items and the files in it the map can read as one layer. **Mission
+  templates:** save a mission as a template (settings, groups, roles, files
+  and map items) and make new missions from it; each gets its own copies of
+  the map items (new UIDs, with routes still linked to their points), and
+  devices in its groups can be invited straight away.
 - **ATAK Reports plugin:** reports uploaded from the plugin are kept on the
   server (TAK Server's CITRAP API), and the plugin can search, download,
   update and delete them. Reports are shared with the uploader's groups.
@@ -512,6 +516,25 @@ contact.
   so phones that were off get them too; editing or deleting one updates
   devices. EdgeTAK's copy is the reference: changes made on a device are
   replaced the next time it connects.
+
+**Elevation** (Data → Elevation): DTED tiles (.dt0, .dt1, .dt2, or zips
+of them such as tak.gov's hemisphere downloads) for ATAK's line of sight,
+height above ground and terrain tools; each tile is filed by its header.
+ATAK's automatic level 0 downloads, normally from tak.gov, can come from
+EdgeTAK instead (same paths, `/elevation/DTED/w078/n38.dt0.zip`): device
+profiles point devices at it. That needs Let's Encrypt on the enrollment
+port, since ATAK only trusts the phone's own CAs for it. Higher-resolution
+tiles go to chosen groups as a data package ATAK imports as elevation,
+optionally only for the area in the map view; it works on any server.
+
+**Share map** (Data → Share map): a link to a live, read-only map for
+someone without a TAK app, such as an incident commander or a partner
+agency. It opens in any browser with no account, shows the chosen groups'
+devices (callsigns and positions, or only dots) updated every 5 seconds,
+and ends after the time you choose (1 hour to 30 days) or when you delete
+it. The list shows how often each link was opened. Links use the
+enrollment port, which has the trusted certificate when Let's Encrypt is
+on.
 
 ### Aircraft and ships (ADS-B and AIS)
 
@@ -828,6 +851,16 @@ who is online and Prosody's log. In TAK Chat, turn on *Use TAK Server
 Credentials* and *Use TAK Server TrustStore*.
 
 ## Alerts
+
+**MEDEVAC board** (Overview → MEDEVAC): 9-line MEDEVAC requests from
+ATAK's MedLine tool (CoT `b-r-f-h-c` with a `_medevac_` detail) are kept
+and shown newest first, with every line decoded (precedence, equipment,
+patient type, security, marking, nationality, terrain), the pick-up site in
+MGRS, each patient's ZMIST, remarks and history. The console tracks a
+status per request (requested, acknowledged, en route, complete,
+cancelled), shows active ones on the map's MEDEVAC layer and a count on the
+tab, and raises a `medevac` webhook alert for each new request. Requests
+deleted on the device are marked; the board keeps the last 500.
 
 **Emergency alerts:** when someone presses ATAK's emergency button (911
 Alert, Ring The Bell, In Contact, Geo-fence Breached, custom), every open
@@ -1304,8 +1337,8 @@ restored into it.
 everything needed to bring the server back: users, groups, the CA and
 certificates, settings, device profiles, federation, data packages,
 missions, plugins, overlays, the chat log and the audit log, plus the
-configuration; position and CoT history, video recordings and offline maps
-are optional. `certs/ca-key.pem` is the key every enrolled device trusts, so a
+configuration; position and CoT history, video recordings, and offline maps
+with elevation tiles are optional. `certs/ca-key.pem` is the key every enrolled device trusts, so a
 restored server is the same server to them: devices reconnect without
 enrolling again. The backup holds that key and password hashes: keep it as
 safe as the server, and somewhere else.

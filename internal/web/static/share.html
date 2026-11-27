@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Shared map</title>
+<link rel="icon" href="/admin/icons/favicon-32.png" type="image/png">
+<link rel="stylesheet" href="/admin/vendor/leaflet.css">
+<script src="/admin/i18n.js"></script>
+<style>
+  :root { --bg: #ffffff; --text: #1d2529; --muted: #5c6b72; --line: #d8dee1; --accent: #1f8a5b; --warn: #b7791f; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161c1f; --text: #dfe7ea; --muted: #8a9aa1; --line: #2a3439; --accent: #4cc38a; --warn: #e5b450; } }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; flex-direction: column; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; overflow-wrap: anywhere; }
+  header .muted { color: var(--muted); font-size: 13px; }
+  .live { display: inline-flex; align-items: center; gap: 6px; }
+  .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .live.stale::before { background: var(--warn); }
+  .spacer { flex: 1; }
+  #map { flex: 1; min-height: 0; }
+  #ended { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: var(--bg); text-align: center; z-index: 2000; }
+  #ended[hidden] { display: none; }
+  .unit-label { background: rgba(255,255,255,.85); border: 1px solid #9aa5aa; border-radius: 4px; padding: 0 4px; color: #111; font-size: 12px; box-shadow: none; }
+  .unit-label::before { display: none; }
+  #empty { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); z-index: 1000; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+  #empty[hidden] { display: none; }
+  main { position: relative; flex: 1; display: flex; min-height: 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="name" data-no-i18n>Shared map</h1>
+  <span class="live muted" id="live">Connecting…</span>
+  <span class="muted" id="count"></span>
+  <span class="spacer"></span>
+  <span class="muted" id="expires"></span>
+</header>
+<main>
+  <div id="map"></div>
+  <div id="empty" hidden>No one is reporting a position right now.</div>
+</main>
+<div id="ended" hidden><div><h1>This map link has ended</h1><p class="muted">It expired or was removed. Ask whoever sent it for a new one.</p></div></div>
+<script src="/admin/vendor/leaflet.js"></script>
+<script src="/admin/share.js"></script>
+</body>
+</html>

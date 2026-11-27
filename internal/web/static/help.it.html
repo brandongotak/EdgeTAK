@@ -39,6 +39,16 @@
   <p>La tabella <strong>Dispositivi</strong> elenca per ogni dispositivo la batteria (con la velocità con cui si scarica), l'ultimo rapporto, il fix GPS e la connessione, partendo dai problemi più gravi. Usala per individuare un telefono che sta per scaricarsi prima che si disconnetta.</p>
 </article>
 
+<article class="help-topic" id="help-medevac" data-group="Pannello" data-tab="medevac" data-title="MEDEVAC">
+  <h2>MEDEVAC</h2>
+  <p>Le richieste MEDEVAC a 9 righe inviate con lo strumento MedLine di ATAK compaiono qui, le più recenti prima, appena un dispositivo ne invia una; la scheda MEDEVAC mostra quante sono attive, e la console avvisa quando ne arriva una nuova.</p>
+  <ul>
+    <li>Ogni richiesta mostra i pazienti per priorità (A urgente, B urgente chirurgico, C prioritario…), su barella e deambulanti, e il punto di raccolta in MGRS e latitudine/longitudine. <strong>Dettagli</strong> riporta tutte le nove righe, le note, lo ZMIST di ogni paziente e la cronologia.</li>
+    <li>Imposta lo stato man mano: richiesta, presa in carico, in viaggio, completata o annullata. Lo stato è conservato su questo server e non cambia nulla sui dispositivi; una richiesta rimossa sul dispositivo viene segnalata.</li>
+    <li>Le richieste attive sono sul livello MEDEVAC della mappa. Aggiungi le richieste MEDEVAC a un webhook (pagina Webhook) per saperlo anche a console chiusa.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-users" data-group="Persone" data-tab="users" data-title="Utenti">
   <h2>Utenti</h2>
   <p>Chiunque acceda: i dispositivi delle persone, la console e la pagina dell'account.</p>
@@ -133,6 +143,7 @@
     <li>Vedi gli iscritti e i loro ruoli, gli elementi e i file, il registro delle modifiche e gli inviti.</li>
     <li><strong>Mostra sulla mappa</strong> disegna gli elementi di una missione; <strong>Esporta</strong> la scarica.</li>
     <li>Una missione è visibile ai gruppi per cui è stata creata. Un <a data-goto="events">evento</a> può crearne una per il suo gruppo.</li>
+    <li><strong>Salva come modello</strong> conserva impostazioni, file ed elementi della mappa di una missione; <strong>Nuova missione</strong> in Modelli di missione ne crea una copia nuova (con i propri elementi della mappa), invitando se vuoi i dispositivi dei suoi gruppi.</li>
   </ul>
 </article>
 
@@ -158,6 +169,26 @@
     <li>Diventa una mappa di base nella console, e i dispositivi ATAK la ricevono come sorgente di mappe quando si connettono, così le mappe funzionano senza internet.</li>
   </ol>
   <p>Le tue sorgenti di tile (e i file <code>.xml</code> di sorgenti di mappe ATAK) sono in <em>Sorgenti di mappe</em> sulla mappa stessa; spunta <em>Invia ai dispositivi ATAK</em> per aggiungerne una agli elenchi di mappe dei dispositivi.</p>
+</article>
+
+<article class="help-topic" id="help-elevation" data-group="Dati" data-tab="elevation" data-title="Elevazione">
+  <h2>Elevazione</h2>
+  <p>Tessere di elevazione DTED per la linea di vista, l'altezza dal suolo, i profili altimetrici e l'ombreggiatura del terreno di ATAK. Carica file .dt0, .dt1 o .dt2, o zip che li contengono (download per emisfero di tak.gov, USGS EarthExplorer); ogni tessera viene archiviata in base al suo contenuto.</p>
+  <ul>
+    <li><strong>Download automatici:</strong> ATAK scarica da solo le tessere di livello 0 man mano che la mappa si sposta, di norma da tak.gov. Spunta <em>I dispositivi scaricano l'elevazione da questo server</em> e i dispositivi le ottengono da EdgeTAK, senza altro accesso a internet. Serve Let's Encrypt attivo (Impostazioni), perché ATAK scarica l'elevazione solo da server considerati attendibili dal telefono stesso. I dispositivi ricevono l'impostazione alla prossima connessione; togliendo la spunta tornano a tak.gov.</li>
+    <li><strong>Invia tessere ai dispositivi:</strong> i livelli 1 e 2 (o 0) partono come pacchetto dati che ATAK importa come elevazione, ai gruppi scelti e, se vuoi, solo per l'area della vista della mappa. Funziona su qualsiasi server e resta in Pacchetti dati per i dispositivi spenti.</li>
+    <li><strong>Mostra la copertura sulla mappa</strong> evidenzia le tessere presenti (viola livello 0, blu livello 1, verde livello 2).</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-share" data-group="Dati" data-tab="share" data-title="Condividi mappa">
+  <h2>Condividi mappa</h2>
+  <p>Un link a una mappa dal vivo, in sola lettura, per chi non ha un'app TAK: un responsabile dell'intervento, un ente partner, i familiari. Si apre in qualsiasi browser senza account e mostra i dispositivi dei gruppi scelti (solo nominativi e posizioni, o solo punti), aggiornata ogni pochi secondi.</p>
+  <ul>
+    <li>Dai un nome alla mappa (chi la guarda lo vede), scegli i gruppi e quanto dura il link (da 1 ora a 30 giorni), poi <strong>Crea link</strong> e invialo, o mostra il suo codice QR.</li>
+    <li>Chiunque abbia il link può guardare finché non scade: fallo durare poco ed <strong>Eliminalo</strong> quando hai finito; smette subito di funzionare.</li>
+    <li>L'elenco mostra quante volte e quando è stato aperto ogni link. Il link usa la porta di iscrizione, quindi con Let's Encrypt attivo si apre senza avvisi sul certificato.</li>
+  </ul>
 </article>
 
 <article class="help-topic" id="help-overlays" data-group="Dati" data-tab="overlays" data-title="Livelli">
@@ -312,7 +343,7 @@
   <p>Invia gli avvisi a Discord, Slack, Microsoft Teams, ntfy (notifiche sul telefono) o a qualsiasi URL, così le persone li ricevono anche con la console chiusa.</p>
   <ol>
     <li>Ottieni un URL webhook dal servizio (la pagina riporta i passaggi per ciascuno).</li>
-    <li><strong>Aggiungi webhook</strong>, scegli il servizio, incolla l'URL e scegli gli avvisi: emergenze, geofence, contatto perso, registrazioni, modifiche degli amministratori, stato del server, accessi bloccati.</li>
+    <li><strong>Aggiungi webhook</strong>, scegli il servizio, incolla l'URL e scegli gli avvisi: emergenze, richieste MEDEVAC, geofence, contatto perso, registrazioni, modifiche degli amministratori, stato del server, accessi bloccati.</li>
     <li>Salva e premi <strong>Invia prova</strong>.</li>
   </ol>
   <p>Limita un webhook a dei gruppi per ricevere solo gli avvisi sui dispositivi di quegli utenti.</p>

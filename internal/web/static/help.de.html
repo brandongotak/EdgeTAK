@@ -39,6 +39,16 @@
   <p>Die Tabelle <strong>Geräte</strong> listet für jedes Gerät den Akkustand (und wie schnell er sinkt), die letzte Meldung, den GPS-Fix und die Verbindung auf, die schlimmsten Probleme zuerst. So erkennen Sie ein Telefon, dessen Akku gleich leer ist, bevor es wegfällt.</p>
 </article>
 
+<article class="help-topic" id="help-medevac" data-group="Übersicht" data-tab="medevac" data-title="MEDEVAC">
+  <h2>MEDEVAC</h2>
+  <p>9-Liner-MEDEVAC-Anforderungen aus dem MedLine-Werkzeug von ATAK erscheinen hier, die neuesten zuerst, sobald ein Gerät eine sendet; der Tab MEDEVAC zeigt, wie viele aktiv sind, und die Konsole meldet neue.</p>
+  <ul>
+    <li>Jede Anforderung zeigt die Patienten nach Dringlichkeit (A dringend, B dringend chirurgisch, C vorrangig…), liegend und gehfähig, und den Aufnahmeort als MGRS und Breite/Länge. <strong>Details</strong> zeigt alle neun Zeilen, die Bemerkungen, das ZMIST jedes Patienten und den Verlauf.</li>
+    <li>Setzen Sie den Status während der Bearbeitung: angefordert, bestätigt, unterwegs, abgeschlossen oder abgebrochen. Der Status wird auf diesem Server geführt und ändert nichts auf den Geräten; eine auf dem Gerät entfernte Anforderung wird markiert.</li>
+    <li>Aktive Anforderungen liegen auf der Kartenebene MEDEVAC. Nehmen Sie MEDEVAC-Anforderungen in einen Webhook auf (Seite Webhooks), um bei geschlossener Konsole von neuen zu erfahren.</li>
+  </ul>
+</article>
+
 <article class="help-topic" id="help-users" data-group="Personen" data-tab="users" data-title="Benutzer">
   <h2>Benutzer</h2>
   <p>Alle, die sich anmelden: die Geräte der Personen, die Konsole und die Kontoseite.</p>
@@ -133,6 +143,7 @@
     <li>Sehen Sie Abonnenten und ihre Rollen, die Objekte und Dateien, das Änderungsprotokoll und die Einladungen.</li>
     <li><strong>Auf der Karte zeigen</strong> zeichnet die Objekte einer Mission; <strong>Exportieren</strong> lädt sie herunter.</li>
     <li>Eine Mission ist für die Gruppen sichtbar, für die sie erstellt wurde. Eine <a data-goto="events">Veranstaltung</a> kann eine für ihre Gruppe erstellen.</li>
+    <li><strong>Als Vorlage speichern</strong> behält Einstellungen, Dateien und Kartenelemente einer Mission; <strong>Neue Mission</strong> unter Missionsvorlagen erstellt eine neue Kopie (mit eigenen Kartenelementen) und lädt auf Wunsch die Geräte ihrer Gruppen ein.</li>
   </ul>
 </article>
 
@@ -158,6 +169,26 @@
     <li>Sie wird zur Grundkarte in der Konsole, und ATAK-Geräte erhalten sie bei der Verbindung als Kartenquelle, sodass Karten ohne Internet funktionieren.</li>
   </ol>
   <p>Ihre eigenen Kachelquellen (und ATAK-Kartenquelldateien im Format <code>.xml</code>) finden Sie unter <em>Kartenquellen</em> direkt auf der Karte; kreuzen Sie <em>An ATAK-Geräte senden</em> an, um eine davon zu den Kartenlisten der Geräte hinzuzufügen.</p>
+</article>
+
+<article class="help-topic" id="help-elevation" data-group="Daten" data-tab="elevation" data-title="Höhendaten">
+  <h2>Höhendaten</h2>
+  <p>DTED-Höhenkacheln für Sichtlinie, Höhe über Grund, Höhenprofile und Geländeschattierung in ATAK. Laden Sie .dt0-, .dt1- oder .dt2-Dateien oder Zips davon hoch (Hemisphären-Downloads von tak.gov, USGS EarthExplorer); jede Kachel wird nach ihrem Inhalt abgelegt.</p>
+  <ul>
+    <li><strong>Automatische Downloads:</strong> ATAK holt Kacheln der Stufe 0 selbst, während die Karte bewegt wird, normalerweise von tak.gov. Mit <em>Geräte laden Höhendaten von diesem Server</em> holen die Geräte sie von EdgeTAK, ohne weiteren Internetzugang. Dafür muss Let's Encrypt an sein (Einstellungen), denn ATAK lädt Höhendaten nur von Servern, denen das Telefon selbst vertraut. Die Geräte erhalten die Einstellung bei ihrer nächsten Verbindung; abschalten verweist sie wieder auf tak.gov.</li>
+    <li><strong>Kacheln an Geräte senden:</strong> Stufen 1 und 2 (oder 0) gehen als Datenpaket hinaus, das ATAK als Höhendaten importiert, an die gewählten Gruppen und auf Wunsch nur für den Kartenausschnitt. Das funktioniert auf jedem Server und bleibt für ausgeschaltete Geräte unter Datenpakete.</li>
+    <li><strong>Abdeckung auf der Karte zeigen</strong> umrandet die vorhandenen Kacheln (violett Stufe 0, blau Stufe 1, grün Stufe 2).</li>
+  </ul>
+</article>
+
+<article class="help-topic" id="help-share" data-group="Daten" data-tab="share" data-title="Karte teilen">
+  <h2>Karte teilen</h2>
+  <p>Ein Link zu einer schreibgeschützten Live-Karte für jemanden ohne TAK-App: Einsatzleitung, Partnerbehörde, Angehörige. Sie öffnet sich in jedem Browser ohne Konto und zeigt die Geräte der gewählten Gruppen (nur Rufnamen und Positionen oder nur Punkte), alle paar Sekunden aktualisiert.</p>
+  <ul>
+    <li>Geben Sie der Karte einen Namen (der Betrachter sieht ihn), wählen Sie die Gruppen und wie lange der Link gilt (1 Stunde bis 30 Tage), dann <strong>Link erstellen</strong> und senden oder seinen QR-Code zeigen.</li>
+    <li>Jeder mit dem Link kann zusehen, bis er endet: halten Sie ihn kurz und <strong>löschen</strong> Sie ihn danach; er funktioniert dann sofort nicht mehr.</li>
+    <li>Die Liste zeigt, wie oft und wann jeder Link geöffnet wurde. Der Link nutzt den Enrollment-Port, mit Let's Encrypt öffnet er sich also ohne Zertifikatswarnung.</li>
+  </ul>
 </article>
 
 <article class="help-topic" id="help-overlays" data-group="Daten" data-tab="overlays" data-title="Ebenen">
@@ -312,7 +343,7 @@
   <p>Senden Sie Alarme an Discord, Slack, Microsoft Teams, ntfy (Benachrichtigungen auf dem Telefon) oder eine beliebige URL, damit man auch bei geschlossener Konsole davon erfährt.</p>
   <ol>
     <li>Besorgen Sie sich beim Dienst eine Webhook-URL (die Seite enthält die Schritte für jeden Dienst).</li>
-    <li><strong>Webhook hinzufügen</strong>, den Dienst wählen, die URL einfügen und die Alarme wählen: Notfälle, Geofences, Kontaktverlust, Registrierungen, administrative Änderungen, Serverzustand, gesperrte Anmeldungen.</li>
+    <li><strong>Webhook hinzufügen</strong>, den Dienst wählen, die URL einfügen und die Alarme wählen: Notfälle, MEDEVAC-Anforderungen, Geofences, Kontaktverlust, Registrierungen, administrative Änderungen, Serverzustand, gesperrte Anmeldungen.</li>
     <li>Speichern und auf <strong>Test senden</strong> klicken.</li>
   </ol>
   <p>Beschränken Sie einen Webhook auf Gruppen, um nur von den Geräten dieser Benutzer zu erfahren.</p>
